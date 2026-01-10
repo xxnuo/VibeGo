@@ -53,6 +53,64 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/file": {
+            "delete": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "File"
+                ],
+                "summary": "Remove file or directory",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Path to remove",
+                        "name": "path",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "boolean"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/file/abs": {
             "get": {
                 "produces": [
@@ -78,6 +136,70 @@ const docTemplate = `{
                             "type": "object",
                             "additionalProperties": {
                                 "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/file/grep": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "File"
+                ],
+                "summary": "Search file contents (grep)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Search path",
+                        "name": "path",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Regex pattern",
+                        "name": "pattern",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Max results (default 100)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/handler.GrepMatch"
+                                }
                             }
                         }
                     },
@@ -405,69 +527,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/file/rm": {
-            "delete": {
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "File"
-                ],
-                "summary": "Remove file or directory",
-                "parameters": [
-                    {
-                        "description": "Remove request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.RemoveRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "boolean"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/api/file/search": {
             "get": {
                 "produces": [
@@ -638,6 +697,40 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/git": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Git"
+                ],
+                "summary": "List bound repos",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Page number (default 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (default 20)",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/git/add": {
             "post": {
                 "consumes": [
@@ -790,7 +883,7 @@ const docTemplate = `{
                 "summary": "Commit staged changes",
                 "parameters": [
                     {
-                        "description": "Commit message",
+                        "description": "Commit message and author",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -834,31 +927,6 @@ const docTemplate = `{
                             "type": "object",
                             "additionalProperties": {
                                 "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/git/list": {
-            "get": {
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Git"
-                ],
-                "summary": "List bound repos",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "array",
-                                "items": {
-                                    "$ref": "#/definitions/handler.GitRepository"
-                                }
                             }
                         }
                     }
@@ -957,7 +1025,7 @@ const docTemplate = `{
                 "summary": "Unstage files (Reset)",
                 "parameters": [
                     {
-                        "description": "Files to reset",
+                        "description": "Files to reset (empty for all)",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -1051,33 +1119,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/git/unbind": {
-            "post": {
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Git"
-                ],
-                "summary": "Unbind repo",
-                "parameters": [
-                    {
-                        "description": "Unbind request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.UnbindRepoRequest"
-                        }
-                    }
-                ],
-                "responses": {}
-            }
-        },
-        "/api/git/undo_commit": {
+        "/api/git/undo-commit": {
             "post": {
                 "consumes": [
                     "application/json"
@@ -1103,25 +1145,31 @@ const docTemplate = `{
                 "responses": {}
             }
         },
-        "/api/session/list": {
-            "get": {
+        "/api/git/{id}": {
+            "delete": {
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Session"
+                    "Git"
                 ],
-                "summary": "List all sessions",
+                "summary": "Unbind repo",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Repo ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
-                                "type": "array",
-                                "items": {
-                                    "$ref": "#/definitions/handler.SessionInfo"
-                                }
+                                "type": "boolean"
                             }
                         }
                     },
@@ -1137,7 +1185,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/session/load": {
+        "/api/session": {
             "get": {
                 "produces": [
                     "application/json"
@@ -1145,34 +1193,31 @@ const docTemplate = `{
                 "tags": [
                     "Session"
                 ],
-                "summary": "Load session by ID",
+                "summary": "List all sessions",
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "Session ID",
-                        "name": "id",
-                        "in": "query",
-                        "required": true
+                        "type": "integer",
+                        "description": "Page number (default 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (default 20)",
+                        "name": "page_size",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handler.Session"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
                             "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "additionalProperties": true
                         }
                     },
-                    "404": {
-                        "description": "Not Found",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1181,9 +1226,7 @@ const docTemplate = `{
                         }
                     }
                 }
-            }
-        },
-        "/api/session/new": {
+            },
             "post": {
                 "consumes": [
                     "application/json"
@@ -1206,8 +1249,8 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
+                    "201": {
+                        "description": "Created",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -1225,8 +1268,43 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/session/rm": {
-            "delete": {
+        "/api/session/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Session"
+                ],
+                "summary": "Load session by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Session"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
                 "consumes": [
                     "application/json"
                 ],
@@ -1236,15 +1314,22 @@ const docTemplate = `{
                 "tags": [
                     "Session"
                 ],
-                "summary": "Remove session",
+                "summary": "Save session",
                 "parameters": [
                     {
-                        "description": "Remove session request",
+                        "type": "string",
+                        "description": "Session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Save session request",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handler.RemoveSessionRequest"
+                            "$ref": "#/definitions/handler.SaveSessionRequest"
                         }
                     }
                 ],
@@ -1255,15 +1340,6 @@ const docTemplate = `{
                             "type": "object",
                             "additionalProperties": {
                                 "type": "boolean"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
                             }
                         }
                     },
@@ -1286,29 +1362,22 @@ const docTemplate = `{
                         }
                     }
                 }
-            }
-        },
-        "/api/session/save": {
-            "post": {
-                "consumes": [
-                    "application/json"
-                ],
+            },
+            "delete": {
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Session"
                 ],
-                "summary": "Save session",
+                "summary": "Remove session",
                 "parameters": [
                     {
-                        "description": "Save session request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.SaveSessionRequest"
-                        }
+                        "type": "string",
+                        "description": "Session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -1318,15 +1387,6 @@ const docTemplate = `{
                             "type": "object",
                             "additionalProperties": {
                                 "type": "boolean"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
                             }
                         }
                     },
@@ -1777,6 +1837,12 @@ const docTemplate = `{
                 "id"
             ],
             "properties": {
+                "author": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
                 "files": {
                     "type": "array",
                     "items": {
@@ -1787,28 +1853,21 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "message": {
-                    "description": "For commit",
                     "type": "string"
                 }
             }
         },
-        "handler.GitRepository": {
+        "handler.GrepMatch": {
             "type": "object",
             "properties": {
-                "created_at": {
-                    "type": "integer"
-                },
-                "id": {
+                "content": {
                     "type": "string"
+                },
+                "line": {
+                    "type": "integer"
                 },
                 "path": {
                     "type": "string"
-                },
-                "remotes": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "integer"
                 }
             }
         },
@@ -1876,28 +1935,6 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.RemoveRequest": {
-            "type": "object",
-            "required": [
-                "path"
-            ],
-            "properties": {
-                "path": {
-                    "type": "string"
-                }
-            }
-        },
-        "handler.RemoveSessionRequest": {
-            "type": "object",
-            "required": [
-                "id"
-            ],
-            "properties": {
-                "id": {
-                    "type": "string"
-                }
-            }
-        },
         "handler.RenameRequest": {
             "type": "object",
             "required": [
@@ -1915,13 +1952,7 @@ const docTemplate = `{
         },
         "handler.SaveSessionRequest": {
             "type": "object",
-            "required": [
-                "id"
-            ],
             "properties": {
-                "id": {
-                    "type": "string"
-                },
                 "messages": {
                     "type": "string"
                 },
@@ -1940,23 +1971,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "messages": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "integer"
-                }
-            }
-        },
-        "handler.SessionInfo": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "integer"
-                },
-                "id": {
                     "type": "string"
                 },
                 "name": {
@@ -2039,17 +2053,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "path": {
-                    "type": "string"
-                }
-            }
-        },
-        "handler.UnbindRepoRequest": {
-            "type": "object",
-            "required": [
-                "id"
-            ],
-            "properties": {
-                "id": {
                     "type": "string"
                 }
             }

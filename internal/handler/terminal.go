@@ -38,8 +38,8 @@ func NewTerminalHandler(db *gorm.DB, shell string) *TerminalHandler {
 
 func (h *TerminalHandler) Register(r *gin.RouterGroup) {
 	g := r.Group("/terminal")
-	g.GET("/list", h.List)
-	g.POST("/new", h.New)
+	g.GET("", h.List)
+	g.POST("", h.New)
 	g.POST("/close", h.Close)
 	g.GET("/ws/:id", h.WebSocket)
 }

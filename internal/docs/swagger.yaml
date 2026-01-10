@@ -41,6 +41,10 @@ definitions:
     type: object
   handler.GitActionRequest:
     properties:
+      author:
+        type: string
+      email:
+        type: string
       files:
         items:
           type: string
@@ -48,23 +52,18 @@ definitions:
       id:
         type: string
       message:
-        description: For commit
         type: string
     required:
     - id
     type: object
-  handler.GitRepository:
+  handler.GrepMatch:
     properties:
-      created_at:
-        type: integer
-      id:
+      content:
         type: string
+      line:
+        type: integer
       path:
         type: string
-      remotes:
-        type: string
-      updated_at:
-        type: integer
     type: object
   handler.MkdirRequest:
     properties:
@@ -107,20 +106,6 @@ definitions:
       rows:
         type: integer
     type: object
-  handler.RemoveRequest:
-    properties:
-      path:
-        type: string
-    required:
-    - path
-    type: object
-  handler.RemoveSessionRequest:
-    properties:
-      id:
-        type: string
-    required:
-    - id
-    type: object
   handler.RenameRequest:
     properties:
       new_path:
@@ -133,14 +118,10 @@ definitions:
     type: object
   handler.SaveSessionRequest:
     properties:
-      id:
-        type: string
       messages:
         type: string
       name:
         type: string
-    required:
-    - id
     type: object
   handler.Session:
     properties:
@@ -149,17 +130,6 @@ definitions:
       id:
         type: string
       messages:
-        type: string
-      name:
-        type: string
-      updated_at:
-        type: integer
-    type: object
-  handler.SessionInfo:
-    properties:
-      created_at:
-        type: integer
-      id:
         type: string
       name:
         type: string
@@ -216,13 +186,6 @@ definitions:
       path:
         type: string
     type: object
-  handler.UnbindRepoRequest:
-    properties:
-      id:
-        type: string
-    required:
-    - id
-    type: object
   handler.WriteFileRequest:
     properties:
       content:
@@ -264,6 +227,44 @@ paths:
       summary: LBHeartbeat check
       tags:
       - System
+  /api/file:
+    delete:
+      parameters:
+      - description: Path to remove
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Remove file or directory
+      tags:
+      - File
   /api/file/abs:
     get:
       parameters:
@@ -294,6 +295,48 @@ paths:
               type: string
             type: object
       summary: Get absolute path
+      tags:
+      - File
+  /api/file/grep:
+    get:
+      parameters:
+      - description: Search path
+        in: query
+        name: path
+        type: string
+      - description: Regex pattern
+        in: query
+        name: pattern
+        required: true
+        type: string
+      - description: Max results (default 100)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/handler.GrepMatch'
+              type: array
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Search file contents (grep)
       tags:
       - File
   /api/file/list:
@@ -495,47 +538,6 @@ paths:
       summary: Rename file or directory
       tags:
       - File
-  /api/file/rm:
-    delete:
-      consumes:
-      - application/json
-      parameters:
-      - description: Remove request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.RemoveRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              type: boolean
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Remove file or directory
-      tags:
-      - File
   /api/file/search:
     get:
       parameters:
@@ -647,6 +649,54 @@ paths:
       summary: Write file content
       tags:
       - File
+  /api/git:
+    get:
+      parameters:
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Page size (default 20)
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List bound repos
+      tags:
+      - Git
+  /api/git/{id}:
+    delete:
+      parameters:
+      - description: Repo ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Unbind repo
+      tags:
+      - Git
   /api/git/add:
     post:
       consumes:
@@ -742,7 +792,7 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: Commit message
+      - description: Commit message and author
         in: body
         name: request
         required: true
@@ -777,22 +827,6 @@ paths:
               type: string
             type: object
       summary: Get file diff
-      tags:
-      - Git
-  /api/git/list:
-    get:
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              items:
-                $ref: '#/definitions/handler.GitRepository'
-              type: array
-            type: object
-      summary: List bound repos
       tags:
       - Git
   /api/git/log:
@@ -851,7 +885,7 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: Files to reset
+      - description: Files to reset (empty for all)
         in: body
         name: request
         required: true
@@ -917,24 +951,7 @@ paths:
       summary: Get git status
       tags:
       - Git
-  /api/git/unbind:
-    post:
-      consumes:
-      - application/json
-      parameters:
-      - description: Unbind request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.UnbindRepoRequest'
-      produces:
-      - application/json
-      responses: {}
-      summary: Unbind repo
-      tags:
-      - Git
-  /api/git/undo_commit:
+  /api/git/undo-commit:
     post:
       consumes:
       - application/json
@@ -951,68 +968,17 @@ paths:
       summary: Undo last commit (Soft reset to HEAD~1)
       tags:
       - Git
-  /api/session/list:
-    get:
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              items:
-                $ref: '#/definitions/handler.SessionInfo'
-              type: array
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: List all sessions
-      tags:
-      - Session
-  /api/session/load:
+  /api/session:
     get:
       parameters:
-      - description: Session ID
+      - description: Page number (default 1)
         in: query
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handler.Session'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Load session by ID
-      tags:
-      - Session
-  /api/session/new:
-    post:
-      consumes:
-      - application/json
-      parameters:
-      - description: New session request
-        in: body
-        name: request
-        schema:
-          $ref: '#/definitions/handler.NewSessionRequest'
+        name: page
+        type: integer
+      - description: Page size (default 20)
+        in: query
+        name: page_size
+        type: integer
       produces:
       - application/json
       responses:
@@ -1027,20 +993,43 @@ paths:
             additionalProperties:
               type: string
             type: object
-      summary: Create new session
+      summary: List all sessions
       tags:
       - Session
-  /api/session/rm:
-    delete:
+    post:
       consumes:
       - application/json
       parameters:
-      - description: Remove session request
+      - description: New session request
         in: body
         name: request
-        required: true
         schema:
-          $ref: '#/definitions/handler.RemoveSessionRequest'
+          $ref: '#/definitions/handler.NewSessionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create new session
+      tags:
+      - Session
+  /api/session/{id}:
+    delete:
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -1049,12 +1038,6 @@ paths:
           schema:
             additionalProperties:
               type: boolean
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
             type: object
         "404":
           description: Not Found
@@ -1071,11 +1054,38 @@ paths:
       summary: Remove session
       tags:
       - Session
-  /api/session/save:
-    post:
+    get:
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.Session'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Load session by ID
+      tags:
+      - Session
+    put:
       consumes:
       - application/json
       parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
       - description: Save session request
         in: body
         name: request
@@ -1090,12 +1100,6 @@ paths:
           schema:
             additionalProperties:
               type: boolean
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
             type: object
         "404":
           description: Not Found

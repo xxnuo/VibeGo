@@ -58,7 +58,7 @@ func TestTerminalHandlerNew(t *testing.T) {
 	}
 	body, _ := json.Marshal(reqBody)
 
-	req := httptest.NewRequest("POST", "/api/terminal/new", bytes.NewReader(body))
+	req := httptest.NewRequest("POST", "/api/terminal", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -90,7 +90,7 @@ func TestTerminalHandlerList(t *testing.T) {
 	router := gin.New()
 	handler.Register(router.Group("/api"))
 
-	req := httptest.NewRequest("GET", "/api/terminal/list", nil)
+	req := httptest.NewRequest("GET", "/api/terminal", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
