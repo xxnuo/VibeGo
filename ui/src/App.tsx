@@ -5,38 +5,16 @@ import {
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 import {
-  useAppStore, useEditorStore, useTerminalStore, useFileStore,
-  AppView, type FileNode, type GitFileNode
+  useAppStore, useEditorStore, useTerminalStore,
+  AppView, type GitFileNode, type FileItem
 } from '@/stores';
 
 import CodeEditor from '@/components/CodeEditor';
-import FileTree from '@/components/FileTree';
+import FileManager from '@/components/FileManager';
 import GitView from '@/components/GitView';
 import TerminalView from '@/components/TerminalView';
 import ProjectMenu from '@/components/ProjectMenu';
 import DiffView from '@/components/DiffView';
-
-const MOCK_FILE_SYSTEM: FileNode[] = [
-  {
-    id: 'root',
-    name: 'mainframe_v1',
-    type: 'folder',
-    children: [
-      {
-        id: 'src',
-        name: 'kernel',
-        type: 'folder',
-        children: [
-          { id: 'app', name: 'boot.sys', type: 'file', language: 'typescript', content: "// BOOT SEQUENCE INITIATED\nimport System from 'kernel';\n\nSystem.init({ mode: 'HACK' });" },
-          { id: 'utils', name: 'decrypt.ts', type: 'file', language: 'typescript', content: "export const crack = (hash) => {\n  // BRUTE FORCE ATTACK\n  return 'p@ssword1';\n}" },
-          { id: 'btn', name: 'payload.js', type: 'file', language: 'javascript', content: "const deploy = () => console.log('Payload delivered');" }
-        ]
-      },
-      { id: 'pkg', name: 'manifest.json', type: 'file', language: 'json', content: "{\n  \"target\": \"corp_network\"\n}" },
-      { id: 'readme', name: 'TARGETS.md', type: 'file', language: 'markdown', content: "# TARGET LIST\n\n1. Main Server\n2. Backup Grid" },
-    ]
-  }
-];
 
 const MOCK_GIT_FILES: GitFileNode[] = [
   {
@@ -65,12 +43,10 @@ const App: React.FC = () => {
   const { theme, locale, currentView, isMenuOpen, toggleTheme, toggleLocale, setCurrentView, setMenuOpen } = useAppStore();
   const { tabs, activeTabId, openFileTab, closeTab, setActiveTabId } = useEditorStore();
   const { terminals, activeTerminalId, setTerminals, setActiveTerminalId } = useTerminalStore();
-  const { fileTree, setFileTree } = useFileStore();
 
   const t = useTranslation(locale);
 
   useEffect(() => {
-    if (fileTree.length === 0) setFileTree(MOCK_FILE_SYSTEM);
     if (terminals.length === 0) setTerminals(MOCK_TERMINALS);
   }, []);
 
@@ -93,13 +69,6 @@ const App: React.FC = () => {
     }
   }, [theme]);
 
-  const handleFileClick = (node: FileNode) => {
-    if (node.type === 'file') {
-      openFileTab(node.id, node.name, 'code');
-      setCurrentView(AppView.FILES);
-    }
-  };
-
   const handleGitFileClick = (gitFile: GitFileNode) => {
     openFileTab(gitFile.id, gitFile.name, 'diff', {
       original: gitFile.originalContent,
@@ -110,22 +79,6 @@ const App: React.FC = () => {
   const handleCloseTab = (e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
     closeTab(tabId);
-  };
-
-  const getActiveFileContent = (): string => {
-    const activeTab = tabs.find(t => t.id === activeTabId);
-    if (!activeTab) return '';
-    const findContent = (nodes: FileNode[], id: string): string => {
-      for (const node of nodes) {
-        if (node.id === id) return node.content || '';
-        if (node.children) {
-          const res = findContent(node.children, id);
-          if (res) return res;
-        }
-      }
-      return '';
-    };
-    return findContent(fileTree, activeTab.fileId);
   };
 
   const activeTab = tabs.find(t => t.id === activeTabId);
@@ -200,16 +153,12 @@ const App: React.FC = () => {
 
     if (currentView === AppView.FILES && activeTabId === null) {
       return (
-        <div className="h-full overflow-y-auto bg-ide-bg p-2 transition-colors duration-300">
-          <div className="border border-ide-border rounded-lg p-3 mb-4 bg-ide-panel/50 shadow-sm">
-            <p className="text-[10px] text-ide-accent mb-2 font-bold tracking-wider">SYSTEM_STATUS</p>
-            <div className="h-1.5 w-full bg-ide-border rounded-full overflow-hidden">
-              <div className="h-full bg-ide-accent w-3/4 shadow-glow"></div>
-            </div>
-          </div>
-          <h3 className="text-[10px] font-bold text-ide-mute uppercase mb-2 px-2 tracking-widest">{t('fileTree.projectRoot')}</h3>
-          <FileTree nodes={fileTree} onFileClick={handleFileClick} activeFileId={activeTab?.fileId} />
-        </div>
+        <FileManager
+          initialPath="."
+          onFileOpen={(file: FileItem) => {
+            openFileTab(file.path, file.name, 'code');
+          }}
+        />
       );
     }
 
@@ -219,7 +168,7 @@ const App: React.FC = () => {
       }
       return (
         <CodeEditor
-          content={getActiveFileContent()}
+          content=""
           language="typescript"
           onChange={() => { }}
         />

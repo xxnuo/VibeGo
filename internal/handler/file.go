@@ -286,6 +286,52 @@ func (h *FileHandler) checkBlacklist(p string) error {
 	return nil
 }
 
+var mimeTypes = map[string]string{
+	".html": "text/html", ".htm": "text/html", ".css": "text/css",
+	".js": "text/javascript", ".mjs": "text/javascript", ".ts": "text/typescript", ".tsx": "text/typescript",
+	".json": "application/json", ".xml": "application/xml",
+	".md": "text/markdown", ".markdown": "text/markdown",
+	".txt": "text/plain", ".log": "text/plain", ".csv": "text/csv",
+	".go": "text/x-go", ".py": "text/x-python", ".rb": "text/x-ruby",
+	".java": "text/x-java", ".c": "text/x-c", ".cpp": "text/x-c++", ".h": "text/x-c",
+	".rs": "text/x-rust", ".swift": "text/x-swift", ".kt": "text/x-kotlin",
+	".php": "text/x-php", ".sh": "text/x-shellscript", ".bash": "text/x-shellscript",
+	".yaml": "text/yaml", ".yml": "text/yaml", ".toml": "text/toml",
+	".sql": "text/x-sql", ".graphql": "text/x-graphql",
+	".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+	".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp", ".ico": "image/x-icon",
+	".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg", ".flac": "audio/flac",
+	".mp4": "video/mp4", ".webm": "video/webm", ".avi": "video/x-msvideo", ".mkv": "video/x-matroska",
+	".pdf": "application/pdf", ".doc": "application/msword",
+	".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	".xls": "application/vnd.ms-excel",
+	".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+	".zip": "application/zip", ".tar": "application/x-tar",
+	".gz": "application/gzip", ".rar": "application/vnd.rar", ".7z": "application/x-7z-compressed",
+	".wasm": "application/wasm", ".exe": "application/x-executable",
+}
+
+func getMimeType(path string, isDir bool) string {
+	if isDir {
+		return "directory"
+	}
+	ext := strings.ToLower(filepath.Ext(path))
+	if mime, ok := mimeTypes[ext]; ok {
+		return mime
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return "application/octet-stream"
+	}
+	defer file.Close()
+	buf := make([]byte, 512)
+	n, err := file.Read(buf)
+	if err != nil || n == 0 {
+		return "application/octet-stream"
+	}
+	return http.DetectContentType(buf[:n])
+}
+
 func getFileInfo(path string) (*FileInfo, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
@@ -301,6 +347,7 @@ func getFileInfo(path string) (*FileInfo, error) {
 		Extension: filepath.Ext(info.Name()),
 		Mode:      fmt.Sprintf("%04o", info.Mode().Perm()),
 		ModTime:   info.ModTime(),
+		MimeType:  getMimeType(path, info.IsDir()),
 	}
 	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
 		fi.Uid = strconv.FormatUint(uint64(stat.Uid), 10)
