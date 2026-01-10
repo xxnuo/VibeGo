@@ -49,6 +49,7 @@ const App: React.FC = () => {
   const tabs = useFrameStore((s) => s.getCurrentTabs());
   const addCurrentTab = useFrameStore((s) => s.addCurrentTab);
   const removeCurrentTab = useFrameStore((s) => s.removeCurrentTab);
+  const openPreviewTab = useFrameStore((s) => s.openPreviewTab);
   const addWorkspaceGroup = useFrameStore((s) => s.addWorkspaceGroup);
   const addTerminalGroup = useFrameStore((s) => s.addTerminalGroup);
   const addPluginGroup = useFrameStore((s) => s.addPluginGroup);
@@ -91,12 +92,12 @@ const App: React.FC = () => {
   }, [addCurrentTab]);
 
   const handleFileOpen = useCallback((file: FileItem) => {
-    addCurrentTab({
+    openPreviewTab({
       id: `tab-${file.path}`,
       title: file.name,
       data: { type: 'code', path: file.path }
     });
-  }, [addCurrentTab]);
+  }, [openPreviewTab]);
 
   const handleBackToList = useCallback(() => {
     resetPreview();

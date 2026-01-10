@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { usePreviewStore, getLanguageFromExtension } from '@/stores/previewStore';
+import { useAppStore } from '@/stores/appStore';
 import { Loader2, Save } from 'lucide-react';
 import { fileApi } from '@/api/file';
 
@@ -9,6 +10,7 @@ interface CodePreviewProps {
 }
 
 const CodePreview: React.FC<CodePreviewProps> = ({ onSave }) => {
+  const appTheme = useAppStore((s) => s.theme);
   const {
     file,
     content,
@@ -23,6 +25,14 @@ const CodePreview: React.FC<CodePreviewProps> = ({ onSave }) => {
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
   const language = getLanguageFromExtension(file?.extension);
+
+  const editorTheme = useMemo(() => {
+    return appTheme === 'light' ? 'light' : 'vs-dark';
+  }, [appTheme]);
+
+  const isMobile = useMemo(() => {
+    return typeof window !== 'undefined' && window.innerWidth < 768;
+  }, []);
 
   const handleEditorMount: OnMount = (editor) => {
     editorRef.current = editor;
@@ -79,7 +89,7 @@ const CodePreview: React.FC<CodePreviewProps> = ({ onSave }) => {
           value={content}
           onChange={handleChange}
           onMount={handleEditorMount}
-          theme="vs-dark"
+          theme={editorTheme}
           loading={
             <div className="h-full flex items-center justify-center">
               <Loader2 className="animate-spin text-ide-accent" size={24} />
@@ -88,17 +98,20 @@ const CodePreview: React.FC<CodePreviewProps> = ({ onSave }) => {
           options={{
             readOnly: !editMode,
             minimap: { enabled: false },
-            fontSize: 13,
+            fontSize: isMobile ? 12 : 13,
             fontFamily: 'JetBrains Mono, Fira Code, monospace',
             scrollBeyondLastLine: false,
             wordWrap: 'on',
-            lineNumbers: 'on',
+            lineNumbers: isMobile ? 'off' : 'on',
             renderLineHighlight: 'line',
             scrollbar: {
-              verticalScrollbarSize: 8,
-              horizontalScrollbarSize: 8,
+              verticalScrollbarSize: isMobile ? 4 : 8,
+              horizontalScrollbarSize: isMobile ? 4 : 8,
             },
             padding: { top: 8, bottom: 8 },
+            lineNumbersMinChars: isMobile ? 2 : 4,
+            folding: !isMobile,
+            glyphMargin: false,
           }}
         />
       </div>

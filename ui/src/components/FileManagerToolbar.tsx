@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
-  Search, X, Eye, EyeOff, RefreshCw, Plus, FolderPlus, Trash2, CheckSquare, Square,
-  ArrowUpDown, LayoutList, LayoutGrid
+  Search, X, Eye, EyeOff, RefreshCw, FolderPlus, Trash2, CheckSquare, Square,
+  ArrowUpDown, LayoutList, LayoutGrid, FilePlus
 } from 'lucide-react';
 import { useFileManagerStore, type SortField } from '@/stores/fileManagerStore';
 
@@ -189,7 +189,7 @@ const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
                   onClick={onNewFile}
                   className="p-2 rounded-md text-ide-mute hover:bg-ide-bg hover:text-ide-text"
                 >
-                  <Plus size={18} />
+                  <FilePlus size={18} />
                 </button>
 
                 <button

@@ -1,8 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { usePreviewStore, getPreviewType } from '@/stores/previewStore';
+import { useFrameStore } from '@/stores/frameStore';
 import type { FileItem } from '@/stores/fileManagerStore';
 import { fileApi } from '@/api/file';
-import { Loader2, AlertCircle, FileQuestion, X, Edit, Eye } from 'lucide-react';
+import { Loader2, AlertCircle, FileQuestion, X, Edit, Eye, Code } from 'lucide-react';
 import { isFileTooLarge, formatFileSize } from './utils';
 import CodePreview from './CodePreview';
 import ImagePreview from './ImagePreview';
@@ -16,6 +17,9 @@ interface FilePreviewProps {
 }
 
 const FilePreview: React.FC<FilePreviewProps> = ({ file, onClose }) => {
+  const [openAsCode, setOpenAsCode] = useState(false);
+  const activeTabId = useFrameStore((s) => s.getCurrentActiveTabId());
+  const pinTab = useFrameStore((s) => s.pinTab);
   const {
     loading,
     error,
@@ -29,6 +33,13 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file, onClose }) => {
     reset,
   } = usePreviewStore();
 
+  const handleToggleEdit = () => {
+    if (!editMode && activeTabId) {
+      pinTab(activeTabId);
+    }
+    setEditMode(!editMode);
+  };
+
   useEffect(() => {
     if (!file) {
       reset();
@@ -36,6 +47,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file, onClose }) => {
     }
 
     setFile(file);
+    setOpenAsCode(false);
     const previewType = getPreviewType(file.mimeType, file.extension);
 
     if (previewType === 'code' || previewType === 'markdown') {
@@ -66,6 +78,29 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file, onClose }) => {
     };
   }, [file?.path]);
 
+  const loadFileAsCode = () => {
+    if (!file) return;
+    if (isFileTooLarge(file.size, 'text')) {
+      setError(`File too large to open (${formatFileSize(file.size)})`);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    fileApi
+      .read(file.path)
+      .then((res) => {
+        setContent(res.content);
+        setOriginalContent(res.content);
+        setOpenAsCode(true);
+      })
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : 'Failed to load file');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  };
+
   if (!file) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-ide-mute gap-4">
@@ -76,13 +111,14 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file, onClose }) => {
   }
 
   const previewType = getPreviewType(file.mimeType, file.extension);
+  const showAsCode = previewType === 'code' || openAsCode;
 
   const renderHeader = () => (
     <div className="flex items-center gap-2 px-3 py-2 border-b border-ide-border bg-ide-panel shrink-0">
       <span className="text-sm text-ide-text font-medium truncate flex-1">{file.name}</span>
-      {previewType === 'code' && (
+      {showAsCode && (
         <button
-          onClick={() => setEditMode(!editMode)}
+          onClick={handleToggleEdit}
           className={`flex items-center gap-1 px-2 py-1 text-xs rounded ${
             editMode
               ? 'bg-ide-accent text-ide-bg'
@@ -128,6 +164,9 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file, onClose }) => {
   }
 
   const renderContent = () => {
+    if (openAsCode) {
+      return <CodePreview />;
+    }
     switch (previewType) {
       case 'code':
         return <CodePreview />;
@@ -145,13 +184,22 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file, onClose }) => {
           <div className="flex-1 flex flex-col items-center justify-center text-ide-mute gap-4 p-4">
             <FileQuestion size={48} className="opacity-50" />
             <p className="text-sm">Preview not available for this file type</p>
-            <a
-              href={fileApi.downloadUrl(file.path)}
-              download={file.name}
-              className="px-4 py-2 bg-ide-accent text-ide-bg rounded text-sm hover:opacity-90"
-            >
-              Download File
-            </a>
+            <div className="flex gap-2">
+              <button
+                onClick={loadFileAsCode}
+                className="flex items-center gap-2 px-4 py-2 bg-ide-panel border border-ide-border text-ide-text rounded text-sm hover:bg-ide-bg"
+              >
+                <Code size={16} />
+                Open as Text
+              </button>
+              <a
+                href={fileApi.downloadUrl(file.path)}
+                download={file.name}
+                className="px-4 py-2 bg-ide-accent text-ide-bg rounded text-sm hover:opacity-90"
+              >
+                Download
+              </a>
+            </div>
           </div>
         );
     }

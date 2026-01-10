@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef } from 'react';
 import { X, Plus, RefreshCw, FolderOpen, GitGraph, FileText, FileDiff, Box, Terminal } from 'lucide-react';
 import { useFrameStore, type TabItem, type ViewType } from '@/stores/frameStore';
 
@@ -14,9 +14,9 @@ const VIEW_ICONS: Record<ViewType, React.ReactNode> = {
 };
 
 const TAB_ICONS: Record<string, React.ReactNode> = {
-  code: <FileText size={14} />,
-  diff: <FileDiff size={14} />,
-  terminal: <Box size={14} />,
+  code: <FileText size={12} />,
+  diff: <FileDiff size={12} />,
+  terminal: <Box size={12} />,
 };
 
 const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
@@ -25,7 +25,10 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
   const activeTabId = useFrameStore((s) => s.getCurrentActiveTabId());
   const setCurrentActiveTab = useFrameStore((s) => s.setCurrentActiveTab);
   const removeCurrentTab = useFrameStore((s) => s.removeCurrentTab);
+  const pinTab = useFrameStore((s) => s.pinTab);
   const currentView = useFrameStore((s) => s.getCurrentView());
+
+  const lastClickTime = useRef<Record<string, number>>({});
 
   const handleCloseTab = useCallback((e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
@@ -33,8 +36,14 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
   }, [removeCurrentTab]);
 
   const handleTabClick = useCallback((tabId: string) => {
+    const now = Date.now();
+    const lastClick = lastClickTime.current[tabId] || 0;
+    if (now - lastClick < 300) {
+      pinTab(tabId);
+    }
+    lastClickTime.current[tabId] = now;
     setCurrentActiveTab(tabId);
-  }, [setCurrentActiveTab]);
+  }, [setCurrentActiveTab, pinTab]);
 
   const handleBackClick = useCallback(() => {
     setCurrentActiveTab(null);
@@ -84,14 +93,14 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
         <div
           key={tab.id}
           onClick={() => handleTabClick(tab.id)}
-          className={`shrink-0 px-3 h-8 rounded-md flex items-center gap-2 text-xs border transition-all cursor-pointer ${
+          className={`shrink-0 px-2 h-7 rounded-md flex items-center gap-1 text-xs border transition-all cursor-pointer ${
             activeTabId === tab.id
               ? 'bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm'
               : 'bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text'
           }`}
         >
           {getTabIcon(tab)}
-          <span className="max-w-[100px] truncate font-medium">{tab.title}</span>
+          <span className={`max-w-[80px] truncate font-medium ${!tab.pinned ? 'italic' : ''}`}>{tab.title}</span>
           {tab.closable !== false && (
             <button
               onClick={(e) => handleCloseTab(e, tab.id)}

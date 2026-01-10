@@ -10,6 +10,7 @@ export interface TabItem {
   icon?: string;
   data?: Record<string, unknown>;
   closable?: boolean;
+  pinned?: boolean;
 }
 
 const EMPTY_TABS: TabItem[] = [];
@@ -71,6 +72,9 @@ interface FrameState {
   setCurrentActiveTab: (tabId: string | null) => void;
   addCurrentTab: (tab: TabItem) => void;
   removeCurrentTab: (tabId: string) => void;
+
+  pinTab: (tabId: string) => void;
+  openPreviewTab: (tab: TabItem) => void;
 }
 
 const createDefaultWorkspace = (path: string, name?: string): WorkspaceGroup => ({
@@ -270,5 +274,76 @@ export const useFrameStore = create<FrameState>((set, get) => ({
   removeCurrentTab: (tabId) => {
     const { activeGroupId, removeTab } = get();
     if (activeGroupId) removeTab(activeGroupId, tabId);
+  },
+
+  pinTab: (tabId) =>
+    set((s) => ({
+      groups: s.groups.map((g) => {
+        if (g.id !== s.activeGroupId) return g;
+        if (g.type === 'workspace') {
+          const v = g.activeView;
+          const viewData = g.views[v];
+          return {
+            ...g,
+            views: {
+              ...g.views,
+              [v]: {
+                ...viewData,
+                tabs: viewData.tabs.map((t) =>
+                  t.id === tabId ? { ...t, pinned: true } : t
+                ),
+              },
+            },
+          };
+        }
+        return {
+          ...g,
+          tabs: g.tabs.map((t) => (t.id === tabId ? { ...t, pinned: true } : t)),
+        };
+      }),
+    })),
+
+  openPreviewTab: (tab) => {
+    const { activeGroupId } = get();
+    if (!activeGroupId) return;
+
+    set((s) => ({
+      groups: s.groups.map((g) => {
+        if (g.id !== activeGroupId) return g;
+
+        if (g.type === 'workspace') {
+          const v = g.activeView;
+          const viewData = g.views[v];
+          const existingTab = viewData.tabs.find((t) => t.id === tab.id);
+          if (existingTab) {
+            return { ...g, views: { ...g.views, [v]: { ...viewData, activeTabId: tab.id } } };
+          }
+          const previewTabIndex = viewData.tabs.findIndex((t) => !t.pinned);
+          let newTabs: TabItem[];
+          if (previewTabIndex !== -1) {
+            newTabs = viewData.tabs.map((t, i) => (i === previewTabIndex ? { ...tab, pinned: false } : t));
+          } else {
+            newTabs = [...viewData.tabs, { ...tab, pinned: false }];
+          }
+          return {
+            ...g,
+            views: { ...g.views, [v]: { tabs: newTabs, activeTabId: tab.id } },
+          };
+        }
+
+        const existingTab = g.tabs.find((t) => t.id === tab.id);
+        if (existingTab) {
+          return { ...g, activeTabId: tab.id };
+        }
+        const previewTabIndex = g.tabs.findIndex((t) => !t.pinned);
+        let newTabs: TabItem[];
+        if (previewTabIndex !== -1) {
+          newTabs = g.tabs.map((t, i) => (i === previewTabIndex ? { ...tab, pinned: false } : t));
+        } else {
+          newTabs = [...g.tabs, { ...tab, pinned: false }];
+        }
+        return { ...g, tabs: newTabs, activeTabId: tab.id };
+      }),
+    }));
   },
 }));
