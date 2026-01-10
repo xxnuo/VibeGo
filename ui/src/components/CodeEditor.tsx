@@ -11,6 +11,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ content, onChange }) => {
   // Simple syntax highlighting simulation (just coloring for demo)
   const [value, setValue] = useState(content);
 
+  React.useEffect(() => {
+    setValue(content);
+  }, [content]);
+
   const handleInsert = (char: string) => {
     setValue((prev) => prev + char);
     onChange(value + char);

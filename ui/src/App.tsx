@@ -13,6 +13,7 @@ import GitView from './components/GitView';
 import TerminalView from './components/TerminalView';
 import ProjectMenu from './components/ProjectMenu';
 import DiffView from './components/DiffView';
+import { Toaster, toast } from 'sonner';
 
 import * as api from './services/api';
 
@@ -138,13 +139,19 @@ const App: React.FC = () => {
     }
   };
 
-  const handleGitFileClick = (gitFile: GitFileNode) => {
+  const handleGitFileClick = async (gitFile: GitFileNode) => {
      const tabId = `diff-${gitFile.id}`;
      const existingTab = openTabs.find(t => t.id === tabId);
      
      if (!existingTab) {
-        // TODO: fetch Diff content (original vs modified)
-        // For now using placeholder
+        let diffData = { old: '', new: '' };
+        try {
+            diffData = await api.getGitDiff(gitFile.path);
+        } catch (e) {
+            console.error("Failed to fetch diff", e);
+            toast.error("Failed to fetch diff");
+        }
+
         setOpenTabs([...openTabs, {
             id: tabId,
             fileId: gitFile.id,
@@ -152,8 +159,8 @@ const App: React.FC = () => {
             isDirty: false,
             type: 'diff',
             data: {
-                original: gitFile.originalContent || '// Loading...',
-                modified: gitFile.modifiedContent || '// Loading...'
+                original: diffData.old || '// Empty',
+                modified: diffData.new || '// Empty'
             }
         }]);
      }
@@ -191,12 +198,47 @@ const App: React.FC = () => {
     }
   };
 
-  const handleEditorChange = async (_newContent: string) => {
+  const handleEditorChange = (newContent: string) => {
       // Find active tab and update dirty state
-      // Debounce save?
-      // For now just console log
-      console.log("Content changed");
+      if (!activeFileId) return;
+
+      setOpenTabs(prev => prev.map(tab => {
+          if (tab.fileId === activeFileId && tab.type === 'code') {
+              return { ...tab, isDirty: true, data: newContent };
+          }
+          return tab;
+      }));
   };
+
+  const saveFile = async () => {
+      const tab = openTabs.find(t => t.fileId === activeFileId);
+      if (!tab || tab.type !== 'code' || !activeFileId) return;
+
+      try {
+          // activeFileId is the path (from node.id)
+          await api.writeFile(activeFileId, tab.data);
+          setOpenTabs(prev => prev.map(t => {
+              if (t.id === tab.id) return { ...t, isDirty: false };
+              return t;
+          }));
+          toast.success("File saved");
+      } catch (e) {
+          console.error("Failed to save", e);
+          toast.error("Failed to save file");
+      }
+  };
+
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+            e.preventDefault();
+            saveFile();
+        }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeFileId, openTabs]);
 
   // --- Render Helpers ---
   const activeTab = openTabs.find(t => t.fileId === activeFileId);
@@ -276,9 +318,34 @@ const App: React.FC = () => {
     );
   };
 
+  const handleCommit = async (message: string) => {
+      try {
+          const filesToStage = gitFiles.map(f => f.path);
+          if (filesToStage.length === 0) {
+              toast.info("No changes to commit");
+              return;
+          }
+          await api.stageFile(filesToStage);
+          await api.commitChanges(message);
+          toast.success("Committed successfully");
+          loadGitStatus();
+      } catch (e) {
+          console.error("Commit failed", e);
+          toast.error("Commit failed");
+      }
+  };
+
   const renderContent = () => {
     if (currentView === AppView.GIT && activeFileId === null) {
-        return <GitView files={gitFiles} onFileClick={handleGitFileClick} locale={locale} />;
+        return (
+            <GitView 
+                files={gitFiles} 
+                onFileClick={handleGitFileClick} 
+                onCommit={handleCommit}
+                onRefresh={loadGitStatus}
+                locale={locale} 
+            />
+        );
     }
 
     if (currentView === AppView.TERMINAL) {
@@ -308,6 +375,7 @@ const App: React.FC = () => {
         }
         return (
             <CodeEditor 
+                key={activeTab.id}
                 content={activeTab.data || ''} 
                 language="typescript" // Detect from tab.title?
                 onChange={handleEditorChange} 
@@ -325,6 +393,7 @@ const App: React.FC = () => {
 
   return (
     <div className="h-screen flex flex-col bg-ide-bg text-ide-text overflow-hidden font-mono transition-colors duration-300">
+      <Toaster position="bottom-right" theme={theme === 'light' ? 'light' : 'dark'} />
       
       {/* 1. Top Bar */}
       {renderTopBar()}

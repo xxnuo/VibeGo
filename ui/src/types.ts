@@ -22,6 +22,7 @@ export interface GitFileNode {
     path: string;
     originalContent?: string;
     modifiedContent?: string;
+    staged?: boolean;
 }
 
 export interface TerminalSession {

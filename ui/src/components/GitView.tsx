@@ -6,11 +6,14 @@ import type { GitFileNode, Locale } from '../types';
 interface GitViewProps {
   files: GitFileNode[];
   onFileClick: (file: GitFileNode) => void;
+  onCommit: (message: string) => void;
+  onRefresh: () => void;
   locale: Locale;
 }
 
-const GitView: React.FC<GitViewProps> = ({ files, onFileClick }) => {
+const GitView: React.FC<GitViewProps> = ({ files, onFileClick, onCommit, onRefresh }) => {
   // const t = useTranslation(locale);
+  const [message, setMessage] = React.useState('');
 
   const getStatusColor = (status: string) => {
       switch(status) {
@@ -28,7 +31,10 @@ const GitView: React.FC<GitViewProps> = ({ files, onFileClick }) => {
           <GitBranch size={18} />
           VCS_CONTROL
         </h2>
-        <button className="p-1 hover:text-ide-accent animate-spin-slow">
+        <button 
+            onClick={onRefresh}
+            className="p-1 hover:text-ide-accent hover:animate-spin"
+        >
           <RotateCw size={16} />
         </button>
       </div>
@@ -36,10 +42,10 @@ const GitView: React.FC<GitViewProps> = ({ files, onFileClick }) => {
       <div className="space-y-4 flex-1">
         <div className="border border-ide-border bg-ide-panel/30">
           <div className="flex justify-between items-center p-2 border-b border-ide-border bg-ide-panel">
-            <span className="text-xs font-bold text-ide-accent uppercase">STAGED_CHANGES</span>
+            <span className="text-xs font-bold text-ide-accent uppercase">CHANGES</span>
             <span className="text-xs bg-ide-accent text-black px-1 font-bold">{files.length}</span>
           </div>
-          <div className="divide-y divide-ide-border">
+          <div className="divide-y divide-ide-border max-h-[300px] overflow-auto">
             {files.map((file) => (
               <button
                 key={file.id}
@@ -60,10 +66,21 @@ const GitView: React.FC<GitViewProps> = ({ files, onFileClick }) => {
 
         <div className="border border-ide-border bg-ide-panel/30 p-2">
            <textarea 
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
             placeholder="> enter_commit_msg"
             className="w-full bg-black border border-ide-border p-2 text-xs text-ide-accent focus:outline-none focus:border-ide-accent min-h-[60px] placeholder-ide-mute/50"
            />
-           <button className="w-full mt-2 bg-ide-accent text-black font-bold py-2 text-xs flex items-center justify-center gap-2 hover:bg-ide-accent/80">
+           <button 
+             onClick={() => {
+                 if (message.trim()) {
+                     onCommit(message);
+                     setMessage('');
+                 }
+             }}
+             className="w-full mt-2 bg-ide-accent text-black font-bold py-2 text-xs flex items-center justify-center gap-2 hover:bg-ide-accent/80 disabled:opacity-50"
+             disabled={!message.trim()}
+           >
              <Play size={12} fill="currentColor" />
              EXECUTE_COMMIT
            </button>
