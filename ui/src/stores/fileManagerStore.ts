@@ -20,6 +20,7 @@ export type ViewMode = 'list' | 'grid';
 interface FileManagerState {
   currentPath: string;
   rootPath: string;
+  initialized: boolean;
   pathHistory: string[];
   historyIndex: number;
   files: FileItem[];
@@ -68,6 +69,7 @@ interface FileManagerState {
 export const useFileManagerStore = create<FileManagerState>((set, get) => ({
   currentPath: '.',
   rootPath: '.',
+  initialized: false,
   pathHistory: ['.'],
   historyIndex: 0,
   files: [],

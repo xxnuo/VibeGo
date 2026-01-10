@@ -85,17 +85,18 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
   const [renameFile, setRenameFile] = useState<FileItem | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const loadFiles = useCallback(async (path: string, updatePath = false) => {
+  const loadFiles = useCallback(async (path: string, initialize = false) => {
     setLoading(true);
     setError(null);
     try {
       const res = await fileApi.list(path);
-      if (updatePath && res.path && res.path !== path) {
+      if (initialize && res.path) {
         useFileManagerStore.getState().setCurrentPath(res.path);
         useFileManagerStore.getState().setRootPath(res.path);
         useFileManagerStore.setState({
           pathHistory: [res.path],
           historyIndex: 0,
+          initialized: true,
         });
       }
       const files: FileItem[] = res.files.map((f) => ({
@@ -119,7 +120,10 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
   }, [setFiles, setLoading, setError]);
 
   useEffect(() => {
-    loadFiles(initialPath, true);
+    const { initialized } = useFileManagerStore.getState();
+    if (!initialized) {
+      loadFiles(initialPath, true);
+    }
   }, []);
 
   useEffect(() => {
