@@ -5,16 +5,16 @@ import {
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 import {
-  useAppStore, useEditorStore, useTerminalStore,
+  useAppStore, useEditorStore, useTerminalStore, usePreviewStore,
   AppView, type GitFileNode, type FileItem
 } from '@/stores';
 
-import CodeEditor from '@/components/CodeEditor';
 import FileManager from '@/components/FileManager';
 import GitView from '@/components/GitView';
 import TerminalView from '@/components/TerminalView';
 import ProjectMenu from '@/components/ProjectMenu';
 import DiffView from '@/components/DiffView';
+import { FilePreview } from '@/components/preview';
 
 const MOCK_GIT_FILES: GitFileNode[] = [
   {
@@ -43,6 +43,9 @@ const App: React.FC = () => {
   const { theme, locale, currentView, isMenuOpen, toggleTheme, toggleLocale, setCurrentView, setMenuOpen } = useAppStore();
   const { tabs, activeTabId, openFileTab, closeTab, setActiveTabId } = useEditorStore();
   const { terminals, activeTerminalId, setTerminals, setActiveTerminalId } = useTerminalStore();
+  const previewFile = usePreviewStore((s) => s.file);
+  const setPreviewFile = usePreviewStore((s) => s.setFile);
+  const resetPreview = usePreviewStore((s) => s.reset);
 
   const t = useTranslation(locale);
 
@@ -152,11 +155,19 @@ const App: React.FC = () => {
     }
 
     if (currentView === AppView.FILES && activeTabId === null) {
+      if (previewFile) {
+        return (
+          <FilePreview
+            file={previewFile}
+            onClose={() => resetPreview()}
+          />
+        );
+      }
       return (
         <FileManager
           initialPath="."
           onFileOpen={(file: FileItem) => {
-            openFileTab(file.path, file.name, 'code');
+            setPreviewFile(file);
           }}
         />
       );
@@ -166,13 +177,25 @@ const App: React.FC = () => {
       if (activeTab.type === 'diff' && activeTab.data) {
         return <DiffView original={activeTab.data.original || ''} modified={activeTab.data.modified || ''} />;
       }
-      return (
-        <CodeEditor
-          content=""
-          language="typescript"
-          onChange={() => { }}
-        />
-      );
+      const tabFile = tabs.find(t => t.id === activeTabId);
+      if (tabFile) {
+        return (
+          <FilePreview
+            file={{
+              path: tabFile.fileId,
+              name: tabFile.title,
+              size: 0,
+              isDir: false,
+              isSymlink: false,
+              isHidden: false,
+              mode: '',
+              modTime: '',
+              extension: tabFile.title.includes('.') ? '.' + tabFile.title.split('.').pop() : '',
+            }}
+            onClose={() => closeTab(activeTabId!)}
+          />
+        );
+      }
     }
 
     return (

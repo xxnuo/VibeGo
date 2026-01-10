@@ -24,7 +24,6 @@ const FileManagerBreadcrumb: React.FC<FileManagerBreadcrumbProps> = ({ className
   const [editValue, setEditValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const rootParts = rootPath === '/' ? [] : rootPath.split('/').filter(Boolean);
   const pathParts = currentPath === '/'
     ? []
     : currentPath.split('/').filter(Boolean);
