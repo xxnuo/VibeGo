@@ -1,7 +1,7 @@
 import React from 'react';
 import { FolderOpen, Settings, Save, Download, Home, X, Sun, Moon, Globe, Terminal, Monitor } from 'lucide-react';
-import type { Locale, Theme } from '@/stores';
-import { useTranslation } from '@/utils/i18n';
+import type { Theme } from '@/stores';
+import { useTranslation, type Locale } from '@/lib/i18n';
 
 interface ProjectMenuProps {
   isOpen: boolean;
@@ -79,11 +79,11 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
         </div>
 
         <div className="grid grid-cols-4 gap-4">
-          <MenuItem icon={<Save size={20} />} label={t('saveAll')} />
-          <MenuItem icon={<FolderOpen size={20} />} label={t('open')} />
-          <MenuItem icon={<Download size={20} />} label={t('export')} />
-          <MenuItem icon={<Settings size={20} />} label={t('settings')} />
-          <MenuItem icon={<Home size={20} />} label={t('home')} />
+          <MenuItem icon={<Save size={20} />} label={t('common.saveAll')} />
+          <MenuItem icon={<FolderOpen size={20} />} label={t('common.open')} />
+          <MenuItem icon={<Download size={20} />} label={t('common.export')} />
+          <MenuItem icon={<Settings size={20} />} label={t('common.settings')} />
+          <MenuItem icon={<Home size={20} />} label={t('common.home')} />
         </div>
 
         <div className="mt-6 pt-4 border-t border-ide-border flex justify-between text-[10px] text-ide-mute">

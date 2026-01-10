@@ -1,0 +1,32 @@
+{
+  "common": {
+    "settings": "设置",
+    "theme": "主题",
+    "language": "语言",
+    "saveAll": "保存所有",
+    "open": "打开...",
+    "export": "导出",
+    "home": "首页"
+  },
+  "sidebar": {
+    "project": "项目",
+    "explorer": "资源管理器",
+    "sourceControl": "源代码管理",
+    "terminal": "终端",
+    "files": "文件",
+    "git": "Git"
+  },
+  "git": {
+    "changes": "更改",
+    "commit": "提交",
+    "pullRequest": "合并请求",
+    "commitMessage": "提交信息...",
+    "configureUpstream": "配置上游以启用 PR。"
+  },
+  "terminal": {
+    "noActiveSession": "无活动终端会话"
+  },
+  "fileTree": {
+    "projectRoot": "项目根目录"
+  }
+}

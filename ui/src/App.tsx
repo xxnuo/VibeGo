@@ -3,7 +3,7 @@ import {
   Menu, Files, GitGraph, Terminal, Plus,
   X, FileText, LayoutTemplate, Box, FileDiff, Cpu, Wifi
 } from 'lucide-react';
-import { useTranslation } from '@/utils/i18n';
+import { useTranslation } from '@/lib/i18n';
 import {
   useAppStore, useEditorStore, useTerminalStore, useFileStore,
   AppView, type FileNode, type GitFileNode
@@ -141,7 +141,7 @@ const App: React.FC = () => {
           <button
             onClick={() => setActiveTabId(null)}
             className={`shrink-0 h-8 w-8 flex items-center justify-center rounded-md border transition-all ${activeTabId === null ? 'bg-ide-accent text-ide-bg border-ide-accent shadow-glow' : 'bg-transparent text-ide-mute border-transparent hover:bg-ide-panel hover:text-ide-text'}`}
-            aria-label={t('explorer')}
+            aria-label={t('sidebar.explorer')}
           >
             <LayoutTemplate size={18} />
           </button>
@@ -207,7 +207,7 @@ const App: React.FC = () => {
               <div className="h-full bg-ide-accent w-3/4 shadow-glow"></div>
             </div>
           </div>
-          <h3 className="text-[10px] font-bold text-ide-mute uppercase mb-2 px-2 tracking-widest">{t('projectRoot')}</h3>
+          <h3 className="text-[10px] font-bold text-ide-mute uppercase mb-2 px-2 tracking-widest">{t('fileTree.projectRoot')}</h3>
           <FileTree nodes={fileTree} onFileClick={handleFileClick} activeFileId={activeTab?.fileId} />
         </div>
       );
