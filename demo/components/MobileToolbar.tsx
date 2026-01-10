@@ -8,17 +8,17 @@ const MobileToolbar: React.FC<MobileToolbarProps> = ({ onInsert }) => {
   const chars = ['{', '}', '(', ')', '[', ']', '<', '>', '=', '=>', ';', '"', "'", '`', '$', '!'];
 
   return (
-    <div className="h-10 bg-ide-panel border-t border-ide-border flex items-center overflow-x-auto no-scrollbar px-2 gap-2 shadow-lg z-10">
+    <div className="h-10 bg-black border-t border-ide-accent flex items-center overflow-x-auto no-scrollbar px-1 gap-1 z-10">
       {chars.map((char) => (
         <button
           key={char}
           onClick={() => onInsert(char)}
-          className="flex-shrink-0 min-w-[32px] h-8 px-2 bg-ide-bg rounded text-sm font-mono text-ide-accent hover:bg-slate-700 active:bg-ide-accent active:text-white transition-colors flex items-center justify-center border border-ide-border"
+          className="flex-shrink-0 min-w-[36px] h-8 bg-ide-panel text-ide-accent border border-ide-border hover:bg-ide-accent hover:text-black hover:border-ide-accent active:translate-y-0.5 transition-all flex items-center justify-center font-bold"
         >
           {char}
         </button>
       ))}
-      <div className="w-2 flex-shrink-0" /> {/* Spacer */}
+      <div className="w-2 flex-shrink-0" />
     </div>
   );
 };

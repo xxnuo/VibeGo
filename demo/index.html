@@ -1,14 +1,19 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
     <title>MobIDE</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         darkMode: 'class',
         theme: {
+          fontFamily: {
+            mono: ['var(--font-mono)', 'monospace'],
+            sans: ['var(--font-mono)', 'monospace'],
+          },
           extend: {
             colors: {
               ide: {
@@ -23,54 +28,113 @@
                 diffDel: 'var(--ide-diff-del)',
                 diffDelBg: 'var(--ide-diff-del-bg)',
               }
+            },
+            borderRadius: {
+              DEFAULT: 'var(--radius)',
+              md: 'var(--radius)',
+              lg: 'var(--radius)',
+              xl: 'var(--radius)',
+              '2xl': 'var(--radius)',
+            },
+            boxShadow: {
+              'glow': 'var(--ide-shadow)',
             }
           }
         }
       }
     </script>
     <style>
-      /* Hide scrollbar for Chrome, Safari and Opera */
-      .no-scrollbar::-webkit-scrollbar {
-          display: none;
-      }
-      /* Hide scrollbar for IE, Edge and Firefox */
-      .no-scrollbar {
-          -ms-overflow-style: none;  /* IE and Edge */
-          scrollbar-width: none;  /* Firefox */
-      }
+      /* Hide scrollbar */
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       
       :root {
+        /* Base Defaults (Light Theme) */
         --ide-bg: #f8fafc;
         --ide-panel: #ffffff;
-        --ide-border: #e2e8f0;
-        --ide-accent: #007acc;
+        --ide-border: #cbd5e1;
+        --ide-accent: #2563eb; /* Blue-600 */
         --ide-text: #0f172a;
         --ide-mute: #64748b;
         --ide-diff-add: #166534;
         --ide-diff-add-bg: #dcfce7;
         --ide-diff-del: #991b1b;
         --ide-diff-del-bg: #fee2e2;
+        --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        --radius: 0.5rem;
+        --ide-shadow: none;
       }
 
-      /* VSCode Modern Dark Theme Palette */
-      .dark {
+      /* Dark Theme (VSCode Style) */
+      html.dark {
         --ide-bg: #1e1e1e;
         --ide-panel: #252526;
         --ide-border: #333333;
-        --ide-accent: #007acc;
+        --ide-accent: #007acc; /* VSCode Blue */
         --ide-text: #cccccc;
         --ide-mute: #858585;
         --ide-diff-add: #4ade80;
-        --ide-diff-add-bg: rgba(74, 222, 128, 0.08);
+        --ide-diff-add-bg: rgba(74, 222, 128, 0.1);
         --ide-diff-del: #f87171;
-        --ide-diff-del-bg: rgba(248, 113, 113, 0.08);
+        --ide-diff-del-bg: rgba(248, 113, 113, 0.1);
+        --radius: 0.5rem;
+        --ide-shadow: none;
+      }
+
+      /* Hacker Theme (Standard Font, Sharp, High Contrast) */
+      html.hacker {
+        --ide-bg: #050505;
+        --ide-panel: #111111;
+        --ide-border: #333333;
+        --ide-accent: #22c55e; /* Green-500 */
+        --ide-text: #f0f0f0;
+        --ide-mute: #666666;
+        --ide-diff-add: #22c55e;
+        --ide-diff-add-bg: rgba(34, 197, 94, 0.1);
+        --ide-diff-del: #ef4444;
+        --ide-diff-del-bg: rgba(239, 68, 68, 0.1);
+        --radius: 0px; /* Sharp corners */
+        --ide-shadow: none;
+      }
+
+      /* Terminal Theme (Cyberpunk, JetBrains Mono, Scanlines, Glow) */
+      html.terminal {
+        --ide-bg: #000000;
+        --ide-panel: #0a0a0a;
+        --ide-border: #003300;
+        --ide-accent: #00ff41; /* Matrix Green */
+        --ide-text: #e0e0e0;
+        --ide-mute: #005500;
+        --ide-diff-add: #00ff41;
+        --ide-diff-add-bg: rgba(0, 255, 65, 0.1);
+        --ide-diff-del: #ff0055;
+        --ide-diff-del-bg: rgba(255, 0, 85, 0.1);
+        --font-mono: 'JetBrains Mono', monospace;
+        --radius: 0px;
+        --ide-shadow: 0 0 10px var(--ide-accent);
       }
 
       body {
         background-color: var(--ide-bg);
         color: var(--ide-text);
+        font-family: var(--font-mono);
         overscroll-behavior: none;
-        transition: background-color 0.2s, color 0.2s;
+        transition: background-color 0.3s, color 0.3s;
+      }
+
+      /* CRT Scanline Effect (Only for terminal class) */
+      .scanlines::before {
+        content: " ";
+        display: block;
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        right: 0;
+        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+        z-index: 9999;
+        background-size: 100% 2px, 3px 100%;
+        pointer-events: none;
       }
     </style>
   <script type="importmap">

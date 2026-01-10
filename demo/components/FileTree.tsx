@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { FileNode } from '../types';
-import { Folder, FileCode, ChevronRight, ChevronDown, File } from 'lucide-react';
+import { Folder, FileCode, ChevronRight, ChevronDown, Hash } from 'lucide-react';
 
 interface FileTreeProps {
   nodes: FileNode[];
@@ -11,7 +11,7 @@ interface FileTreeProps {
 
 const FileTree: React.FC<FileTreeProps> = ({ nodes, onFileClick, activeFileId, depth = 0 }) => {
   return (
-    <div className="select-none">
+    <div className="select-none font-mono text-xs">
       {nodes.map((node) => (
         <FileTreeNode 
           key={node.id} 
@@ -31,10 +31,10 @@ const FileTreeNode: React.FC<{
   activeFileId?: string;
   depth: number;
 }> = ({ node, onFileClick, activeFileId, depth }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true); // Default open for hacker feel
 
   const isActive = node.id === activeFileId;
-  const paddingLeft = `${depth * 1.5 + 1}rem`;
+  const paddingLeft = `${depth * 1.5 + 0.5}rem`;
 
   const handleClick = () => {
     if (node.type === 'folder') {
@@ -48,24 +48,26 @@ const FileTreeNode: React.FC<{
     <div>
       <div
         onClick={handleClick}
-        className={`flex items-center py-3 pr-4 border-b border-white/5 active:bg-ide-accent/10 transition-colors ${
-          isActive ? 'bg-ide-accent/20 text-ide-accent' : 'text-ide-text'
+        className={`flex items-center py-2 pr-2 border-l-2 cursor-pointer hover:bg-ide-accent/10 ${
+          isActive 
+            ? 'border-ide-accent bg-ide-accent/20 text-ide-accent' 
+            : 'border-transparent text-ide-mute hover:text-ide-text'
         }`}
         style={{ paddingLeft }}
       >
-        <span className="mr-2 text-ide-mute">
+        <span className="mr-2 opacity-70">
           {node.type === 'folder' ? (
-            isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+            isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />
           ) : (
-            <span className="w-4" />
+             <span className="w-3.5 inline-block text-[10px] text-center"></span>
           )}
         </span>
         
-        <span className="mr-2 text-ide-accent">
-            {node.type === 'folder' ? <Folder size={18} /> : <FileCode size={18} />}
+        <span className="mr-2">
+            {node.type === 'folder' ? <Folder size={14} /> : <Hash size={14} />}
         </span>
         
-        <span className="text-sm truncate font-medium">{node.name}</span>
+        <span className="truncate">{node.name}</span>
       </div>
       
       {node.type === 'folder' && isOpen && node.children && (

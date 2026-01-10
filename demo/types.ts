@@ -37,5 +37,5 @@ export interface EditorTab {
   data?: any; // For diff content
 }
 
-export type Theme = 'light' | 'dark';
+export type Theme = 'light' | 'dark' | 'hacker' | 'terminal';
 export type Locale = 'en' | 'zh';

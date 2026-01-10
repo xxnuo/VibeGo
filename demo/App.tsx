@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AppView, FileNode, TerminalSession, EditorTab, Theme, Locale, GitFileNode } from './types';
 import { 
   Menu, Files, GitGraph, Terminal, Plus, 
-  X, FileText, LayoutTemplate, Box, FileDiff
+  X, FileText, LayoutTemplate, Box, FileDiff, Cpu, Zap, Wifi
 } from 'lucide-react';
 import { useTranslation } from './utils/i18n';
 
@@ -15,8 +15,8 @@ import DiffView from './components/DiffView';
 
 const App: React.FC = () => {
   // --- State ---
-  const [theme, setTheme] = useState<Theme>('dark');
-  const [locale, setLocale] = useState<Locale>('zh'); 
+  const [theme, setTheme] = useState<Theme>('terminal');
+  const [locale, setLocale] = useState<Locale>('en'); 
   
   const [currentView, setCurrentView] = useState<AppView>(AppView.FILES);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -29,10 +29,27 @@ const App: React.FC = () => {
   // --- Effects ---
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
+    const body = document.body;
+    
+    // Reset classes
+    root.className = '';
+    body.classList.remove('scanlines');
+
+    // Apply classes based on theme
+    switch (theme) {
+        case 'light':
+            // Default, no class needed on root
+            break;
+        case 'dark':
+            root.classList.add('dark');
+            break;
+        case 'hacker':
+            root.classList.add('dark', 'hacker');
+            break;
+        case 'terminal':
+            root.classList.add('dark', 'terminal');
+            body.classList.add('scanlines');
+            break;
     }
   }, [theme]);
 
@@ -40,54 +57,59 @@ const App: React.FC = () => {
   const fileSystem: FileNode[] = [
     {
       id: 'root',
-      name: 'my-project',
+      name: 'mainframe_v1',
       type: 'folder',
       children: [
         { 
           id: 'src', 
-          name: 'src', 
+          name: 'kernel', 
           type: 'folder', 
           children: [
-             { id: 'app', name: 'App.tsx', type: 'file', language: 'typescript', content: "import React from 'react';\n\nconst App = () => {\n  return <h1>Hello World</h1>;\n};\n\nexport default App;" },
-             { id: 'utils', name: 'utils.ts', type: 'file', language: 'typescript', content: "export const add = (a, b) => a + b;" },
-             { id: 'btn', name: 'Button.tsx', type: 'file', language: 'typescript', content: "export const Button = () => <button>Click</button>;" }
+             { id: 'app', name: 'boot.sys', type: 'file', language: 'typescript', content: "// BOOT SEQUENCE INITIATED\nimport System from 'kernel';\n\nSystem.init({ mode: 'HACK' });" },
+             { id: 'utils', name: 'decrypt.ts', type: 'file', language: 'typescript', content: "export const crack = (hash) => {\n  // BRUTE FORCE ATTACK\n  return 'p@ssword1';\n}" },
+             { id: 'btn', name: 'payload.js', type: 'file', language: 'javascript', content: "const deploy = () => console.log('Payload delivered');" }
           ] 
         },
-        { id: 'pkg', name: 'package.json', type: 'file', language: 'json', content: "{\n  \"name\": \"demo-app\"\n}" },
-        { id: 'readme', name: 'README.md', type: 'file', language: 'markdown', content: "# Demo App\n\nThis is a cool project." },
+        { id: 'pkg', name: 'manifest.json', type: 'file', language: 'json', content: "{\n  \"target\": \"corp_network\"\n}" },
+        { id: 'readme', name: 'TARGETS.md', type: 'file', language: 'markdown', content: "# TARGET LIST\n\n1. Main Server\n2. Backup Grid" },
       ]
     }
   ];
 
   const gitFiles: GitFileNode[] = [
     { 
-        id: 'git-1', name: 'Button.tsx', path: 'src/components/Button.tsx', status: 'modified',
-        originalContent: "export const Button = () => <button>Click</button>;",
-        modifiedContent: "export const Button = () => <button className='btn'>Click Me</button>;"
+        id: 'git-1', name: 'payload.js', path: 'src/kernel/payload.js', status: 'modified',
+        originalContent: "const deploy = () => console.log('Waiting...');",
+        modifiedContent: "const deploy = () => console.log('Payload delivered');"
     },
     { 
-        id: 'git-2', name: 'helpers.ts', path: 'src/utils/helpers.ts', status: 'added',
+        id: 'git-2', name: 'decrypt.ts', path: 'src/kernel/decrypt.ts', status: 'added',
         originalContent: "",
-        modifiedContent: "export const formatDate = (d) => d.toString();"
+        modifiedContent: "export const crack = (hash) => { ... }"
     },
     {
-        id: 'git-3', name: 'README.old.md', path: 'README.old.md', status: 'deleted',
-        originalContent: "# Old Readme\n\nDeprecated.",
+        id: 'git-3', name: 'logs.txt', path: 'logs.txt', status: 'deleted',
+        originalContent: "ACCESS GRANTED",
         modifiedContent: ""
     }
   ];
 
   const [openTabs, setOpenTabs] = useState<EditorTab[]>([
-    { id: 'tab-1', fileId: 'app', title: 'App.tsx', isDirty: false, type: 'code' }
+    { id: 'tab-1', fileId: 'app', title: 'boot.sys', isDirty: false, type: 'code' }
   ]);
   
   const [terminals, setTerminals] = useState<TerminalSession[]>([
-    { id: 'term-1', name: 'sh', history: ['npm install', 'found 0 vulnerabilities'] },
-    { id: 'term-2', name: 'node', history: ['Welcome to Node.js v18.0.0'] }
+    { id: 'term-1', name: 'root@proxynode', history: ['> connecting to 192.168.0.1...', '> secure handshake... OK'] },
+    { id: 'term-2', name: 'net_watch', history: ['scanning ports...'] }
   ]);
 
   // --- Handlers ---
-  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  const toggleTheme = () => {
+    const order: Theme[] = ['light', 'dark', 'hacker', 'terminal'];
+    const nextIndex = (order.indexOf(theme) + 1) % order.length;
+    setTheme(order[nextIndex]);
+  };
+  
   const toggleLocale = () => setLocale(prev => prev === 'en' ? 'zh' : 'en');
 
   const handleFileClick = (node: FileNode) => {
@@ -115,7 +137,7 @@ const App: React.FC = () => {
         setOpenTabs([...openTabs, {
             id: tabId,
             fileId: gitFile.id,
-            title: `${gitFile.name} (Diff)`,
+            title: `${gitFile.name} [DIFF]`,
             isDirty: false,
             type: 'diff',
             data: {
@@ -167,31 +189,36 @@ const App: React.FC = () => {
 
   const renderTopBar = () => {
     return (
-      <div className="h-12 bg-ide-bg border-b border-ide-border flex items-center overflow-x-auto no-scrollbar px-2 gap-2 flex-shrink-0 transition-colors duration-200">
+      <div className="h-12 bg-ide-bg border-b border-ide-border flex items-center overflow-x-auto no-scrollbar px-2 gap-2 flex-shrink-0 transition-colors duration-300">
         
+        {/* System ID / Icon */}
+        <div className="px-2 flex items-center justify-center text-ide-accent font-bold text-xs border-r border-ide-border mr-1 h-8">
+            <span className="animate-pulse mr-1">●</span> 4492
+        </div>
+
         {(currentView === AppView.FILES || currentView === AppView.GIT) && (
           <>
             <button 
                 onClick={() => setActiveFileId(null)}
-                className={`flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-md transition-colors ${activeFileId === null ? 'bg-ide-accent text-white font-bold' : 'bg-ide-panel text-ide-mute border border-ide-border'}`}
+                className={`flex-shrink-0 h-8 w-8 flex items-center justify-center rounded-md border transition-all ${activeFileId === null ? 'bg-ide-accent text-ide-bg border-ide-accent shadow-glow' : 'bg-transparent text-ide-mute border-transparent hover:bg-ide-panel hover:text-ide-text'}`}
                 aria-label={t('explorer')}
             >
-                <LayoutTemplate size={20} />
+                <LayoutTemplate size={18} />
             </button>
-            <div className="w-px h-6 bg-ide-border mx-1 flex-shrink-0" />
+            <div className="w-px h-5 bg-ide-border mx-1 flex-shrink-0" />
             {openTabs.map(tab => (
               <div 
                 key={tab.id}
                 onClick={() => setActiveFileId(tab.fileId)}
-                className={`flex-shrink-0 pl-3 pr-2 py-1.5 rounded-md flex items-center gap-2 text-sm border transition-all cursor-pointer ${
+                className={`flex-shrink-0 px-3 h-8 rounded-md flex items-center gap-2 text-xs border transition-all cursor-pointer ${
                     activeFileId === tab.fileId 
-                    ? 'bg-ide-panel border-ide-accent text-ide-accent' 
+                    ? 'bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm' 
                     : 'bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text'
                 }`}
               >
                 {tab.type === 'diff' ? <FileDiff size={14} /> : <FileText size={14} />}
-                <span className="max-w-[100px] truncate">{tab.title}</span>
-                <button onClick={(e) => closeTab(e, tab.id)} className="p-0.5 hover:bg-white/10 rounded-full transition-colors">
+                <span className="max-w-[100px] truncate font-medium">{tab.title}</span>
+                <button onClick={(e) => closeTab(e, tab.id)} className="hover:text-red-500 rounded-full p-0.5 hover:bg-ide-bg">
                   <X size={12} />
                 </button>
               </div>
@@ -205,9 +232,9 @@ const App: React.FC = () => {
                <button
                   key={term.id}
                   onClick={() => setActiveTerminalId(term.id)}
-                  className={`flex-shrink-0 px-4 py-1.5 rounded-md flex items-center gap-2 text-sm font-mono border ${
+                  className={`flex-shrink-0 px-4 h-8 rounded-md flex items-center gap-2 text-xs font-mono border ${
                     activeTerminalId === term.id
-                    ? 'bg-ide-panel border-ide-accent text-ide-accent' 
+                    ? 'bg-ide-panel border-ide-accent text-ide-accent shadow-glow' 
                     : 'bg-transparent border-transparent text-ide-mute'
                   }`}
                >
@@ -218,7 +245,7 @@ const App: React.FC = () => {
           </>
         )}
 
-         <button className="flex-shrink-0 w-8 h-8 rounded-md bg-ide-panel hover:bg-ide-accent hover:text-white text-ide-mute flex items-center justify-center ml-auto border border-ide-border transition-colors">
+         <button className="flex-shrink-0 w-8 h-8 rounded-md ml-auto text-ide-accent hover:bg-ide-accent hover:text-ide-bg flex items-center justify-center border border-ide-border transition-colors">
             <Plus size={18} />
          </button>
       </div>
@@ -236,8 +263,14 @@ const App: React.FC = () => {
 
     if (currentView === AppView.FILES && activeFileId === null) {
         return (
-            <div className="h-full overflow-y-auto bg-ide-bg p-2 transition-colors duration-200">
-                <h3 className="text-[10px] font-bold text-ide-mute uppercase tracking-[0.1em] mb-3 px-3 mt-2">{t('projectRoot')}</h3>
+            <div className="h-full overflow-y-auto bg-ide-bg p-2 transition-colors duration-300">
+                <div className="border border-ide-border rounded-lg p-3 mb-4 bg-ide-panel/50 shadow-sm">
+                    <p className="text-[10px] text-ide-accent mb-2 font-bold tracking-wider">SYSTEM_STATUS</p>
+                    <div className="h-1.5 w-full bg-ide-border rounded-full overflow-hidden">
+                        <div className="h-full bg-ide-accent w-3/4 shadow-glow"></div>
+                    </div>
+                </div>
+                <h3 className="text-[10px] font-bold text-ide-mute uppercase mb-2 px-2 tracking-widest">{t('projectRoot')}</h3>
                 <FileTree nodes={fileSystem} onFileClick={handleFileClick} activeFileId={activeFileId || undefined} />
             </div>
         );
@@ -257,70 +290,74 @@ const App: React.FC = () => {
     }
     
     return (
-        <div className="h-full flex flex-col items-center justify-center text-ide-mute gap-4">
-             <LayoutTemplate size={48} className="opacity-20" />
-             <p className="text-sm">Select a file from the explorer</p>
+        <div className="h-full flex flex-col items-center justify-center text-ide-mute gap-4 border-2 border-dashed border-ide-border m-4 rounded-xl bg-ide-panel/30">
+             <LayoutTemplate size={48} className="text-ide-accent opacity-50" />
+             <p className="text-sm font-bold tracking-widest text-ide-accent">WAITING_FOR_INPUT...</p>
         </div>
     );
   };
 
   return (
-    <div className="h-screen flex flex-col bg-ide-bg text-ide-text overflow-hidden transition-colors duration-200">
+    <div className="h-screen flex flex-col bg-ide-bg text-ide-text overflow-hidden font-mono transition-colors duration-300">
       
       {/* 1. Top Bar */}
       {renderTopBar()}
 
       {/* 2. Main Workspace */}
-      <main className="flex-1 overflow-hidden relative">
+      <main className="flex-1 overflow-hidden relative border-b border-ide-border">
         {renderContent()}
       </main>
 
-      {/* 3. Bottom Bar */}
-      <footer className="h-14 bg-ide-panel border-t border-ide-border flex items-center px-4 justify-between flex-shrink-0 z-20 transition-colors duration-200 shadow-lg">
+      {/* 3. Footer / Nav */}
+      <footer className="h-14 bg-ide-panel border-t border-ide-border flex items-center justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.1)]">
         
         {/* Left: Project Menu Trigger */}
         <button 
           onClick={() => setIsMenuOpen(true)}
-          className="flex items-center gap-2 group"
+          className="h-full px-4 flex items-center gap-3 hover:bg-ide-bg transition-colors border-r border-ide-border group"
         >
-          <div className="p-2 bg-ide-bg rounded-lg border border-ide-border group-hover:border-ide-accent transition-colors">
-             <Menu size={20} className="text-ide-text group-hover:text-ide-accent" />
+          <div className="p-1.5 rounded-md border border-ide-border group-hover:border-ide-accent group-hover:text-ide-accent transition-colors">
+            <Menu size={18} />
           </div>
-          <div className="flex flex-col items-start">
-             <span className="text-[9px] text-ide-mute leading-none uppercase tracking-wider">{t('project')}</span>
-             <span className="text-xs font-bold leading-tight">my-project</span>
-          </div>
+          <span className="font-bold tracking-wider text-xs hidden sm:inline">MENU</span>
         </button>
 
-        {/* Center: Tabs/Mode Selection */}
-        <div className="flex bg-ide-bg rounded-full p-1 border border-ide-border shadow-inner">
+        {/* Center: Mode Toggles */}
+        <div className="flex h-10 bg-ide-bg rounded-lg p-1 border border-ide-border gap-1">
           <button 
             onClick={() => setCurrentView(AppView.FILES)}
-            className={`p-2 rounded-full transition-all ${currentView === AppView.FILES ? 'bg-ide-accent text-white shadow-sm' : 'text-ide-mute hover:text-ide-text'}`}
+            className={`px-3 h-full rounded flex items-center gap-2 transition-all ${currentView === AppView.FILES ? 'bg-ide-panel text-ide-accent shadow-sm' : 'text-ide-mute hover:text-ide-text'}`}
           >
-            <Files size={20} />
+            <Files size={16} />
           </button>
           <button 
             onClick={() => {
                 setCurrentView(AppView.GIT);
                 setActiveFileId(null);
             }}
-            className={`p-2 rounded-full transition-all ${currentView === AppView.GIT ? 'bg-ide-accent text-white shadow-sm' : 'text-ide-mute hover:text-ide-text'}`}
+            className={`px-3 h-full rounded flex items-center gap-2 transition-all ${currentView === AppView.GIT ? 'bg-ide-panel text-ide-accent shadow-sm' : 'text-ide-mute hover:text-ide-text'}`}
           >
-            <GitGraph size={20} />
+            <GitGraph size={16} />
           </button>
           <button 
              onClick={() => setCurrentView(AppView.TERMINAL)}
-             className={`p-2 rounded-full transition-all ${currentView === AppView.TERMINAL ? 'bg-ide-accent text-white shadow-sm' : 'text-ide-mute hover:text-ide-text'}`}
+             className={`px-3 h-full rounded flex items-center gap-2 transition-all ${currentView === AppView.TERMINAL ? 'bg-ide-panel text-ide-accent shadow-sm' : 'text-ide-mute hover:text-ide-text'}`}
           >
-            <Terminal size={20} />
+            <Terminal size={16} />
           </button>
         </div>
 
-        {/* Right: Plus Button */}
-        <button className="p-3 bg-ide-accent text-white rounded-full shadow-xl shadow-sky-500/10 active:scale-90 transition-all hover:brightness-110">
-           <Plus size={20} strokeWidth={3} />
-        </button>
+        {/* Right: Stats */}
+        <div className="flex items-center gap-3 px-4 text-ide-mute text-[10px] font-bold">
+           <div className="hidden sm:flex items-center gap-1">
+             <Cpu size={14} />
+             <span>12%</span>
+           </div>
+           <div className="flex items-center gap-1 text-ide-accent animate-pulse">
+             <Wifi size={14} />
+             <span className="hidden sm:inline">ONLINE</span>
+           </div>
+        </div>
       </footer>
 
       <ProjectMenu 
