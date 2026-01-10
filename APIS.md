@@ -114,11 +114,12 @@ Operations for file system management.
 ```
 
 ### Search Files
-**GET** `/api/file/search?path=...&pattern=...`
+**GET** `/api/file/search?path=...&pattern=...&limit=...`
 
 **Query Params:**
 - `path`: Search root path (default: `.`)
 - `pattern`: Glob pattern (e.g., `*.go`)
+- `limit`: Max results (default: 100)
 
 **Response:**
 ```json
@@ -129,13 +130,33 @@ Operations for file system management.
 }
 ```
 
-### Remove File/Directory
-**DELETE** `/api/file/rm`
+### Search File Contents (Grep) 🆕
+**GET** `/api/file/grep?path=...&pattern=...&limit=...`
 
-**Body:**
+**Query Params:**
+- `path`: Search root path (default: `.`)
+- `pattern`: Regex pattern
+- `limit`: Max results (default: 100)
+
+**Response:**
 ```json
-{ "path": "string" }
+{
+  "matches": [
+    {
+      "path": "/path/to/file.txt",
+      "line": 42,
+      "content": "matching line content"
+    }
+  ]
+}
 ```
+
+### Remove File/Directory 🔄
+**DELETE** `/api/file?path=...`
+
+**Query Params:**
+- `path`: Path to remove
+
 **Response:**
 ```json
 { "ok": true }
@@ -185,6 +206,31 @@ Operations for file system management.
 
 Operations for Git version control.
 
+### List Bound Repositories 🔄
+**GET** `/api/git?page=...&page_size=...`
+
+**Query Params:**
+- `page`: Page number (default: 1)
+- `page_size`: Page size (default: 20, max: 100)
+
+**Response:**
+```json
+{
+  "repos": [
+    {
+      "id": "uuid",
+      "path": "...",
+      "remotes": "...",
+      "created_at": 1234567890,
+      "updated_at": 1234567890
+    }
+  ],
+  "page": 1,
+  "page_size": 20,
+  "total": 5
+}
+```
+
 ### Bind Existing Repository
 **POST** `/api/git/bind`
 
@@ -200,38 +246,19 @@ Operations for Git version control.
 { "ok": true, "id": "uuid" }
 ```
 
-### Unbind Repository
-**POST** `/api/git/unbind`
+### Unbind Repository 🔄
+**DELETE** `/api/git/:id`
 
-**Body:**
-```json
-{ "id": "repo_uuid" }
-```
+**Path Params:**
+- `id`: Repo UUID
+
 **Response:**
 ```json
 { "ok": true }
 ```
 
-### List Bound Repositories
-**GET** `/api/git/list`
-
-**Response:**
-```json
-{
-  "repos": [
-    {
-      "id": "uuid",
-      "path": "...",
-      "remotes": "...",
-      "created_at": 1234567890,
-      "updated_at": 1234567890
-    }
-  ]
-}
-```
-
-### Initialize New Repository
-**POST** `/api/git/new`
+### Initialize New Repository 🔄
+**POST** `/api/git/init`
 
 **Body:**
 ```json
@@ -269,7 +296,7 @@ Operations for Git version control.
   "files": [
     {
       "path": "file.txt",
-      "status": "M", // M=Modified, A=Added, D=Deleted, ?=Untracked
+      "status": "M",
       "staged": false
     }
   ]
@@ -341,14 +368,16 @@ Operations for Git version control.
 { "ok": true }
 ```
 
-### Commit Changes
+### Commit Changes 🔄
 **POST** `/api/git/commit`
 
 **Body:**
 ```json
 {
   "id": "repo_uuid",
-  "message": "Commit message"
+  "message": "Commit message",
+  "author": "Author Name (optional)",
+  "email": "author@example.com (optional)"
 }
 ```
 **Response:**
@@ -356,18 +385,21 @@ Operations for Git version control.
 { "ok": true, "hash": "new_commit_hash" }
 ```
 
-### Unstage Files (Reset)
+### Unstage Files (Reset) 🔄
 **POST** `/api/git/reset`
 
 **Body:**
 ```json
 {
-  "id": "repo_uuid"
+  "id": "repo_uuid",
+  "files": ["file1.txt"] 
 }
 ```
+**Note:** Empty `files` array will unstage all changes.
+
 **Response:**
 ```json
-{ "ok": true, "message": "All changes unstaged (Mixed Reset)" }
+{ "ok": true, "message": "Files unstaged" }
 ```
 
 ### Discard Changes (Checkout)
@@ -385,8 +417,8 @@ Operations for Git version control.
 { "ok": true }
 ```
 
-### Undo Last Commit
-**POST** `/api/git/undo_commit`
+### Undo Last Commit 🔄
+**POST** `/api/git/undo-commit`
 
 **Body:**
 ```json
@@ -403,20 +435,27 @@ Operations for Git version control.
 
 Operations for chat/interaction sessions.
 
-### List Sessions
-**GET** `/api/session/list`
+### List Sessions 🔄
+**GET** `/api/session?page=...&page_size=...`
+
+**Query Params:**
+- `page`: Page number (default: 1)
+- `page_size`: Page size (default: 20, max: 100)
 
 **Response:**
 ```json
 {
   "sessions": [
     { "id": "uuid", "name": "Session Name", "created_at": ..., "updated_at": ... }
-  ]
+  ],
+  "page": 1,
+  "page_size": 20,
+  "total": 10
 }
 ```
 
-### Create Session
-**POST** `/api/session/new`
+### Create Session 🔄
+**POST** `/api/session`
 
 **Body:**
 ```json
@@ -426,28 +465,13 @@ Operations for chat/interaction sessions.
 ```json
 { "ok": true, "id": "uuid" }
 ```
+**Status:** 201 Created
 
-### Save Session
-**POST** `/api/session/save`
+### Load Session 🔄
+**GET** `/api/session/:id`
 
-**Body:**
-```json
-{
-  "id": "uuid",
-  "name": "New Name (optional)",
-  "messages": "JSON string of messages (optional)"
-}
-```
-**Response:**
-```json
-{ "ok": true }
-```
-
-### Load Session
-**GET** `/api/session/load?id=...`
-
-**Query Params:**
-- `id`: Session ID
+**Path Params:**
+- `id`: Session UUID
 
 **Response:**
 ```json
@@ -460,13 +484,30 @@ Operations for chat/interaction sessions.
 }
 ```
 
-### Remove Session
-**DELETE** `/api/session/rm`
+### Save Session 🔄
+**PUT** `/api/session/:id`
+
+**Path Params:**
+- `id`: Session UUID
 
 **Body:**
 ```json
-{ "id": "uuid" }
+{
+  "name": "New Name (optional)",
+  "messages": "JSON string of messages (optional)"
+}
 ```
+**Response:**
+```json
+{ "ok": true }
+```
+
+### Remove Session 🔄
+**DELETE** `/api/session/:id`
+
+**Path Params:**
+- `id`: Session UUID
+
 **Response:**
 ```json
 { "ok": true }
@@ -526,8 +567,8 @@ Operations for application settings (KV store).
 
 Operations for managing terminal sessions.
 
-### List Terminals
-**GET** `/api/terminal/list`
+### List Terminals 🔄
+**GET** `/api/terminal`
 
 **Response:**
 ```json
@@ -542,8 +583,6 @@ Operations for managing terminal sessions.
       "rows": 24,
       "status": "running",
       "pty_status": "active",
-      "exit_code": 0,
-      "history_size": 1024,
       "created_at": ...,
       "updated_at": ...
     }
@@ -551,8 +590,8 @@ Operations for managing terminal sessions.
 }
 ```
 
-### Create Terminal
-**POST** `/api/terminal/new`
+### Create Terminal 🔄
+**POST** `/api/terminal`
 
 **Body:**
 ```json
@@ -584,3 +623,16 @@ Operations for managing terminal sessions.
 **GET** `/api/terminal/ws/:id`
 
 Connect to this endpoint via WebSocket to interact with the terminal.
+
+---
+
+## Legend
+
+- 🆕 New endpoint
+- 🔄 Modified endpoint (breaking change)
+
+## Rate Limiting
+
+All API endpoints are rate-limited to **100 requests per minute per IP address**.
+
+Exceeding this limit will result in a `429 Too Many Requests` response.

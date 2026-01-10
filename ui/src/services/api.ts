@@ -81,7 +81,7 @@ let cachedRepoId: string | null = null;
 const getRepoId = async (): Promise<string | null> => {
     if (cachedRepoId) return cachedRepoId;
     try {
-        const res = await fetch(`${API_BASE}/git/list`);
+        const res = await fetch(`${API_BASE}/git`);
         if (!res.ok) return null;
         const data = await res.json();
 
@@ -90,12 +90,11 @@ const getRepoId = async (): Promise<string | null> => {
             return cachedRepoId;
         }
 
-        // Auto-bind if no repos
         console.log("No git repos found, attempting to auto-bind '.'");
         const bindRes = await fetch(`${API_BASE}/git/bind`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: '.' }) // Backend resolves . to baseDir
+            body: JSON.stringify({ path: '.' })
         });
 
         if (bindRes.ok) {
@@ -180,18 +179,18 @@ const mapGitStatus = (s: string): 'modified' | 'added' | 'deleted' => {
 // --- Terminal ---
 
 export const getTerminals = async (): Promise<TerminalSession[]> => {
-    const res = await fetch(`${API_BASE}/terminal/list`);
+    const res = await fetch(`${API_BASE}/terminal`);
     if (!res.ok) return [];
     const data = await res.json();
     return data.terminals.map((t: any) => ({
         id: t.id,
         name: t.name || 'Terminal',
-        history: [] // Handled by xterm
+        history: []
     }));
 };
 
 export const createTerminal = async (): Promise<TerminalSession> => {
-    const res = await fetch(`${API_BASE}/terminal/new`, {
+    const res = await fetch(`${API_BASE}/terminal`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: 'Terminal', cols: 80, rows: 24 })
