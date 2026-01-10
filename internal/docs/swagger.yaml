@@ -548,6 +548,10 @@ paths:
         name: pattern
         required: true
         type: string
+      - description: Max results (default 100)
+        in: query
+        name: limit
+        type: integer
       produces:
       - application/json
       responses:

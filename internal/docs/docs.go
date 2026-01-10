@@ -490,6 +490,12 @@ const docTemplate = `{
                         "name": "pattern",
                         "in": "query",
                         "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Max results (default 100)",
+                        "name": "limit",
+                        "in": "query"
                     }
                 ],
                 "responses": {
