@@ -14,6 +14,8 @@ interface EditorState {
   setFileContent: (fileId: string, content: string) => void;
   getFileContent: (fileId: string) => string | undefined;
   markTabDirty: (id: string, dirty: boolean) => void;
+  openFileTab: (fileId: string, title: string, type?: 'code' | 'diff', data?: EditorTab['data']) => void;
+  closeTab: (id: string) => void;
 }
 
 export const useEditorStore = create<EditorState>((set, get) => ({
@@ -55,4 +57,31 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((s) => ({
       tabs: s.tabs.map((t) => (t.id === id ? { ...t, isDirty: dirty } : t)),
     })),
+  openFileTab: (fileId, title, type = 'code', data) => {
+    const { tabs, addTab } = get();
+    const tabId = type === 'diff' ? `diff-${fileId}` : `tab-${fileId}`;
+    const exists = tabs.find((t) => t.id === tabId);
+    if (exists) {
+      set({ activeTabId: tabId });
+      return;
+    }
+    addTab({
+      id: tabId,
+      fileId,
+      title: type === 'diff' ? `${title} [DIFF]` : title,
+      isDirty: false,
+      type,
+      data,
+    });
+  },
+  closeTab: (id) => {
+    const { tabs } = get();
+    const newTabs = tabs.filter((t) => t.id !== id);
+    const currentActive = get().activeTabId;
+    let newActive = currentActive;
+    if (currentActive === id) {
+      newActive = newTabs.length > 0 ? newTabs[newTabs.length - 1].id : null;
+    }
+    set({ tabs: newTabs, activeTabId: newActive });
+  },
 }));

@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import type { FileNode, EditorTab, Theme, Locale, GitFileNode } from '@/types';
+import React, { useEffect } from 'react';
+import type { FileNode, GitFileNode } from '@/types';
 import { AppView } from '@/types';
 import {
   Menu, Files, GitGraph, Terminal, Plus,
   X, FileText, LayoutTemplate, Box, FileDiff, Cpu, Wifi
 } from 'lucide-react';
 import { useTranslation } from '@/utils/i18n';
+import { useAppStore, useEditorStore, useTerminalStore, useFileStore } from '@/stores';
 
 import CodeEditor from '@/components/CodeEditor';
 import FileTree from '@/components/FileTree';
@@ -14,33 +15,70 @@ import TerminalView from '@/components/TerminalView';
 import ProjectMenu from '@/components/ProjectMenu';
 import DiffView from '@/components/DiffView';
 
+const MOCK_FILE_SYSTEM: FileNode[] = [
+  {
+    id: 'root',
+    name: 'mainframe_v1',
+    type: 'folder',
+    children: [
+      {
+        id: 'src',
+        name: 'kernel',
+        type: 'folder',
+        children: [
+          { id: 'app', name: 'boot.sys', type: 'file', language: 'typescript', content: "// BOOT SEQUENCE INITIATED\nimport System from 'kernel';\n\nSystem.init({ mode: 'HACK' });" },
+          { id: 'utils', name: 'decrypt.ts', type: 'file', language: 'typescript', content: "export const crack = (hash) => {\n  // BRUTE FORCE ATTACK\n  return 'p@ssword1';\n}" },
+          { id: 'btn', name: 'payload.js', type: 'file', language: 'javascript', content: "const deploy = () => console.log('Payload delivered');" }
+        ]
+      },
+      { id: 'pkg', name: 'manifest.json', type: 'file', language: 'json', content: "{\n  \"target\": \"corp_network\"\n}" },
+      { id: 'readme', name: 'TARGETS.md', type: 'file', language: 'markdown', content: "# TARGET LIST\n\n1. Main Server\n2. Backup Grid" },
+    ]
+  }
+];
+
+const MOCK_GIT_FILES: GitFileNode[] = [
+  {
+    id: 'git-1', name: 'payload.js', path: 'src/kernel/payload.js', status: 'modified',
+    originalContent: "const deploy = () => console.log('Waiting...');",
+    modifiedContent: "const deploy = () => console.log('Payload delivered');"
+  },
+  {
+    id: 'git-2', name: 'decrypt.ts', path: 'src/kernel/decrypt.ts', status: 'added',
+    originalContent: "",
+    modifiedContent: "export const crack = (hash) => { ... }"
+  },
+  {
+    id: 'git-3', name: 'logs.txt', path: 'logs.txt', status: 'deleted',
+    originalContent: "ACCESS GRANTED",
+    modifiedContent: ""
+  }
+];
+
+const MOCK_TERMINALS = [
+  { id: 'term-1', name: 'root@proxynode', history: ['> connecting to 192.168.0.1...', '> secure handshake... OK'] },
+  { id: 'term-2', name: 'net_watch', history: ['scanning ports...'] }
+];
+
 const App: React.FC = () => {
-  // --- State ---
-  const [theme, setTheme] = useState<Theme>('light');
-  const [locale, setLocale] = useState<Locale>('zh');
-
-  const [currentView, setCurrentView] = useState<AppView>(AppView.FILES);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  const [activeFileId, setActiveFileId] = useState<string | null>(null);
-  const [activeTerminalId, setActiveTerminalId] = useState<string>('term-1');
+  const { theme, locale, currentView, isMenuOpen, toggleTheme, toggleLocale, setCurrentView, setMenuOpen } = useAppStore();
+  const { tabs, activeTabId, openFileTab, closeTab, setActiveTabId } = useEditorStore();
+  const { terminals, activeTerminalId, setTerminals, setActiveTerminalId } = useTerminalStore();
+  const { fileTree, setFileTree } = useFileStore();
 
   const t = useTranslation(locale);
 
-  // --- Effects ---
+  useEffect(() => {
+    if (fileTree.length === 0) setFileTree(MOCK_FILE_SYSTEM);
+    if (terminals.length === 0) setTerminals(MOCK_TERMINALS);
+  }, []);
+
   useEffect(() => {
     const root = document.documentElement;
     const body = document.body;
-
-    // Reset classes
     root.className = '';
     body.classList.remove('scanlines');
-
-    // Apply classes based on theme
     switch (theme) {
-      case 'light':
-        // Default, no class needed on root
-        break;
       case 'dark':
         root.classList.add('dark');
         break;
@@ -54,125 +92,28 @@ const App: React.FC = () => {
     }
   }, [theme]);
 
-  // --- Mock Data ---
-  const fileSystem: FileNode[] = [
-    {
-      id: 'root',
-      name: 'mainframe_v1',
-      type: 'folder',
-      children: [
-        {
-          id: 'src',
-          name: 'kernel',
-          type: 'folder',
-          children: [
-            { id: 'app', name: 'boot.sys', type: 'file', language: 'typescript', content: "// BOOT SEQUENCE INITIATED\nimport System from 'kernel';\n\nSystem.init({ mode: 'HACK' });" },
-            { id: 'utils', name: 'decrypt.ts', type: 'file', language: 'typescript', content: "export const crack = (hash) => {\n  // BRUTE FORCE ATTACK\n  return 'p@ssword1';\n}" },
-            { id: 'btn', name: 'payload.js', type: 'file', language: 'javascript', content: "const deploy = () => console.log('Payload delivered');" }
-          ]
-        },
-        { id: 'pkg', name: 'manifest.json', type: 'file', language: 'json', content: "{\n  \"target\": \"corp_network\"\n}" },
-        { id: 'readme', name: 'TARGETS.md', type: 'file', language: 'markdown', content: "# TARGET LIST\n\n1. Main Server\n2. Backup Grid" },
-      ]
-    }
-  ];
-
-  const gitFiles: GitFileNode[] = [
-    {
-      id: 'git-1', name: 'payload.js', path: 'src/kernel/payload.js', status: 'modified',
-      originalContent: "const deploy = () => console.log('Waiting...');",
-      modifiedContent: "const deploy = () => console.log('Payload delivered');"
-    },
-    {
-      id: 'git-2', name: 'decrypt.ts', path: 'src/kernel/decrypt.ts', status: 'added',
-      originalContent: "",
-      modifiedContent: "export const crack = (hash) => { ... }"
-    },
-    {
-      id: 'git-3', name: 'logs.txt', path: 'logs.txt', status: 'deleted',
-      originalContent: "ACCESS GRANTED",
-      modifiedContent: ""
-    }
-  ];
-
-  const [openTabs, setOpenTabs] = useState<EditorTab[]>([
-    { id: 'tab-1', fileId: 'app', title: 'boot.sys', isDirty: false, type: 'code' }
-  ]);
-
-  const [terminals] = useState([
-    { id: 'term-1', name: 'root@proxynode', history: ['> connecting to 192.168.0.1...', '> secure handshake... OK'] },
-    { id: 'term-2', name: 'net_watch', history: ['scanning ports...'] }
-  ]);
-
-  // --- Handlers ---
-  const toggleTheme = () => {
-    const order: Theme[] = ['light', 'dark', 'hacker', 'terminal'];
-    const nextIndex = (order.indexOf(theme) + 1) % order.length;
-    setTheme(order[nextIndex]);
-  };
-
-  const toggleLocale = () => setLocale(prev => prev === 'en' ? 'zh' : 'en');
-
   const handleFileClick = (node: FileNode) => {
     if (node.type === 'file') {
-      const existingTab = openTabs.find(t => t.fileId === node.id);
-      if (!existingTab) {
-        setOpenTabs([...openTabs, {
-          id: `tab-${node.id}`,
-          fileId: node.id,
-          title: node.name,
-          isDirty: false,
-          type: 'code'
-        }]);
-      }
-      setActiveFileId(node.id);
+      openFileTab(node.id, node.name, 'code');
       setCurrentView(AppView.FILES);
     }
   };
 
   const handleGitFileClick = (gitFile: GitFileNode) => {
-    const tabId = `diff-${gitFile.id}`;
-    const existingTab = openTabs.find(t => t.id === tabId);
-
-    if (!existingTab) {
-      setOpenTabs([...openTabs, {
-        id: tabId,
-        fileId: gitFile.id,
-        title: `${gitFile.name} [DIFF]`,
-        isDirty: false,
-        type: 'diff',
-        data: {
-          original: gitFile.originalContent,
-          modified: gitFile.modifiedContent
-        }
-      }]);
-    }
-
-    setActiveFileId(gitFile.id);
+    openFileTab(gitFile.id, gitFile.name, 'diff', {
+      original: gitFile.originalContent,
+      modified: gitFile.modifiedContent
+    });
   };
 
-  const closeTab = (e: React.MouseEvent, tabId: string) => {
+  const handleCloseTab = (e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
-    const newTabs = openTabs.filter(t => t.id !== tabId);
-    setOpenTabs(newTabs);
-
-    const activeTab = openTabs.find(t =>
-      (t.type === 'code' && t.fileId === activeFileId) ||
-      (t.type === 'diff' && t.fileId === activeFileId)
-    );
-
-    if (activeTab && activeTab.id === tabId) {
-      if (newTabs.length > 0) {
-        const nextTab = newTabs[newTabs.length - 1];
-        setActiveFileId(nextTab.fileId);
-      } else {
-        setActiveFileId(null);
-      }
-    }
+    closeTab(tabId);
   };
 
-  // --- Render Helpers ---
   const getActiveFileContent = (): string => {
+    const activeTab = tabs.find(t => t.id === activeTabId);
+    if (!activeTab) return '';
     const findContent = (nodes: FileNode[], id: string): string => {
       for (const node of nodes) {
         if (node.id === id) return node.content || '';
@@ -183,84 +124,80 @@ const App: React.FC = () => {
       }
       return '';
     };
-    return activeFileId ? findContent(fileSystem, activeFileId) : '';
+    return findContent(fileTree, activeTab.fileId);
   };
 
-  const activeTab = openTabs.find(t => t.fileId === activeFileId);
+  const activeTab = tabs.find(t => t.id === activeTabId);
 
-  const renderTopBar = () => {
-    return (
-      <div className="h-12 bg-ide-bg border-b border-ide-border flex items-center overflow-x-auto no-scrollbar px-2 gap-2 shrink-0 transition-colors duration-300">
-
-        {/* System ID / Icon */}
-        <div className="px-2 flex items-center justify-center text-ide-accent font-bold text-xs border-r border-ide-border mr-1 h-8">
-          <span className="animate-pulse mr-1">●</span> 4492
-        </div>
-
-        {(currentView === AppView.FILES || currentView === AppView.GIT) && (
-          <>
-            <button
-              onClick={() => setActiveFileId(null)}
-              className={`shrink-0 h-8 w-8 flex items-center justify-center rounded-md border transition-all ${activeFileId === null ? 'bg-ide-accent text-ide-bg border-ide-accent shadow-glow' : 'bg-transparent text-ide-mute border-transparent hover:bg-ide-panel hover:text-ide-text'}`}
-              aria-label={t('explorer')}
-            >
-              <LayoutTemplate size={18} />
-            </button>
-            <div className="w-px h-5 bg-ide-border mx-1 shrink-0" />
-            {openTabs.map(tab => (
-              <div
-                key={tab.id}
-                onClick={() => setActiveFileId(tab.fileId)}
-                className={`shrink-0 px-3 h-8 rounded-md flex items-center gap-2 text-xs border transition-all cursor-pointer ${activeFileId === tab.fileId
-                  ? 'bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm'
-                  : 'bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text'
-                  }`}
-              >
-                {tab.type === 'diff' ? <FileDiff size={14} /> : <FileText size={14} />}
-                <span className="max-w-[100px] truncate font-medium">{tab.title}</span>
-                <button onClick={(e) => closeTab(e, tab.id)} className="hover:text-red-500 rounded-full p-0.5 hover:bg-ide-bg">
-                  <X size={12} />
-                </button>
-              </div>
-            ))}
-          </>
-        )}
-
-        {currentView === AppView.TERMINAL && (
-          <>
-            {terminals.map(term => (
-              <button
-                key={term.id}
-                onClick={() => setActiveTerminalId(term.id)}
-                className={`shrink-0 px-4 h-8 rounded-md flex items-center gap-2 text-xs font-mono border ${activeTerminalId === term.id
-                  ? 'bg-ide-panel border-ide-accent text-ide-accent shadow-glow'
-                  : 'bg-transparent border-transparent text-ide-mute'
-                  }`}
-              >
-                <Box size={14} />
-                {term.name}
-              </button>
-            ))}
-          </>
-        )}
-
-        <button className="shrink-0 w-8 h-8 rounded-md ml-auto text-ide-accent hover:bg-ide-accent hover:text-ide-bg flex items-center justify-center border border-ide-border transition-colors">
-          <Plus size={18} />
-        </button>
+  const renderTopBar = () => (
+    <div className="h-12 bg-ide-bg border-b border-ide-border flex items-center overflow-x-auto no-scrollbar px-2 gap-2 shrink-0 transition-colors duration-300">
+      <div className="px-2 flex items-center justify-center text-ide-accent font-bold text-xs border-r border-ide-border mr-1 h-8">
+        <span className="animate-pulse mr-1">●</span> 4492
       </div>
-    );
-  };
+
+      {(currentView === AppView.FILES || currentView === AppView.GIT) && (
+        <>
+          <button
+            onClick={() => setActiveTabId(null)}
+            className={`shrink-0 h-8 w-8 flex items-center justify-center rounded-md border transition-all ${activeTabId === null ? 'bg-ide-accent text-ide-bg border-ide-accent shadow-glow' : 'bg-transparent text-ide-mute border-transparent hover:bg-ide-panel hover:text-ide-text'}`}
+            aria-label={t('explorer')}
+          >
+            <LayoutTemplate size={18} />
+          </button>
+          <div className="w-px h-5 bg-ide-border mx-1 shrink-0" />
+          {tabs.map(tab => (
+            <div
+              key={tab.id}
+              onClick={() => setActiveTabId(tab.id)}
+              className={`shrink-0 px-3 h-8 rounded-md flex items-center gap-2 text-xs border transition-all cursor-pointer ${activeTabId === tab.id
+                ? 'bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm'
+                : 'bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text'
+                }`}
+            >
+              {tab.type === 'diff' ? <FileDiff size={14} /> : <FileText size={14} />}
+              <span className="max-w-[100px] truncate font-medium">{tab.title}</span>
+              <button onClick={(e) => handleCloseTab(e, tab.id)} className="hover:text-red-500 rounded-full p-0.5 hover:bg-ide-bg">
+                <X size={12} />
+              </button>
+            </div>
+          ))}
+        </>
+      )}
+
+      {currentView === AppView.TERMINAL && (
+        <>
+          {terminals.map(term => (
+            <button
+              key={term.id}
+              onClick={() => setActiveTerminalId(term.id)}
+              className={`shrink-0 px-4 h-8 rounded-md flex items-center gap-2 text-xs font-mono border ${activeTerminalId === term.id
+                ? 'bg-ide-panel border-ide-accent text-ide-accent shadow-glow'
+                : 'bg-transparent border-transparent text-ide-mute'
+                }`}
+            >
+              <Box size={14} />
+              {term.name}
+            </button>
+          ))}
+        </>
+      )}
+
+      <button className="shrink-0 w-8 h-8 rounded-md ml-auto text-ide-accent hover:bg-ide-accent hover:text-ide-bg flex items-center justify-center border border-ide-border transition-colors">
+        <Plus size={18} />
+      </button>
+    </div>
+  );
 
   const renderContent = () => {
-    if (currentView === AppView.GIT && activeFileId === null) {
-      return <GitView files={gitFiles} onFileClick={handleGitFileClick} locale={locale} />;
+    if (currentView === AppView.GIT && activeTabId === null) {
+      return <GitView files={MOCK_GIT_FILES} onFileClick={handleGitFileClick} locale={locale} />;
     }
 
     if (currentView === AppView.TERMINAL) {
-      return <TerminalView activeTerminalId={activeTerminalId} terminals={terminals} />;
+      return <TerminalView activeTerminalId={activeTerminalId || ''} terminals={terminals} />;
     }
 
-    if (currentView === AppView.FILES && activeFileId === null) {
+    if (currentView === AppView.FILES && activeTabId === null) {
       return (
         <div className="h-full overflow-y-auto bg-ide-bg p-2 transition-colors duration-300">
           <div className="border border-ide-border rounded-lg p-3 mb-4 bg-ide-panel/50 shadow-sm">
@@ -270,7 +207,7 @@ const App: React.FC = () => {
             </div>
           </div>
           <h3 className="text-[10px] font-bold text-ide-mute uppercase mb-2 px-2 tracking-widest">{t('projectRoot')}</h3>
-          <FileTree nodes={fileSystem} onFileClick={handleFileClick} activeFileId={activeFileId || undefined} />
+          <FileTree nodes={fileTree} onFileClick={handleFileClick} activeFileId={activeTab?.fileId} />
         </div>
       );
     }
@@ -298,21 +235,13 @@ const App: React.FC = () => {
 
   return (
     <div className="h-screen flex flex-col bg-ide-bg text-ide-text overflow-hidden font-mono transition-colors duration-300">
-
-      {/* 1. Top Bar */}
       {renderTopBar()}
-
-      {/* 2. Main Workspace */}
       <main className="flex-1 overflow-hidden relative border-b border-ide-border">
         {renderContent()}
       </main>
-
-      {/* 3. Footer / Nav */}
       <footer className="h-14 bg-ide-panel border-t border-ide-border flex items-center justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.1)]">
-
-        {/* Left: Project Menu Trigger */}
         <button
-          onClick={() => setIsMenuOpen(true)}
+          onClick={() => setMenuOpen(true)}
           className="h-full px-4 flex items-center gap-3 hover:bg-ide-bg transition-colors border-r border-ide-border group"
         >
           <div className="p-1.5 rounded-md border border-ide-border group-hover:border-ide-accent group-hover:text-ide-accent transition-colors">
@@ -320,8 +249,6 @@ const App: React.FC = () => {
           </div>
           <span className="font-bold tracking-wider text-xs hidden sm:inline">MENU</span>
         </button>
-
-        {/* Center: Mode Toggles */}
         <div className="flex h-10 bg-ide-bg rounded-lg p-1 border border-ide-border gap-1">
           <button
             onClick={() => setCurrentView(AppView.FILES)}
@@ -330,10 +257,7 @@ const App: React.FC = () => {
             <Files size={16} />
           </button>
           <button
-            onClick={() => {
-              setCurrentView(AppView.GIT);
-              setActiveFileId(null);
-            }}
+            onClick={() => { setCurrentView(AppView.GIT); setActiveTabId(null); }}
             className={`px-3 h-full rounded flex items-center gap-2 transition-all ${currentView === AppView.GIT ? 'bg-ide-panel text-ide-accent shadow-sm' : 'text-ide-mute hover:text-ide-text'}`}
           >
             <GitGraph size={16} />
@@ -345,8 +269,6 @@ const App: React.FC = () => {
             <Terminal size={16} />
           </button>
         </div>
-
-        {/* Right: Stats */}
         <div className="flex items-center gap-3 px-4 text-ide-mute text-[10px] font-bold">
           <div className="hidden sm:flex items-center gap-1">
             <Cpu size={14} />
@@ -358,16 +280,14 @@ const App: React.FC = () => {
           </div>
         </div>
       </footer>
-
       <ProjectMenu
         isOpen={isMenuOpen}
-        onClose={() => setIsMenuOpen(false)}
+        onClose={() => setMenuOpen(false)}
         theme={theme}
         toggleTheme={toggleTheme}
         locale={locale}
         toggleLocale={toggleLocale}
       />
-
     </div>
   );
 };
