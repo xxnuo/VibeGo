@@ -1,5 +1,5 @@
 import React from 'react';
-import { TerminalSession } from '../types';
+import type { TerminalSession } from '@/types';
 
 interface TerminalViewProps {
   activeTerminalId: string;

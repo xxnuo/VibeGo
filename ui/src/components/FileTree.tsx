@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileNode } from '../types';
+import type { FileNode } from '@/types';
 import { Folder, FileCode, ChevronRight, ChevronDown, Hash } from 'lucide-react';
 
 interface FileTreeProps {
@@ -13,12 +13,12 @@ const FileTree: React.FC<FileTreeProps> = ({ nodes, onFileClick, activeFileId, d
   return (
     <div className="select-none font-mono text-xs">
       {nodes.map((node) => (
-        <FileTreeNode 
-          key={node.id} 
-          node={node} 
-          onFileClick={onFileClick} 
-          activeFileId={activeFileId} 
-          depth={depth} 
+        <FileTreeNode
+          key={node.id}
+          node={node}
+          onFileClick={onFileClick}
+          activeFileId={activeFileId}
+          depth={depth}
         />
       ))}
     </div>
@@ -48,34 +48,33 @@ const FileTreeNode: React.FC<{
     <div>
       <div
         onClick={handleClick}
-        className={`flex items-center py-2 pr-2 border-l-2 cursor-pointer hover:bg-ide-accent/10 ${
-          isActive 
-            ? 'border-ide-accent bg-ide-accent/20 text-ide-accent' 
-            : 'border-transparent text-ide-mute hover:text-ide-text'
-        }`}
+        className={`flex items-center py-2 pr-2 border-l-2 cursor-pointer hover:bg-ide-accent/10 ${isActive
+          ? 'border-ide-accent bg-ide-accent/20 text-ide-accent'
+          : 'border-transparent text-ide-mute hover:text-ide-text'
+          }`}
         style={{ paddingLeft }}
       >
         <span className="mr-2 opacity-70">
           {node.type === 'folder' ? (
             isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />
           ) : (
-             <span className="w-3.5 inline-block text-[10px] text-center"></span>
+            <span className="w-3.5 inline-block text-[10px] text-center"></span>
           )}
         </span>
-        
+
         <span className="mr-2">
-            {node.type === 'folder' ? <Folder size={14} /> : <Hash size={14} />}
+          {node.type === 'folder' ? <Folder size={14} /> : <Hash size={14} />}
         </span>
-        
+
         <span className="truncate">{node.name}</span>
       </div>
-      
+
       {node.type === 'folder' && isOpen && node.children && (
-        <FileTree 
-          nodes={node.children} 
-          onFileClick={onFileClick} 
-          activeFileId={activeFileId} 
-          depth={depth + 1} 
+        <FileTree
+          nodes={node.children}
+          onFileClick={onFileClick}
+          activeFileId={activeFileId}
+          depth={depth + 1}
         />
       )}
     </div>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { GitBranch, GitCommit, GitPullRequest, RotateCw, Play } from 'lucide-react';
-import { GitFileNode, Locale } from '../types';
-import { useTranslation } from '../utils/i18n';
+import type { GitFileNode, Locale } from '@/types';
+import { useTranslation } from '@/utils/i18n';
 
 interface GitViewProps {
   files: GitFileNode[];
@@ -13,17 +13,17 @@ const GitView: React.FC<GitViewProps> = ({ files, onFileClick, locale }) => {
   const t = useTranslation(locale);
 
   const getStatusColor = (status: string) => {
-      switch(status) {
-          case 'modified': return 'text-yellow-500';
-          case 'added': return 'text-green-500';
-          case 'deleted': return 'text-red-500';
-          default: return 'text-ide-mute';
-      }
+    switch (status) {
+      case 'modified': return 'text-yellow-500';
+      case 'added': return 'text-green-500';
+      case 'deleted': return 'text-red-500';
+      default: return 'text-ide-mute';
+    }
   };
 
   return (
     <div className="flex flex-col h-full bg-ide-bg p-4 text-ide-text overflow-y-auto font-mono">
-      <div className="flex items-center justify-between mb-6 flex-shrink-0 border-b border-ide-accent pb-2">
+      <div className="flex items-center justify-between mb-6 shrink-0 border-b border-ide-accent pb-2">
         <h2 className="text-lg font-bold flex items-center gap-2 text-ide-accent">
           <GitBranch size={18} />
           VCS_CONTROL
@@ -47,11 +47,11 @@ const GitView: React.FC<GitViewProps> = ({ files, onFileClick, locale }) => {
                 className="w-full flex items-center gap-3 p-2 hover:bg-ide-accent/10 transition-colors text-left group"
               >
                 <div className={`w-4 text-center font-bold text-xs ${getStatusColor(file.status)}`}>
-                    {file.status[0].toUpperCase()}
+                  {file.status[0].toUpperCase()}
                 </div>
                 <div className="flex flex-col overflow-hidden">
-                    <span className="text-xs font-bold text-ide-text group-hover:text-ide-accent truncate">{file.name}</span>
-                    <span className="text-[9px] text-ide-mute truncate">{file.path}</span>
+                  <span className="text-xs font-bold text-ide-text group-hover:text-ide-accent truncate">{file.name}</span>
+                  <span className="text-[9px] text-ide-mute truncate">{file.path}</span>
                 </div>
               </button>
             ))}
@@ -59,14 +59,14 @@ const GitView: React.FC<GitViewProps> = ({ files, onFileClick, locale }) => {
         </div>
 
         <div className="border border-ide-border bg-ide-panel/30 p-2">
-           <textarea 
+          <textarea
             placeholder="> enter_commit_msg"
             className="w-full bg-black border border-ide-border p-2 text-xs text-ide-accent focus:outline-none focus:border-ide-accent min-h-[60px] placeholder-ide-mute/50"
-           />
-           <button className="w-full mt-2 bg-ide-accent text-black font-bold py-2 text-xs flex items-center justify-center gap-2 hover:bg-ide-accent/80">
-             <Play size={12} fill="currentColor" />
-             EXECUTE_COMMIT
-           </button>
+          />
+          <button className="w-full mt-2 bg-ide-accent text-black font-bold py-2 text-xs flex items-center justify-center gap-2 hover:bg-ide-accent/80">
+            <Play size={12} fill="currentColor" />
+            EXECUTE_COMMIT
+          </button>
         </div>
       </div>
     </div>

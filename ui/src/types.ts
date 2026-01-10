@@ -33,7 +33,8 @@ export interface EditorTab {
   fileId: string;
   title: string;
   isDirty: boolean;
-  type: 'code' | 'diff'; 
+  type: 'code' | 'diff';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data?: any; // For diff content
 }
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import MobileToolbar from './MobileToolbar';
+import MobileToolbar from '@/components/MobileToolbar';
 
 interface CodeEditorProps {
   content: string;
@@ -43,7 +43,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ content, language, onChange }) 
           />
         </div>
       </div>
-      
+
       {/* Mobile Sticky Toolbar */}
       <MobileToolbar onInsert={handleInsert} />
     </div>
