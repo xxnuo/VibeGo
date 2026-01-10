@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useRef, useMemo, useCallback } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
-import { usePreviewStore, getLanguageFromExtension } from '@/stores/previewStore';
+import { usePreviewStore, getLanguageFromExtension, getPreviewType } from '@/stores/previewStore';
 import { useAppStore } from '@/stores/appStore';
-import { Loader2, Save } from 'lucide-react';
+import { Loader2, Save, Edit, Eye } from 'lucide-react';
 import { fileApi } from '@/api/file';
+import { useFrameStore } from '@/stores/frameStore';
 
 interface CodePreviewProps {
   onSave?: () => void;
@@ -20,7 +21,12 @@ const CodePreview: React.FC<CodePreviewProps> = ({ onSave }) => {
     setContent,
     setIsDirty,
     setError,
+    setEditMode,
   } = usePreviewStore();
+
+  const activeTabId = useFrameStore((s) => s.getCurrentActiveTabId());
+  const pinTab = useFrameStore((s) => s.pinTab);
+  const setTopBarConfig = useFrameStore((s) => s.setTopBarConfig);
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
@@ -33,6 +39,19 @@ const CodePreview: React.FC<CodePreviewProps> = ({ onSave }) => {
   const isMobile = useMemo(() => {
     return typeof window !== 'undefined' && window.innerWidth < 768;
   }, []);
+
+  const isCodeFile = file && (
+    getPreviewType(file.mimeType, file.extension) === 'code' ||
+    getPreviewType(file.mimeType, file.extension) === 'markdown'
+  );
+  const showEditToggle = isCodeFile && activeTabId;
+
+  const handleToggleEdit = useCallback(() => {
+    if (!editMode && activeTabId) {
+      pinTab(activeTabId);
+    }
+    setEditMode(!editMode);
+  }, [editMode, activeTabId, pinTab, setEditMode]);
 
   const handleEditorMount: OnMount = (editor) => {
     editorRef.current = editor;
@@ -67,6 +86,28 @@ const CodePreview: React.FC<CodePreviewProps> = ({ onSave }) => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [file, content, isDirty]);
+
+  useEffect(() => {
+    if (showEditToggle) {
+      setTopBarConfig({
+        show: true,
+        centerContent: file?.name || '',
+        rightButtons: [
+          {
+            icon: editMode ? <Eye size={16} /> : <Edit size={16} />,
+            onClick: handleToggleEdit,
+            active: editMode,
+          }
+        ]
+      });
+    } else {
+      setTopBarConfig({ show: false });
+    }
+
+    return () => {
+      setTopBarConfig({ show: false });
+    };
+  }, [showEditToggle, editMode, file?.name, handleToggleEdit, setTopBarConfig]);
 
   return (
     <div className="h-full w-full flex flex-col">

@@ -120,7 +120,7 @@ const SettingsPage: React.FC = () => {
   const { settings, init, set, loading } = useSettingsStore();
   const locale = (settings.locale || 'zh') as Locale;
   const t = useTranslation(locale);
-  const setHeaderConfig = useFrameStore((s) => s.setHeaderConfig);
+  const setTopBarConfig = useFrameStore((s) => s.setTopBarConfig);
   const removeGroup = useFrameStore((s) => s.removeGroup);
 
   useEffect(() => {
@@ -128,18 +128,19 @@ const SettingsPage: React.FC = () => {
   }, [init]);
 
   useEffect(() => {
-    setHeaderConfig({
-      leftButton: { icon: <Settings size={18} />, variant: 'accent' },
-      title: t('common.settings'),
-      rightButton: {
-        icon: <X size={18} />,
-        onClick: () => removeGroup('settings'),
-        variant: 'ghost',
-      },
-      showTabs: false,
+    setTopBarConfig({
+      show: true,
+      leftButtons: [{ icon: <Settings size={18} />, active: true }],
+      centerContent: t('common.settings'),
+      rightButtons: [
+        {
+          icon: <X size={18} />,
+          onClick: () => removeGroup('settings'),
+        }
+      ],
     });
-    return () => setHeaderConfig(null);
-  }, [t, setHeaderConfig, removeGroup]);
+    return () => setTopBarConfig({ show: false });
+  }, [t, setTopBarConfig, removeGroup]);
 
   if (loading) {
     return (
