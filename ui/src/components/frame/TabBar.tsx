@@ -134,26 +134,27 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
       ))}
 
       <div className="ml-auto flex items-center gap-2">
-        {showEditToggle && (
+        {showEditToggle ? (
           <button
             onClick={handleToggleEdit}
-            className={`shrink-0 h-8 px-3 rounded-md flex items-center gap-1.5 text-xs border transition-all ${
+            className={`shrink-0 w-8 h-8 rounded-md flex items-center justify-center border transition-all ${
               editMode
                 ? 'bg-ide-accent text-ide-bg border-ide-accent'
                 : 'bg-transparent text-ide-mute border-ide-border hover:bg-ide-panel hover:text-ide-text'
             }`}
+            title={editMode ? 'View' : 'Edit'}
           >
-            {editMode ? <Eye size={14} /> : <Edit size={14} />}
-            {editMode ? 'View' : 'Edit'}
+            {editMode ? <Eye size={18} /> : <Edit size={18} />}
+          </button>
+        ) : (
+          <button
+            onClick={onAction}
+            className="shrink-0 w-8 h-8 rounded-md text-ide-accent hover:bg-ide-accent hover:text-ide-bg flex items-center justify-center border border-ide-border transition-colors"
+            title={showRefreshButton ? 'Refresh' : 'New'}
+          >
+            {showRefreshButton ? <RefreshCw size={18} /> : <Plus size={18} />}
           </button>
         )}
-        <button
-          onClick={onAction}
-          className="shrink-0 w-8 h-8 rounded-md text-ide-accent hover:bg-ide-accent hover:text-ide-bg flex items-center justify-center border border-ide-border transition-colors"
-          title={showRefreshButton ? 'Refresh' : 'New'}
-        >
-          {showRefreshButton ? <RefreshCw size={18} /> : <Plus size={18} />}
-        </button>
       </div>
     </div>
   );
