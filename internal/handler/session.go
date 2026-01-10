@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -27,11 +28,11 @@ func NewSessionHandler(db *gorm.DB) *SessionHandler {
 
 func (h *SessionHandler) Register(r *gin.RouterGroup) {
 	g := r.Group("/session")
-	g.GET("/list", h.List)
-	g.POST("/new", h.New)
-	g.POST("/save", h.Save)
-	g.GET("/load", h.Load)
-	g.DELETE("/rm", h.Remove)
+	g.GET("", h.List)
+	g.POST("", h.New)
+	g.GET("/:id", h.Load)
+	g.PUT("/:id", h.Save)
+	g.DELETE("/:id", h.Remove)
 }
 
 type SessionInfo struct {
@@ -44,25 +45,44 @@ type SessionInfo struct {
 // @Summary List all sessions
 // @Tags Session
 // @Produce json
-// @Success 200 {object} map[string][]SessionInfo
+// @Param page query int false "Page number (default 1)"
+// @Param page_size query int false "Page size (default 20)"
+// @Success 200 {object} map[string]interface{}
 // @Failure 500 {object} map[string]string
-// @Router /api/session/list [get]
+// @Router /api/session [get]
 func (h *SessionHandler) List(c *gin.Context) {
+	page := 1
+	pageSize := 20
+	if p := c.Query("page"); p != "" {
+		if n, err := strconv.Atoi(p); err == nil && n > 0 {
+			page = n
+		}
+	}
+	if ps := c.Query("page_size"); ps != "" {
+		if n, err := strconv.Atoi(ps); err == nil && n > 0 && n <= 100 {
+			pageSize = n
+		}
+	}
+
+	var total int64
+	h.db.Model(&Session{}).Count(&total)
+
 	var sessions []Session
-	if err := h.db.Order("updated_at DESC").Find(&sessions).Error; err != nil {
+	offset := (page - 1) * pageSize
+	if err := h.db.Order("updated_at DESC").Offset(offset).Limit(pageSize).Find(&sessions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	list := make([]SessionInfo, len(sessions))
 	for i, s := range sessions {
-		list[i] = SessionInfo{
-			ID:        s.ID,
-			Name:      s.Name,
-			CreatedAt: s.CreatedAt,
-			UpdatedAt: s.UpdatedAt,
-		}
+		list[i] = SessionInfo{ID: s.ID, Name: s.Name, CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt}
 	}
-	c.JSON(http.StatusOK, gin.H{"sessions": list})
+	c.JSON(http.StatusOK, gin.H{
+		"sessions":   list,
+		"page":       page,
+		"page_size":  pageSize,
+		"total":      total,
+	})
 }
 
 type NewSessionRequest struct {
@@ -74,9 +94,9 @@ type NewSessionRequest struct {
 // @Accept json
 // @Produce json
 // @Param request body NewSessionRequest false "New session request"
-// @Success 200 {object} map[string]interface{}
+// @Success 201 {object} map[string]interface{}
 // @Failure 500 {object} map[string]string
-// @Router /api/session/new [post]
+// @Router /api/session [post]
 func (h *SessionHandler) New(c *gin.Context) {
 	var req NewSessionRequest
 	c.ShouldBindJSON(&req)
@@ -92,11 +112,10 @@ func (h *SessionHandler) New(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": true, "id": session.ID})
+	c.JSON(http.StatusCreated, gin.H{"ok": true, "id": session.ID})
 }
 
 type SaveSessionRequest struct {
-	ID       string `json:"id" binding:"required"`
 	Name     string `json:"name"`
 	Messages string `json:"messages"`
 }
@@ -105,26 +124,22 @@ type SaveSessionRequest struct {
 // @Tags Session
 // @Accept json
 // @Produce json
+// @Param id path string true "Session ID"
 // @Param request body SaveSessionRequest true "Save session request"
 // @Success 200 {object} map[string]bool
-// @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/session/save [post]
+// @Router /api/session/{id} [put]
 func (h *SessionHandler) Save(c *gin.Context) {
-	var req SaveSessionRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+	id := c.Param("id")
 	var session Session
-	if err := h.db.First(&session, "id = ?", req.ID).Error; err != nil {
+	if err := h.db.First(&session, "id = ?", id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 		return
 	}
-	updates := map[string]interface{}{
-		"updated_at": time.Now().Unix(),
-	}
+	var req SaveSessionRequest
+	c.ShouldBindJSON(&req)
+	updates := map[string]interface{}{"updated_at": time.Now().Unix()}
 	if req.Name != "" {
 		updates["name"] = req.Name
 	}
@@ -141,17 +156,12 @@ func (h *SessionHandler) Save(c *gin.Context) {
 // @Summary Load session by ID
 // @Tags Session
 // @Produce json
-// @Param id query string true "Session ID"
+// @Param id path string true "Session ID"
 // @Success 200 {object} Session
-// @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
-// @Router /api/session/load [get]
+// @Router /api/session/{id} [get]
 func (h *SessionHandler) Load(c *gin.Context) {
-	id := c.Query("id")
-	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
-		return
-	}
+	id := c.Param("id")
 	var session Session
 	if err := h.db.First(&session, "id = ?", id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
@@ -160,27 +170,17 @@ func (h *SessionHandler) Load(c *gin.Context) {
 	c.JSON(http.StatusOK, session)
 }
 
-type RemoveSessionRequest struct {
-	ID string `json:"id" binding:"required"`
-}
-
 // @Summary Remove session
 // @Tags Session
-// @Accept json
 // @Produce json
-// @Param request body RemoveSessionRequest true "Remove session request"
+// @Param id path string true "Session ID"
 // @Success 200 {object} map[string]bool
-// @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/session/rm [delete]
+// @Router /api/session/{id} [delete]
 func (h *SessionHandler) Remove(c *gin.Context) {
-	var req RemoveSessionRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	result := h.db.Delete(&Session{}, "id = ?", req.ID)
+	id := c.Param("id")
+	result := h.db.Delete(&Session{}, "id = ?", id)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
 		return

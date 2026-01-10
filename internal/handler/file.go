@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"bufio"
 	"errors"
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -53,7 +55,8 @@ func (h *FileHandler) Register(r *gin.RouterGroup) {
 	g.GET("/list", h.List)
 	g.GET("/tree", h.Tree)
 	g.GET("/search", h.Search)
-	g.DELETE("/rm", h.Remove)
+	g.GET("/grep", h.Grep)
+	g.DELETE("", h.Remove)
 	g.POST("/rename", h.Rename)
 	g.POST("/mkdir", h.Mkdir)
 	g.GET("/abs", h.Abs)
@@ -458,27 +461,22 @@ func (h *FileHandler) Search(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"matches": matches})
 }
 
-type RemoveRequest struct {
-	Path string `json:"path" binding:"required"`
-}
-
 // @Summary Remove file or directory
 // @Tags File
-// @Accept json
 // @Produce json
-// @Param request body RemoveRequest true "Remove request"
+// @Param path query string true "Path to remove"
 // @Success 200 {object} map[string]bool
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/file/rm [delete]
+// @Router /api/file [delete]
 func (h *FileHandler) Remove(c *gin.Context) {
-	var req RemoveRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	path := c.Query("path")
+	if path == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "path is required"})
 		return
 	}
-	p, err := h.resolvePath(req.Path)
+	p, err := h.resolvePath(path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -575,4 +573,86 @@ func (h *FileHandler) Mkdir(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true, "path": p})
+}
+
+type GrepMatch struct {
+	Path    string `json:"path"`
+	Line    int    `json:"line"`
+	Content string `json:"content"`
+}
+
+// @Summary Search file contents (grep)
+// @Tags File
+// @Produce json
+// @Param path query string false "Search path"
+// @Param pattern query string true "Regex pattern"
+// @Param limit query int false "Max results (default 100)"
+// @Success 200 {object} map[string][]GrepMatch
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/file/grep [get]
+func (h *FileHandler) Grep(c *gin.Context) {
+	path := c.Query("path")
+	if path == "" {
+		path = "."
+	}
+	pattern := c.Query("pattern")
+	if pattern == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "pattern is required"})
+		return
+	}
+	limit := 100
+	if l := c.Query("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	p, err := h.resolvePath(path)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid regex: " + err.Error()})
+		return
+	}
+
+	var matches []GrepMatch
+	limitErr := errors.New("limit reached")
+
+	filepath.WalkDir(p, func(fpath string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || len(matches) >= limit {
+			if len(matches) >= limit {
+				return limitErr
+			}
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil || info.Size() > 10*1024*1024 {
+			return nil
+		}
+		f, err := os.Open(fpath)
+		if err != nil {
+			return nil
+		}
+		defer f.Close()
+
+		scanner := bufio.NewScanner(f)
+		lineNum := 0
+		for scanner.Scan() && len(matches) < limit {
+			lineNum++
+			line := scanner.Text()
+			if re.MatchString(line) {
+				matches = append(matches, GrepMatch{
+					Path:    fpath,
+					Line:    lineNum,
+					Content: line,
+				})
+			}
+		}
+		return nil
+	})
+
+	c.JSON(http.StatusOK, gin.H{"matches": matches})
 }

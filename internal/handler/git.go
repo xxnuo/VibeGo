@@ -37,9 +37,9 @@ func NewGitHandler(db *gorm.DB) *GitHandler {
 func (h *GitHandler) Register(r *gin.RouterGroup) {
 	g := r.Group("/git")
 	g.POST("/bind", h.Bind)
-	g.POST("/unbind", h.Unbind)
-	g.GET("/list", h.List)
-	g.POST("/new", h.New)
+	g.DELETE("/:id", h.Unbind)
+	g.GET("", h.List)
+	g.POST("/init", h.New)
 	g.POST("/clone", h.Clone)
 	g.GET("/status", h.Status)
 	g.GET("/log", h.Log)
@@ -47,9 +47,9 @@ func (h *GitHandler) Register(r *gin.RouterGroup) {
 	g.GET("/show", h.Show)
 	g.POST("/commit", h.Commit)
 	g.POST("/add", h.Add)
-	g.POST("/reset", h.Reset)       // Unstage
-	g.POST("/checkout", h.Checkout) // Discard changes (restore)
-	g.POST("/undo_commit", h.UndoCommit)
+	g.POST("/reset", h.Reset)
+	g.POST("/checkout", h.Checkout)
+	g.POST("/undo-commit", h.UndoCommit)
 }
 
 func (h *GitHandler) openRepo(id string) (*git.Repository, error) {
@@ -67,15 +67,34 @@ func (h *GitHandler) openRepo(id string) (*git.Repository, error) {
 // @Summary List bound repos
 // @Tags Git
 // @Produce json
-// @Success 200 {object} map[string][]GitRepository
-// @Router /api/git/list [get]
+// @Param page query int false "Page number (default 1)"
+// @Param page_size query int false "Page size (default 20)"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/git [get]
 func (h *GitHandler) List(c *gin.Context) {
+	page := 1
+	pageSize := 20
+	if p := c.Query("page"); p != "" {
+		if n, err := strconv.Atoi(p); err == nil && n > 0 {
+			page = n
+		}
+	}
+	if ps := c.Query("page_size"); ps != "" {
+		if n, err := strconv.Atoi(ps); err == nil && n > 0 && n <= 100 {
+			pageSize = n
+		}
+	}
+
+	var total int64
+	h.db.Model(&GitRepository{}).Count(&total)
+
 	var repos []GitRepository
-	if err := h.db.Find(&repos).Error; err != nil {
+	offset := (page - 1) * pageSize
+	if err := h.db.Offset(offset).Limit(pageSize).Find(&repos).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"repos": repos})
+	c.JSON(http.StatusOK, gin.H{"repos": repos, "page": page, "page_size": pageSize, "total": total})
 }
 
 type NewRepoRequest struct {
@@ -167,23 +186,16 @@ func (h *GitHandler) Clone(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true, "id": repo.ID})
 }
 
-type UnbindRepoRequest struct {
-	ID string `json:"id" binding:"required"`
-}
-
 // @Summary Unbind repo
 // @Tags Git
-// @Accept json
 // @Produce json
-// @Param request body UnbindRepoRequest true "Unbind request"
-// @Router /api/git/unbind [post]
+// @Param id path string true "Repo ID"
+// @Success 200 {object} map[string]bool
+// @Failure 500 {object} map[string]string
+// @Router /api/git/{id} [delete]
 func (h *GitHandler) Unbind(c *gin.Context) {
-	var req UnbindRepoRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	if err := h.db.Delete(&GitRepository{}, "id = ?", req.ID).Error; err != nil {
+	id := c.Param("id")
+	if err := h.db.Delete(&GitRepository{}, "id = ?", id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -499,7 +511,9 @@ func (h *GitHandler) Show(c *gin.Context) {
 type GitActionRequest struct {
 	ID      string   `json:"id" binding:"required"`
 	Files   []string `json:"files"`
-	Message string   `json:"message"` // For commit
+	Message string   `json:"message"`
+	Author  string   `json:"author"`
+	Email   string   `json:"email"`
 }
 
 // @Summary Stage files
@@ -542,7 +556,7 @@ func (h *GitHandler) Add(c *gin.Context) {
 // @Tags Git
 // @Accept json
 // @Produce json
-// @Param request body GitActionRequest true "Files to reset"
+// @Param request body GitActionRequest true "Files to reset (empty for all)"
 // @Router /api/git/reset [post]
 func (h *GitHandler) Reset(c *gin.Context) {
 	var req GitActionRequest
@@ -563,22 +577,27 @@ func (h *GitHandler) Reset(c *gin.Context) {
 		return
 	}
 
-	head, err := repo.Head()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot reset without HEAD"})
-		return
+	if len(req.Files) == 0 {
+		head, err := repo.Head()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot reset without HEAD"})
+			return
+		}
+		err = w.Reset(&git.ResetOptions{Commit: head.Hash(), Mode: git.MixedReset})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true, "message": "All changes unstaged"})
+	} else {
+		for _, file := range req.Files {
+			if _, err := w.Remove(file); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unstage " + file + ": " + err.Error()})
+				return
+			}
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true, "message": "Files unstaged"})
 	}
-
-	err = w.Reset(&git.ResetOptions{
-		Commit: head.Hash(),
-		Mode:   git.MixedReset,
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"ok": true, "message": "All changes unstaged (Mixed Reset)"})
 }
 
 // @Summary Discard changes (Checkout file from index/HEAD)
@@ -661,7 +680,7 @@ func (h *GitHandler) Checkout(c *gin.Context) {
 // @Tags Git
 // @Accept json
 // @Produce json
-// @Param request body GitActionRequest true "Commit message"
+// @Param request body GitActionRequest true "Commit message and author"
 // @Router /api/git/commit [post]
 func (h *GitHandler) Commit(c *gin.Context) {
 	var req GitActionRequest
@@ -682,10 +701,19 @@ func (h *GitHandler) Commit(c *gin.Context) {
 		return
 	}
 
+	author := req.Author
+	if author == "" {
+		author = "Code Vibe User"
+	}
+	email := req.Email
+	if email == "" {
+		email = "user@codevibe.local"
+	}
+
 	hash, err := w.Commit(req.Message, &git.CommitOptions{
 		Author: &object.Signature{
-			Name:  "Code Vibe User",
-			Email: "user@codevibe.local",
+			Name:  author,
+			Email: email,
 			When:  time.Now(),
 		},
 	})
@@ -702,7 +730,7 @@ func (h *GitHandler) Commit(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param request body GitActionRequest true "Repo ID"
-// @Router /api/git/undo_commit [post]
+// @Router /api/git/undo-commit [post]
 func (h *GitHandler) UndoCommit(c *gin.Context) {
 	var req GitActionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
