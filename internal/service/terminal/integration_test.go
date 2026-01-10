@@ -10,6 +10,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"github.com/gorilla/websocket"
+	"github.com/xxnuo/vibego/internal/model"
 	"gorm.io/gorm"
 )
 
@@ -19,7 +20,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		t.Fatalf("failed to open database: %v", err)
 	}
 
-	if err := db.AutoMigrate(&TerminalSession{}, &TerminalHistory{}); err != nil {
+	if err := db.AutoMigrate(&model.TerminalSession{}, &model.TerminalHistory{}); err != nil {
 		t.Fatalf("failed to migrate: %v", err)
 	}
 
@@ -35,8 +36,8 @@ func TestManager_CreateAndClose(t *testing.T) {
 		t.Fatalf("failed to create terminal: %v", err)
 	}
 
-	if info.Status != StatusActive {
-		t.Errorf("expected status %s, got %s", StatusActive, info.Status)
+	if info.Status != model.StatusActive {
+		t.Errorf("expected status %s, got %s", model.StatusActive, info.Status)
 	}
 
 	gotInfo, ok := manager.Get(info.ID)

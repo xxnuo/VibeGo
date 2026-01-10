@@ -6,6 +6,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xxnuo/vibego/internal/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -15,7 +16,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	require.NoError(t, err)
-	if err := db.AutoMigrate(&KV{}); err != nil {
+	if err := db.AutoMigrate(&model.KV{}); err != nil {
 		t.Fatalf("failed to migrate: %v", err)
 	}
 	return db
@@ -23,14 +24,13 @@ func setupTestDB(t *testing.T) *gorm.DB {
 
 func TestNew(t *testing.T) {
 	db := setupTestDB(t)
-	store, err := New(db)
-	require.NoError(t, err)
+	store := New(db)
 	assert.NotNil(t, store)
 }
 
 func TestSetAndGet(t *testing.T) {
 	db := setupTestDB(t)
-	store, _ := New(db)
+	store := New(db)
 
 	err := store.Set("key1", "value1")
 	require.NoError(t, err)
@@ -42,7 +42,7 @@ func TestSetAndGet(t *testing.T) {
 
 func TestGetNotFound(t *testing.T) {
 	db := setupTestDB(t)
-	store, _ := New(db)
+	store := New(db)
 
 	_, err := store.Get("nonexistent")
 	assert.Error(t, err)
@@ -50,7 +50,7 @@ func TestGetNotFound(t *testing.T) {
 
 func TestSetOverwrite(t *testing.T) {
 	db := setupTestDB(t)
-	store, _ := New(db)
+	store := New(db)
 
 	store.Set("key1", "value1")
 	store.Set("key1", "value2")
@@ -62,7 +62,7 @@ func TestSetOverwrite(t *testing.T) {
 
 func TestDelete(t *testing.T) {
 	db := setupTestDB(t)
-	store, _ := New(db)
+	store := New(db)
 
 	store.Set("key1", "value1")
 	err := store.Delete("key1")
@@ -73,7 +73,7 @@ func TestDelete(t *testing.T) {
 
 func TestExists(t *testing.T) {
 	db := setupTestDB(t)
-	store, _ := New(db)
+	store := New(db)
 
 	assert.False(t, store.Exists("key1"))
 
@@ -83,7 +83,7 @@ func TestExists(t *testing.T) {
 
 func TestKeys(t *testing.T) {
 	db := setupTestDB(t)
-	store, _ := New(db)
+	store := New(db)
 
 	store.Set("a", "1")
 	store.Set("b", "2")
@@ -97,7 +97,7 @@ func TestKeys(t *testing.T) {
 
 func TestAll(t *testing.T) {
 	db := setupTestDB(t)
-	store, _ := New(db)
+	store := New(db)
 
 	store.Set("a", "1")
 	store.Set("b", "2")
@@ -111,7 +111,7 @@ func TestAll(t *testing.T) {
 
 func TestClear(t *testing.T) {
 	db := setupTestDB(t)
-	store, _ := New(db)
+	store := New(db)
 
 	store.Set("a", "1")
 	store.Set("b", "2")
@@ -130,7 +130,7 @@ type TestUser struct {
 
 func TestSetJSONAndGetJSON(t *testing.T) {
 	db := setupTestDB(t)
-	store, _ := New(db)
+	store := New(db)
 
 	user := TestUser{Name: "Alice", Age: 30}
 	err := store.SetJSON("user1", user)
@@ -145,7 +145,7 @@ func TestSetJSONAndGetJSON(t *testing.T) {
 
 func TestSetJSONOverwrite(t *testing.T) {
 	db := setupTestDB(t)
-	store, _ := New(db)
+	store := New(db)
 
 	store.SetJSON("user", TestUser{Name: "Bob", Age: 25})
 	store.SetJSON("user", TestUser{Name: "Charlie", Age: 35})
@@ -158,7 +158,7 @@ func TestSetJSONOverwrite(t *testing.T) {
 
 func TestGetJSONNotFound(t *testing.T) {
 	db := setupTestDB(t)
-	store, _ := New(db)
+	store := New(db)
 
 	var result TestUser
 	err := store.GetJSON("nonexistent", &result)
@@ -167,7 +167,7 @@ func TestGetJSONNotFound(t *testing.T) {
 
 func TestSetJSONSlice(t *testing.T) {
 	db := setupTestDB(t)
-	store, _ := New(db)
+	store := New(db)
 
 	users := []TestUser{
 		{Name: "A", Age: 1},
@@ -186,7 +186,7 @@ func TestSetJSONSlice(t *testing.T) {
 
 func TestSetJSONInvalidValue(t *testing.T) {
 	db := setupTestDB(t)
-	store, _ := New(db)
+	store := New(db)
 
 	ch := make(chan int)
 	err := store.SetJSON("invalid", ch)
@@ -195,7 +195,7 @@ func TestSetJSONInvalidValue(t *testing.T) {
 
 func TestKeysEmpty(t *testing.T) {
 	db := setupTestDB(t)
-	store, _ := New(db)
+	store := New(db)
 
 	keys, err := store.Keys()
 	require.NoError(t, err)
@@ -204,7 +204,7 @@ func TestKeysEmpty(t *testing.T) {
 
 func TestAllEmpty(t *testing.T) {
 	db := setupTestDB(t)
-	store, _ := New(db)
+	store := New(db)
 
 	all, err := store.All()
 	require.NoError(t, err)

@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/gorilla/websocket"
+	"github.com/xxnuo/vibego/internal/model"
 	"github.com/xxnuo/vibego/internal/service/terminal"
 	"github.com/xxnuo/vibego/internal/utils"
 	"gorm.io/gorm"
@@ -31,7 +32,7 @@ func main() {
 		log.Fatalf("failed to connect database: %v", err)
 	}
 
-	if err := db.AutoMigrate(&terminal.TerminalSession{}, &terminal.TerminalHistory{}); err != nil {
+	if err := db.AutoMigrate(&model.TerminalSession{}, &model.TerminalHistory{}); err != nil {
 		log.Fatalf("failed to migrate: %v", err)
 	}
 
