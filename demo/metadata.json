@@ -1,0 +1,5 @@
+{
+  "name": "MobIDE - Mobile Web IDE",
+  "description": "A high-fidelity prototype of a mobile-first Web IDE featuring a file explorer, code editor with mobile toolbar, terminal emulator interface, and git integration placeholder.",
+  "requestFramePermissions": []
+}

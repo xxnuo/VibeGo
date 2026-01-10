@@ -1,0 +1,1343 @@
+basePath: /api
+definitions:
+  handler.BindRepoRequest:
+    properties:
+      path:
+        type: string
+      remotes:
+        type: string
+    required:
+    - path
+    type: object
+  handler.CloneRepoRequest:
+    properties:
+      path:
+        type: string
+      url:
+        type: string
+    required:
+    - path
+    - url
+    type: object
+  handler.CloseTerminalRequest:
+    properties:
+      id:
+        type: string
+    required:
+    - id
+    type: object
+  handler.FileInfo:
+    properties:
+      is_dir:
+        type: boolean
+      mod_time:
+        type: integer
+      name:
+        type: string
+      path:
+        type: string
+      size:
+        type: integer
+    type: object
+  handler.GitActionRequest:
+    properties:
+      files:
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      message:
+        description: For commit
+        type: string
+    required:
+    - id
+    type: object
+  handler.GitRepository:
+    properties:
+      created_at:
+        type: integer
+      id:
+        type: string
+      path:
+        type: string
+      remotes:
+        type: string
+      updated_at:
+        type: integer
+    type: object
+  handler.MkdirRequest:
+    properties:
+      path:
+        type: string
+    required:
+    - path
+    type: object
+  handler.NewFileRequest:
+    properties:
+      content:
+        type: string
+      is_dir:
+        type: boolean
+      path:
+        type: string
+    required:
+    - path
+    type: object
+  handler.NewRepoRequest:
+    properties:
+      path:
+        type: string
+    required:
+    - path
+    type: object
+  handler.NewSessionRequest:
+    properties:
+      name:
+        type: string
+    type: object
+  handler.NewTerminalRequest:
+    properties:
+      cols:
+        type: integer
+      cwd:
+        type: string
+      name:
+        type: string
+      rows:
+        type: integer
+    type: object
+  handler.RemoveRequest:
+    properties:
+      path:
+        type: string
+    required:
+    - path
+    type: object
+  handler.RemoveSessionRequest:
+    properties:
+      id:
+        type: string
+    required:
+    - id
+    type: object
+  handler.RenameRequest:
+    properties:
+      new_path:
+        type: string
+      old_path:
+        type: string
+    required:
+    - new_path
+    - old_path
+    type: object
+  handler.SaveSessionRequest:
+    properties:
+      id:
+        type: string
+      messages:
+        type: string
+      name:
+        type: string
+    required:
+    - id
+    type: object
+  handler.Session:
+    properties:
+      created_at:
+        type: integer
+      id:
+        type: string
+      messages:
+        type: string
+      name:
+        type: string
+      updated_at:
+        type: integer
+    type: object
+  handler.SessionInfo:
+    properties:
+      created_at:
+        type: integer
+      id:
+        type: string
+      name:
+        type: string
+      updated_at:
+        type: integer
+    type: object
+  handler.SetRequest:
+    properties:
+      key:
+        type: string
+      value:
+        type: string
+    required:
+    - key
+    - value
+    type: object
+  handler.TerminalInfo:
+    properties:
+      cols:
+        type: integer
+      created_at:
+        type: integer
+      cwd:
+        type: string
+      exit_code:
+        type: integer
+      history_size:
+        type: integer
+      id:
+        type: string
+      name:
+        type: string
+      pty_status:
+        type: string
+      rows:
+        type: integer
+      shell:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: integer
+    type: object
+  handler.TreeNode:
+    properties:
+      children:
+        items:
+          $ref: '#/definitions/handler.TreeNode'
+        type: array
+      is_dir:
+        type: boolean
+      name:
+        type: string
+      path:
+        type: string
+    type: object
+  handler.UnbindRepoRequest:
+    properties:
+      id:
+        type: string
+    required:
+    - id
+    type: object
+  handler.WriteFileRequest:
+    properties:
+      content:
+        type: string
+      path:
+        type: string
+    required:
+    - content
+    - path
+    type: object
+host: localhost:1984
+info:
+  contact: {}
+  description: VibeGo 后端服务 API
+  title: VibeGo API
+  version: 0.0.1
+paths:
+  /__heartbeat__:
+    get:
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Ready
+          schema:
+            type: string
+      summary: Heartbeat check
+      tags:
+      - System
+  /__lbheartbeat__:
+    get:
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Ready
+          schema:
+            type: string
+      summary: LBHeartbeat check
+      tags:
+      - System
+  /api/file/abs:
+    get:
+      parameters:
+      - description: Path
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get absolute path
+      tags:
+      - File
+  /api/file/list:
+    get:
+      parameters:
+      - description: Directory path
+        in: query
+        name: path
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List directory contents
+      tags:
+      - File
+  /api/file/mkdir:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Mkdir request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.MkdirRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create directory
+      tags:
+      - File
+  /api/file/new:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: New file request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.NewFileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create new file or directory
+      tags:
+      - File
+  /api/file/read:
+    get:
+      parameters:
+      - description: File path
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Read file content
+      tags:
+      - File
+  /api/file/rename:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Rename request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.RenameRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Rename file or directory
+      tags:
+      - File
+  /api/file/rm:
+    delete:
+      consumes:
+      - application/json
+      parameters:
+      - description: Remove request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.RemoveRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Remove file or directory
+      tags:
+      - File
+  /api/file/search:
+    get:
+      parameters:
+      - description: Search path
+        in: query
+        name: path
+        type: string
+      - description: Search pattern
+        in: query
+        name: pattern
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/handler.FileInfo'
+              type: array
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Search files by pattern
+      tags:
+      - File
+  /api/file/tree:
+    get:
+      parameters:
+      - description: Directory path
+        in: query
+        name: path
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.TreeNode'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get directory tree
+      tags:
+      - File
+  /api/file/write:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Write file request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.WriteFileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Write file content
+      tags:
+      - File
+  /api/git/add:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Files to add
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.GitActionRequest'
+      produces:
+      - application/json
+      responses: {}
+      summary: Stage files
+      tags:
+      - Git
+  /api/git/bind:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Bind repo request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.BindRepoRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Bind git repository
+      tags:
+      - Git
+  /api/git/checkout:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Files to restore
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.GitActionRequest'
+      produces:
+      - application/json
+      responses: {}
+      summary: Discard changes (Checkout file from index/HEAD)
+      tags:
+      - Git
+  /api/git/clone:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Clone repo request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CloneRepoRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Clone git repository
+      tags:
+      - Git
+  /api/git/commit:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Commit message
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.GitActionRequest'
+      produces:
+      - application/json
+      responses: {}
+      summary: Commit staged changes
+      tags:
+      - Git
+  /api/git/diff:
+    get:
+      parameters:
+      - description: Repo ID
+        in: query
+        name: id
+        required: true
+        type: string
+      - description: File path
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get file diff
+      tags:
+      - Git
+  /api/git/list:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/handler.GitRepository'
+              type: array
+            type: object
+      summary: List bound repos
+      tags:
+      - Git
+  /api/git/log:
+    get:
+      parameters:
+      - description: Repo ID
+        in: query
+        name: id
+        required: true
+        type: string
+      - description: Limit
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get git commit log
+      tags:
+      - Git
+  /api/git/new:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: New repo request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.NewRepoRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Initialize new git repository
+      tags:
+      - Git
+  /api/git/reset:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Files to reset
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.GitActionRequest'
+      produces:
+      - application/json
+      responses: {}
+      summary: Unstage files (Reset)
+      tags:
+      - Git
+  /api/git/show:
+    get:
+      parameters:
+      - description: Repo ID
+        in: query
+        name: id
+        required: true
+        type: string
+      - description: File path
+        in: query
+        name: path
+        required: true
+        type: string
+      - description: 'Ref (default: HEAD)'
+        in: query
+        name: ref
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Show file content at specific ref
+      tags:
+      - Git
+  /api/git/status:
+    get:
+      parameters:
+      - description: Repo ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get git status
+      tags:
+      - Git
+  /api/git/unbind:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Unbind request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.UnbindRepoRequest'
+      produces:
+      - application/json
+      responses: {}
+      summary: Unbind repo
+      tags:
+      - Git
+  /api/git/undo_commit:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Repo ID
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.GitActionRequest'
+      produces:
+      - application/json
+      responses: {}
+      summary: Undo last commit (Soft reset to HEAD~1)
+      tags:
+      - Git
+  /api/session/list:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/handler.SessionInfo'
+              type: array
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List all sessions
+      tags:
+      - Session
+  /api/session/load:
+    get:
+      parameters:
+      - description: Session ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.Session'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Load session by ID
+      tags:
+      - Session
+  /api/session/new:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: New session request
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/handler.NewSessionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create new session
+      tags:
+      - Session
+  /api/session/rm:
+    delete:
+      consumes:
+      - application/json
+      parameters:
+      - description: Remove session request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.RemoveSessionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Remove session
+      tags:
+      - Session
+  /api/session/save:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Save session request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.SaveSessionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Save session
+      tags:
+      - Session
+  /api/settings/get:
+    get:
+      parameters:
+      - description: Setting key
+        in: query
+        name: key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a setting by key
+      tags:
+      - Settings
+  /api/settings/list:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List all settings
+      tags:
+      - Settings
+  /api/settings/reset:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Reset all settings
+      tags:
+      - Settings
+  /api/settings/set:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Set request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.SetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Set a setting
+      tags:
+      - Settings
+  /api/terminal/close:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Terminal ID
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CloseTerminalRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Close terminal session
+      tags:
+      - Terminal
+  /api/terminal/list:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/handler.TerminalInfo'
+              type: array
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List terminal sessions
+      tags:
+      - Terminal
+  /api/terminal/new:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Terminal options
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.NewTerminalRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create new terminal session
+      tags:
+      - Terminal
+  /api/terminal/ws/{id}:
+    get:
+      parameters:
+      - description: Terminal ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses: {}
+      summary: Connect to terminal websocket
+      tags:
+      - Terminal
+  /health:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - System
+  /version:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get server version
+      tags:
+      - System
+swagger: "2.0"

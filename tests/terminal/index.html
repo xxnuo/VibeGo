@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal WebSocket Demo</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1e1e1e;
+            color: #fff;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            font-size: 24px;
+            color: #61dafb;
+        }
+
+        .controls {
+            background: #252526;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        button {
+            background: #0e639c;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #1177bb;
+        }
+
+        button:disabled {
+            background: #3c3c3c;
+            cursor: not-allowed;
+        }
+
+        button.danger {
+            background: #d32f2f;
+        }
+
+        button.danger:hover {
+            background: #f44336;
+        }
+
+        select, input {
+            background: #3c3c3c;
+            color: white;
+            border: 1px solid #555;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .status {
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .status.connected {
+            background: #4caf50;
+        }
+
+        .status.disconnected {
+            background: #f44336;
+        }
+
+        .terminal-wrapper {
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        #terminal {
+            padding: 10px;
+        }
+
+        .info {
+            background: #252526;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .info h3 {
+            margin-bottom: 10px;
+            color: #61dafb;
+        }
+
+        .info pre {
+            background: #1e1e1e;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+
+        .sessions-list {
+            background: #252526;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .session-item {
+            background: #3c3c3c;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .session-item.active {
+            border-left: 3px solid #61dafb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Terminal WebSocket Demo - WebTTY 桥接层测试</h1>
+
+        <div class="sessions-list">
+            <h3>终端会话列表</h3>
+            <div id="sessions"></div>
+        </div>
+
+        <div class="controls">
+            <button onclick="createTerminal()">创建新终端</button>
+            <button onclick="refreshSessions()">刷新列表</button>
+            <select id="terminalSelect" onchange="switchTerminal()">
+                <option value="">选择终端...</option>
+            </select>
+            <button onclick="reactivateCurrentTerminal()" id="reactivateBtn" disabled>重新激活</button>
+            <button onclick="closeCurrentTerminal()" class="danger" id="closeBtn" disabled>关闭当前终端</button>
+            <button onclick="deleteCurrentTerminal()" class="danger" id="deleteBtn" disabled>删除会话</button>
+            <span class="status disconnected" id="status">未连接</span>
+        </div>
+
+        <div class="terminal-wrapper">
+            <div id="terminal"></div>
+        </div>
+
+        <div class="info">
+            <h3>协议信息</h3>
+            <pre id="protocolInfo">
+协议版本: WebTTY (基于 gotty)
+消息格式:
+  客户端 → 服务端:
+    '0' + base64(data)  = 输入
+    '2'                 = Ping
+    '4' + JSON          = Resize
+
+  服务端 → 客户端:
+    '1' + base64(data)  = 输出 (Base64 编码)
+    '3'                 = Pong
+    '5' + JSON          = SetWindowTitle
+    '6' + JSON          = SetBufferSize
+
+特性:
+  WebTTY 桥接层架构
+  多客户端共享终端 (N:1)
+  Base64 编码输出
+  心跳机制
+  初始化消息
+  动态调整窗口大小
+  历史缓存和持久化 (10MB 环形缓冲区)
+  PTY 进程状态监控
+  会话和进程状态分离
+            </pre>
+        </div>
+
+        <div class="info">
+            <h3>调试日志</h3>
+            <pre id="debugLog"></pre>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+
+    <script>
+        let term = null;
+        let socket = null;
+        let currentSessionId = null;
+        let fitAddon = null;
+        let sessionsCache = {};
+        const MsgInput = '0'.charCodeAt(0);
+        const MsgOutput = '1'.charCodeAt(0);
+        const MsgPing = '2'.charCodeAt(0);
+        const MsgPong = '3'.charCodeAt(0);
+        const MsgResize = '4'.charCodeAt(0);
+        const MsgSetWindowTitle = '5'.charCodeAt(0);
+        const MsgSetBufferSize = '6'.charCodeAt(0);
+
+        function log(msg) {
+            const debugLog = document.getElementById('debugLog');
+            const time = new Date().toLocaleTimeString();
+            debugLog.textContent = `[${time}] ${msg}\n` + debugLog.textContent;
+            if (debugLog.textContent.split('\n').length > 50) {
+                debugLog.textContent = debugLog.textContent.split('\n').slice(0, 50).join('\n');
+            }
+        }
+
+        let isReadOnly = false;
+
+        function updateStatus(connected) {
+            const status = document.getElementById('status');
+            const closeBtn = document.getElementById('closeBtn');
+            const deleteBtn = document.getElementById('deleteBtn');
+            const reactivateBtn = document.getElementById('reactivateBtn');
+            if (connected) {
+                status.className = 'status connected';
+                status.textContent = isReadOnly ? '只读' : '已连接';
+                closeBtn.disabled = isReadOnly;
+                deleteBtn.disabled = false;
+                reactivateBtn.disabled = !isReadOnly;
+            } else {
+                status.className = 'status disconnected';
+                status.textContent = '未连接';
+                closeBtn.disabled = true;
+                deleteBtn.disabled = !currentSessionId;
+                reactivateBtn.disabled = true;
+            }
+        }
+
+        async function createTerminal() {
+            try {
+                const response = await fetch('/api/terminals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: 'Demo Terminal',
+                        cwd: '',
+                        cols: 80,
+                        rows: 24
+                    })
+                });
+                const session = await response.json();
+                log(`创建终端成功: ${session.id}`);
+                await refreshSessions();
+                connectToTerminal(session.id, true);
+            } catch (err) {
+                log(`创建终端失败: ${err.message}`);
+            }
+        }
+
+        async function refreshSessions() {
+            try {
+                const response = await fetch('/api/terminals');
+                const sessions = await response.json();
+
+                const sessionsDiv = document.getElementById('sessions');
+                const select = document.getElementById('terminalSelect');
+
+                sessionsDiv.innerHTML = '';
+                select.innerHTML = '<option value="">选择终端...</option>';
+                sessionsCache = {};
+
+                sessions.forEach(session => {
+                    sessionsCache[session.id] = session;
+                    const item = document.createElement('div');
+                    item.className = 'session-item' + (session.id === currentSessionId ? ' active' : '');
+                    const ptyStatusBadge = session.pty_status === 'running' ? 'Running' : 'Stopped';
+                    item.innerHTML = `
+                        <span>${session.name || 'Unnamed'} ${ptyStatusBadge} (${session.status}/${session.pty_status})</span>
+                        <span style="font-size: 12px; color: #888;">${session.id.substring(0, 8)}</span>
+                    `;
+                    const isRunning = session.pty_status === 'running';
+                    item.onclick = () => connectToTerminal(session.id, isRunning);
+                    sessionsDiv.appendChild(item);
+
+                    const option = document.createElement('option');
+                    option.value = session.id;
+                    option.textContent = `${session.name || 'Unnamed'} - ${session.id.substring(0, 8)}`;
+                    if (session.id === currentSessionId) {
+                        option.selected = true;
+                    }
+                    select.appendChild(option);
+                });
+
+                log(`刷新会话列表: ${sessions.length} 个终端`);
+            } catch (err) {
+                log(`刷新列表失败: ${err.message}`);
+            }
+        }
+
+        function switchTerminal() {
+            const select = document.getElementById('terminalSelect');
+            const sessionId = select.value;
+            if (sessionId) {
+                const session = sessionsCache[sessionId];
+                const isRunning = session && session.pty_status === 'running';
+                connectToTerminal(sessionId, isRunning);
+            }
+        }
+
+        async function closeCurrentTerminal() {
+            if (!currentSessionId) return;
+
+            try {
+                await fetch(`/api/terminals/${currentSessionId}`, {
+                    method: 'DELETE'
+                });
+                log(`关闭终端: ${currentSessionId}`);
+                disconnect();
+                currentSessionId = null;
+                await refreshSessions();
+            } catch (err) {
+                log(`关闭终端失败: ${err.message}`);
+            }
+        }
+
+        async function deleteCurrentTerminal() {
+            if (!currentSessionId) return;
+
+            try {
+                await fetch(`/api/terminals/${currentSessionId}/delete`, {
+                    method: 'DELETE'
+                });
+                log(`删除会话: ${currentSessionId}`);
+                disconnect();
+                currentSessionId = null;
+                await refreshSessions();
+            } catch (err) {
+                log(`删除会话失败: ${err.message}`);
+            }
+        }
+
+        function reactivateCurrentTerminal() {
+            if (!currentSessionId) return;
+            connectToTerminal(currentSessionId, true);
+        }
+
+        function connectToTerminal(sessionId, reactivate = false) {
+            if (socket) {
+                disconnect();
+            }
+
+            currentSessionId = sessionId;
+            isReadOnly = !reactivate;
+
+            if (!term) {
+                term = new Terminal({
+                    cursorBlink: true,
+                    fontSize: 14,
+                    fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+                    theme: {
+                        background: '#000000',
+                        foreground: '#ffffff'
+                    }
+                });
+                fitAddon = new FitAddon.FitAddon();
+                term.loadAddon(fitAddon);
+                term.open(document.getElementById('terminal'));
+                fitAddon.fit();
+
+                term.onData(data => {
+                    if (socket && socket.readyState === WebSocket.OPEN && !isReadOnly) {
+                        const encoded = btoa(unescape(encodeURIComponent(data)));
+                        const msg = new Uint8Array([MsgInput, ...new TextEncoder().encode(encoded)]);
+                        socket.send(msg);
+                    }
+                });
+
+                window.addEventListener('resize', () => {
+                    if (fitAddon) {
+                        fitAddon.fit();
+                    }
+                });
+            }
+
+            term.reset();
+            log(`连接到终端: ${sessionId}${reactivate ? ' (重新激活)' : ' (只读)'}`);
+
+            const wsUrl = `ws://${window.location.host}/api/terminals/${sessionId}/ws${reactivate ? '?reactivate=true' : ''}`;
+            socket = new WebSocket(wsUrl);
+            socket.binaryType = 'arraybuffer';
+
+            socket.onopen = () => {
+                log('WebSocket 连接已建立');
+                updateStatus(true);
+                refreshSessions();
+            };
+
+            socket.onmessage = (event) => {
+                const data = new Uint8Array(event.data);
+                if (data.length === 0) return;
+
+                const msgType = data[0];
+                const payload = data.slice(1);
+
+                switch (msgType) {
+                    case MsgOutput:
+                        const encoded = new TextDecoder().decode(payload);
+                        const decoded = decodeURIComponent(escape(atob(encoded)));
+                        term.write(decoded);
+                        break;
+
+                    case MsgPong:
+                        log('收到 Pong');
+                        break;
+
+                    case MsgSetWindowTitle:
+                        const titleData = JSON.parse(new TextDecoder().decode(payload));
+                        log(`窗口标题: ${JSON.stringify(titleData)}`);
+                        break;
+
+                    case MsgSetBufferSize:
+                        const bufferSize = JSON.parse(new TextDecoder().decode(payload));
+                        log(`缓冲区大小: ${bufferSize}`);
+                        break;
+
+                    default:
+                        log(`未知消息类型: ${msgType} (${String.fromCharCode(msgType)})`);
+                }
+            };
+
+            socket.onerror = (error) => {
+                log(`WebSocket 错误: ${error.message || 'Unknown error'}`);
+            };
+
+            socket.onclose = () => {
+                log('WebSocket 连接已关闭');
+                updateStatus(false);
+            };
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.close();
+                socket = null;
+            }
+            if (term) {
+                term.blur();
+            }
+            updateStatus(false);
+        }
+
+        refreshSessions();
+    </script>
+</body>
+</html>

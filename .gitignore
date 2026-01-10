@@ -1,0 +1,3 @@
+*/node_modules/*
+*.db
+ui/dist/index.html

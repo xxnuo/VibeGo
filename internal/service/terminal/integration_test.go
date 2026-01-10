@@ -1,0 +1,237 @@
+package terminal
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/glebarez/sqlite"
+	"github.com/gorilla/websocket"
+	"gorm.io/gorm"
+)
+
+func setupTestDB(t *testing.T) *gorm.DB {
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+
+	if err := db.AutoMigrate(&TerminalSession{}, &TerminalHistory{}); err != nil {
+		t.Fatalf("failed to migrate: %v", err)
+	}
+
+	return db
+}
+
+func TestManager_CreateAndClose(t *testing.T) {
+	db := setupTestDB(t)
+	manager := NewManager(db, &ManagerConfig{Shell: "/bin/sh"})
+
+	info, err := manager.Create(CreateOptions{Name: "test", Cwd: os.TempDir(), Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatalf("failed to create terminal: %v", err)
+	}
+
+	if info.Status != StatusActive {
+		t.Errorf("expected status %s, got %s", StatusActive, info.Status)
+	}
+
+	gotInfo, ok := manager.Get(info.ID)
+	if !ok {
+		t.Fatal("failed to get terminal info")
+	}
+
+	if gotInfo.ID != info.ID {
+		t.Errorf("expected ID %s, got %s", info.ID, gotInfo.ID)
+	}
+
+	err = manager.Close(info.ID)
+	if err != nil {
+		t.Errorf("failed to close terminal: %v", err)
+	}
+
+	_, ok = manager.Get(info.ID)
+	if ok {
+		t.Error("expected terminal to be removed")
+	}
+}
+
+func TestManager_MultiClient_Sharing(t *testing.T) {
+	db := setupTestDB(t)
+	manager := NewManager(db, &ManagerConfig{Shell: "/bin/sh"})
+
+	info, err := manager.Create(CreateOptions{Name: "test", Cwd: os.TempDir(), Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatalf("failed to create terminal: %v", err)
+	}
+	defer manager.Close(info.ID)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upgrader := websocket.Upgrader{}
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+
+		if _, err := manager.Attach(info.ID, conn, AttachOptions{Reactivate: true}); err != nil {
+			t.Errorf("failed to attach: %v", err)
+			conn.Close()
+			return
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+
+	conn1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("client 1 failed to dial: %v", err)
+	}
+	defer conn1.Close()
+
+	time.Sleep(100 * time.Millisecond)
+
+	conn2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("client 2 failed to dial: %v", err)
+	}
+	defer conn2.Close()
+
+	time.Sleep(100 * time.Millisecond)
+
+	if manager.activeConns.Load() != 2 {
+		t.Errorf("expected 2 active connections, got %d", manager.activeConns.Load())
+	}
+}
+
+func TestManager_MaxConnections(t *testing.T) {
+	db := setupTestDB(t)
+	manager := NewManager(db, &ManagerConfig{Shell: "/bin/sh", MaxConnections: 2})
+
+	info, err := manager.Create(CreateOptions{Name: "test", Cwd: os.TempDir(), Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatalf("failed to create terminal: %v", err)
+	}
+	defer manager.Close(info.ID)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upgrader := websocket.Upgrader{}
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+
+		if _, err := manager.Attach(info.ID, conn, AttachOptions{Reactivate: true}); err != nil {
+			conn.Close()
+			return
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+
+	conn1, _, _ := websocket.DefaultDialer.Dial(wsURL, nil)
+	defer conn1.Close()
+	time.Sleep(50 * time.Millisecond)
+
+	conn2, _, _ := websocket.DefaultDialer.Dial(wsURL, nil)
+	defer conn2.Close()
+	time.Sleep(50 * time.Millisecond)
+
+	conn3, resp3, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err == nil {
+		conn3.Close()
+	}
+
+	if resp3 != nil && resp3.StatusCode == http.StatusSwitchingProtocols {
+		time.Sleep(50 * time.Millisecond)
+		if manager.activeConns.Load() > 2 {
+			t.Error("expected max 2 connections to be enforced")
+		}
+	}
+}
+
+func TestManager_WebTTY_Integration(t *testing.T) {
+	db := setupTestDB(t)
+	manager := NewManager(db, &ManagerConfig{Shell: "/bin/sh"})
+
+	info, err := manager.Create(CreateOptions{Name: "test", Cwd: os.TempDir(), Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatalf("failed to create terminal: %v", err)
+	}
+	defer manager.Close(info.ID)
+
+	done := make(chan bool)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upgrader := websocket.Upgrader{}
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+
+		if _, err := manager.Attach(info.ID, conn, AttachOptions{Reactivate: true}); err != nil {
+			conn.Close()
+			return
+		}
+
+		<-done
+		conn.Close()
+	}))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	msgCount := 0
+	conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+	for i := 0; i < 10; i++ {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+		if len(msg) > 0 {
+			msgCount++
+			t.Logf("Received message type: %c", msg[0])
+		}
+	}
+
+	close(done)
+	conn.Close()
+
+	if msgCount < 2 {
+		t.Errorf("expected at least 2 init messages, got %d", msgCount)
+	}
+}
+
+func TestManager_Resize(t *testing.T) {
+	db := setupTestDB(t)
+	manager := NewManager(db, &ManagerConfig{Shell: "/bin/sh"})
+
+	info, err := manager.Create(CreateOptions{Name: "test", Cwd: os.TempDir(), Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatalf("failed to create terminal: %v", err)
+	}
+	defer manager.Close(info.ID)
+
+	err = manager.Resize(info.ID, 120, 40)
+	if err != nil {
+		t.Errorf("failed to resize: %v", err)
+	}
+
+	err = manager.Resize("nonexistent", 120, 40)
+	if err != ErrTerminalNotFound {
+		t.Errorf("expected ErrTerminalNotFound, got %v", err)
+	}
+}

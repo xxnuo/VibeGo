@@ -1,0 +1,105 @@
+package main
+
+import (
+	"fmt"
+	"io/fs"
+	"net/http"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog/log"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+	"github.com/xxnuo/vibego/internal/config"
+
+	"github.com/xxnuo/vibego/internal/docs"
+	"github.com/xxnuo/vibego/internal/handler"
+	"github.com/xxnuo/vibego/internal/logger"
+	"github.com/xxnuo/vibego/internal/middleware"
+	"github.com/xxnuo/vibego/internal/service/kv"
+	"github.com/xxnuo/vibego/internal/service/terminal"
+	"github.com/xxnuo/vibego/internal/version"
+	"github.com/xxnuo/vibego/ui"
+)
+
+// @title VibeGo API
+// @version 0.0.1
+// @description VibeGo 后端服务 API
+// @host localhost:1984
+// @BasePath /api
+func main() {
+	cfg := config.GetConfig()
+
+	logger.Setup(cfg.LogLevel)
+	logger.SetLogFile(cfg.LogDir, cfg.DisableLogToFile)
+
+	fmt.Printf("Starting VibeGo server at: http://%s:%s\n", cfg.Host, cfg.Port)
+
+	log.Info().
+		Str("host", cfg.Host).
+		Str("port", cfg.Port).
+		Str("version", version.Version).
+		Str("cors-origins", cfg.CORSOrigins).
+		Bool("allow-wan", cfg.AllowWAN).
+		Msg("Starting VibeGo server")
+
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
+
+	r.Use(middleware.Recovery())
+	r.Use(middleware.Logger())
+	r.Use(middleware.AllowWAN(cfg.AllowWAN))
+	r.Use(middleware.CORS(cfg.CORSOrigins))
+
+	docs.SwaggerInfo.BasePath = "/"
+	swaggerHandler := ginSwagger.WrapHandler(swaggerFiles.Handler)
+	r.GET("/docs/*any", func(c *gin.Context) {
+		if c.Param("any") == "/" {
+			c.Redirect(http.StatusMovedPermanently, "/docs/index.html")
+			return
+		}
+		swaggerHandler(c)
+	})
+
+	r.GET("/docs", func(c *gin.Context) {
+		c.Redirect(http.StatusMovedPermanently, "/docs/index.html")
+	})
+
+	handler.NewSystemHandler().Register(r)
+
+	r.Use(middleware.Auth(cfg.Token))
+
+	db := config.GetDB(
+		&kv.KV{},
+		&handler.Session{},
+		&handler.GitRepository{},
+		&terminal.TerminalSession{},
+		&terminal.TerminalHistory{},
+	)
+
+	api := r.Group("/api")
+
+	handler.NewSettingsHandler(db).Register(api)
+	handler.NewSessionHandler(db).Register(api)
+	handler.NewFileHandler().Register(api)
+	handler.NewTerminalHandler(db, cfg.DefaultShell).Register(api)
+	handler.NewGitHandler(db).Register(api)
+
+	distFS, err := ui.GetDistFS()
+	if err == nil {
+		fileServer := http.FileServer(http.FS(distFS))
+		r.NoRoute(func(c *gin.Context) {
+			path := strings.TrimPrefix(c.Request.URL.Path, "/")
+			if path == "" {
+				path = "index.html"
+			}
+			if _, err := fs.Stat(distFS, path); err == nil {
+				fileServer.ServeHTTP(c.Writer, c.Request)
+				return
+			}
+			c.Status(http.StatusNotFound)
+		})
+	}
+
+	r.Run(fmt.Sprintf("%s:%s", cfg.Host, cfg.Port))
+}
