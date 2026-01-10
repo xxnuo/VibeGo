@@ -252,8 +252,6 @@ const App: React.FC = () => {
     <>
       <AppFrame
         onMenuOpen={() => setMenuOpen(true)}
-        onTabAction={handleTabAction}
-        onBackToList={handleBackToList}
       >
         {renderContent()}
       </AppFrame>

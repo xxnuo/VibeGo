@@ -125,6 +125,7 @@ const GroupButton: React.FC<GroupButtonProps> = ({
 const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick }) => {
   const groups = useFrameStore((s) => s.groups);
   const activeGroupId = useFrameStore((s) => s.activeGroupId);
+  const bottomBarConfig = useFrameStore((s) => s.bottomBarConfig);
   const setActiveGroup = useFrameStore((s) => s.setActiveGroup);
   const setWorkspaceView = useFrameStore((s) => s.setWorkspaceView);
   const setCurrentActiveTab = useFrameStore((s) => s.setCurrentActiveTab);
@@ -189,6 +190,12 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick }) => {
     },
   ] : [];
 
+  if (!bottomBarConfig.show) {
+    return null;
+  }
+
+  const useCustomItems = bottomBarConfig.customItems && bottomBarConfig.customItems.length > 0;
+
   return (
     <>
       <footer className="h-14 bg-ide-panel border-t border-ide-border flex items-center justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.1)]">
@@ -205,17 +212,39 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick }) => {
           ref={containerRef}
           className="flex h-10 bg-ide-bg rounded-lg p-1 border border-ide-border gap-1 overflow-x-auto no-scrollbar max-w-[60vw]"
         >
-          {groups.map((group) => (
-            <GroupButton
-              key={group.id}
-              group={group}
-              isActive={activeGroupId === group.id}
-              isExpanded={shouldExpand(group)}
-              onGroupClick={handleGroupClick}
-              onViewClick={handleViewClick}
-              onLongPress={handleLongPress}
-            />
-          ))}
+          {useCustomItems ? (
+            bottomBarConfig.customItems!.map((item) => (
+              <button
+                key={item.id}
+                onClick={item.onClick}
+                className={`px-3 h-full rounded flex items-center gap-2 transition-all relative ${
+                  bottomBarConfig.activeItemId === item.id
+                    ? 'bg-ide-panel text-ide-accent shadow-sm'
+                    : 'text-ide-mute hover:text-ide-text'
+                }`}
+                title={item.label}
+              >
+                {item.icon}
+                {item.badge && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full px-1 min-w-[16px] h-4 flex items-center justify-center">
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            ))
+          ) : (
+            groups.map((group) => (
+              <GroupButton
+                key={group.id}
+                group={group}
+                isActive={activeGroupId === group.id}
+                isExpanded={shouldExpand(group)}
+                onGroupClick={handleGroupClick}
+                onViewClick={handleViewClick}
+                onLongPress={handleLongPress}
+              />
+            ))
+          )}
         </div>
 
         <div className="flex items-center gap-2 px-4">

@@ -5,20 +5,33 @@ export type GroupType = 'workspace' | 'terminal' | 'plugin' | 'settings';
 
 export type ViewType = 'files' | 'git' | 'terminal';
 
-export type HeaderButtonVariant = 'ghost' | 'accent' | 'outline';
-
-export interface HeaderButton {
+export interface TopBarButton {
   icon: ReactNode;
   label?: string;
   onClick?: () => void;
-  variant?: HeaderButtonVariant;
+  active?: boolean;
+  disabled?: boolean;
 }
 
-export interface HeaderConfig {
-  leftButton?: HeaderButton;
-  title?: string;
-  rightButton?: HeaderButton;
-  showTabs?: boolean;
+export interface TopBarConfig {
+  leftButtons?: TopBarButton[];
+  centerContent?: string | ReactNode;
+  rightButtons?: TopBarButton[];
+  show?: boolean;
+}
+
+export interface BottomMenuItem {
+  id: string;
+  icon: ReactNode;
+  label: string;
+  badge?: string | number;
+  onClick?: () => void;
+}
+
+export interface BottomBarConfig {
+  customItems?: BottomMenuItem[];
+  activeItemId?: string;
+  show?: boolean;
 }
 
 export interface TabItem {
@@ -73,9 +86,11 @@ export type PageGroup = WorkspaceGroup | TerminalGroup | PluginGroup | SettingsG
 interface FrameState {
   groups: PageGroup[];
   activeGroupId: string | null;
-  headerConfig: HeaderConfig | null;
+  topBarConfig: TopBarConfig;
+  bottomBarConfig: BottomBarConfig;
 
-  setHeaderConfig: (config: HeaderConfig | null) => void;
+  setTopBarConfig: (config: TopBarConfig) => void;
+  setBottomBarConfig: (config: BottomBarConfig) => void;
   initDefaultGroups: () => void;
   addWorkspaceGroup: (path: string, name?: string) => void;
   addTerminalGroup: (name?: string) => void;
@@ -164,9 +179,11 @@ const getGroupActiveTabId = (group: PageGroup, view?: ViewType): string | null =
 export const useFrameStore = create<FrameState>((set, get) => ({
   groups: [],
   activeGroupId: null,
-  headerConfig: null,
+  topBarConfig: { show: false },
+  bottomBarConfig: { show: true },
 
-  setHeaderConfig: (config) => set({ headerConfig: config }),
+  setTopBarConfig: (config) => set({ topBarConfig: config }),
+  setBottomBarConfig: (config) => set({ bottomBarConfig: config }),
 
   initDefaultGroups: () => {
     const { groups } = get();
