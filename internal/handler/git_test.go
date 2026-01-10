@@ -188,7 +188,7 @@ func TestGitUndoCommit(t *testing.T) {
 		"id": id,
 	}
 	body, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/git/undo_commit", bytes.NewBuffer(body))
+	req, _ := http.NewRequest("POST", "/git/undo-commit", bytes.NewBuffer(body))
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -226,7 +226,7 @@ func TestGitUndoCommit(t *testing.T) {
 			"path": repoPath,
 		}
 		body, _ := json.Marshal(reqBody)
-		req, _ := http.NewRequest("POST", "/git/new", bytes.NewBuffer(body))
+		req, _ := http.NewRequest("POST", "/git/init", bytes.NewBuffer(body))
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 	

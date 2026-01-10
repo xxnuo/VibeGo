@@ -236,10 +236,8 @@ func TestFileRemove(t *testing.T) {
 
 	os.WriteFile(filepath.Join(tmpDir, "rm.txt"), []byte("x"), 0644)
 
-	body := `{"path":"rm.txt"}`
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("DELETE", "/api/file/rm", bytes.NewBufferString(body))
-	req.Header.Set("Content-Type", "application/json")
+	req, _ := http.NewRequest("DELETE", "/api/file?path=rm.txt", nil)
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -253,10 +251,8 @@ func TestFileRemoveDir(t *testing.T) {
 	os.MkdirAll(filepath.Join(tmpDir, "rmdir", "sub"), 0755)
 	os.WriteFile(filepath.Join(tmpDir, "rmdir", "sub", "f.txt"), []byte("f"), 0644)
 
-	body := `{"path":"rmdir"}`
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("DELETE", "/api/file/rm", bytes.NewBufferString(body))
-	req.Header.Set("Content-Type", "application/json")
+	req, _ := http.NewRequest("DELETE", "/api/file?path=rmdir", nil)
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -267,10 +263,8 @@ func TestFileRemoveDir(t *testing.T) {
 func TestFileRemoveNotFound(t *testing.T) {
 	_, r, _ := setupTestFileHandler(t)
 
-	body := `{"path":"notexist"}`
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("DELETE", "/api/file/rm", bytes.NewBufferString(body))
-	req.Header.Set("Content-Type", "application/json")
+	req, _ := http.NewRequest("DELETE", "/api/file?path=notexist", nil)
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
@@ -424,3 +418,45 @@ func TestSystemPathBlacklist(t *testing.T) {
 	// in Read handler if resolvePath fails.
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
+
+func TestFileGrep(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+
+	os.WriteFile(filepath.Join(tmpDir, "test1.txt"), []byte("hello world\nfoo bar\nhello again"), 0644)
+	os.WriteFile(filepath.Join(tmpDir, "test2.txt"), []byte("no match here"), 0644)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/file/grep?pattern=hello", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string][]GrepMatch
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.Equal(t, 2, len(resp["matches"]))
+}
+
+func TestFileGrepWithLimit(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+
+	os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte("line1\nline2\nline3\nline4"), 0644)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/file/grep?pattern=line&limit=2", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string][]GrepMatch
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.Equal(t, 2, len(resp["matches"]))
+}
+
+func TestFileGrepMissingPattern(t *testing.T) {
+	_, r, _ := setupTestFileHandler(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/file/grep", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
