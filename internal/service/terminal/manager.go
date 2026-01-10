@@ -284,17 +284,10 @@ func (m *Manager) List() ([]TerminalInfo, error) {
 	return result, nil
 }
 
-func (m *Manager) Attach(id string, conn *websocket.Conn, opts AttachOptions) (*Connection, error) {
+func (m *Manager) Attach(id string, conn *websocket.Conn) (*Connection, error) {
 	at, ok := m.getActive(id)
 	if !ok {
-		if !opts.Reactivate {
-			return m.sendHistoryOnly(id, conn)
-		}
-		var err error
-		at, err = m.reactivateSession(id)
-		if err != nil {
-			return nil, ErrTerminalNotFound
-		}
+		return m.sendHistoryOnly(id, conn)
 	}
 
 	if m.maxConnections > 0 && int(m.activeConns.Load()) >= m.maxConnections {
@@ -343,49 +336,10 @@ func (m *Manager) Attach(id string, conn *websocket.Conn, opts AttachOptions) (*
 	return &Connection{Done: doneCh}, nil
 }
 
-func (m *Manager) reactivateSession(id string) (*activeTerminal, error) {
-	var session TerminalSession
-	if err := m.db.Where("id = ?", id).First(&session).Error; err != nil {
-		return nil, err
-	}
-
-	pty, err := newLocalCommand(m.shell, nil, session.Cwd, session.Cols, session.Rows)
-	if err != nil {
-		return nil, err
-	}
-
-	now := time.Now().Unix()
-	m.db.Model(&TerminalSession{}).Where("id = ?", id).Updates(map[string]any{
-		"status":     StatusActive,
-		"pty_status": PTYStatusRunning,
-		"updated_at": now,
-	})
-
-	active := &activeTerminal{
-		ID:            session.ID,
-		PTY:           pty,
-		Session:       &session,
-		Done:          make(chan struct{}),
-		historyBuffer: newHistoryBuffer(m.historyBufferSize),
-		flushTicker:   time.NewTicker(m.historyFlushInterval),
-		bufferSize:    m.bufferSize,
-		encoder:       base64.StdEncoding,
-	}
-	active.ptyStatus.Store(PTYStatusRunning)
-
-	m.terminals.Store(session.ID, active)
-
-	go m.ptyReadLoop(active)
-	go m.monitorPTY(active, pty)
-	go m.flushHistory(active)
-
-	return active, nil
-}
-
 func (m *Manager) sendHistoryOnly(id string, conn *websocket.Conn) (*Connection, error) {
 	historyData, err := m.loadHistoryFromDB(id)
 	if err != nil {
-		return nil, err
+		return nil, ErrTerminalNotFound
 	}
 
 	mst := newWSMaster(conn)
@@ -408,13 +362,6 @@ func (m *Manager) replayHistory(at *activeTerminal, mst master) error {
 	at.historyMu.RLock()
 	historyData := at.historyBuffer.Read()
 	at.historyMu.RUnlock()
-
-	if len(historyData) == 0 {
-		dbData, err := m.loadHistoryFromDB(at.ID)
-		if err == nil && len(dbData) > 0 {
-			historyData = dbData
-		}
-	}
 
 	if len(historyData) > 0 {
 		msg := WSMessage{

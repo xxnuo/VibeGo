@@ -161,7 +161,6 @@
             <select id="terminalSelect" onchange="switchTerminal()">
                 <option value="">选择终端...</option>
             </select>
-            <button onclick="reactivateCurrentTerminal()" id="reactivateBtn" disabled>重新激活</button>
             <button onclick="closeCurrentTerminal()" class="danger" id="closeBtn" disabled>关闭当前终端</button>
             <button onclick="deleteCurrentTerminal()" class="danger" id="deleteBtn" disabled>删除会话</button>
             <span class="status disconnected" id="status">未连接</span>
@@ -228,19 +227,16 @@
             const status = document.getElementById('status');
             const closeBtn = document.getElementById('closeBtn');
             const deleteBtn = document.getElementById('deleteBtn');
-            const reactivateBtn = document.getElementById('reactivateBtn');
             if (connected) {
                 status.className = 'status connected';
-                status.textContent = isReadOnly ? '只读' : '已连接';
+                status.textContent = isReadOnly ? '只读历史' : '已连接';
                 closeBtn.disabled = isReadOnly;
                 deleteBtn.disabled = false;
-                reactivateBtn.disabled = !isReadOnly;
             } else {
                 status.className = 'status disconnected';
                 status.textContent = '未连接';
                 closeBtn.disabled = true;
                 deleteBtn.disabled = !currentSessionId;
-                reactivateBtn.disabled = true;
             }
         }
 
@@ -353,18 +349,13 @@
             }
         }
 
-        function reactivateCurrentTerminal() {
-            if (!currentSessionId) return;
-            connectToTerminal(currentSessionId, true);
-        }
-
-        function connectToTerminal(sessionId, reactivate = false) {
+        function connectToTerminal(sessionId, isRunning = true) {
             if (socket) {
                 disconnect();
             }
 
             currentSessionId = sessionId;
-            isReadOnly = !reactivate;
+            isReadOnly = !isRunning;
 
             if (!term) {
                 term = new Terminal({
@@ -396,9 +387,9 @@
             }
 
             term.reset();
-            log(`连接到终端: ${sessionId}${reactivate ? ' (重新激活)' : ' (只读)'}`);
+            log(`连接到终端: ${sessionId}${isReadOnly ? ' (只读历史)' : ''}`);
 
-            const wsUrl = `ws://${window.location.host}/api/terminals/${sessionId}/ws${reactivate ? '?reactivate=true' : ''}`;
+            const wsUrl = `ws://${window.location.host}/api/terminals/${sessionId}/ws`;
             socket = new WebSocket(wsUrl);
 
             socket.onopen = () => {

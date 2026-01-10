@@ -161,7 +161,7 @@ func (h *TerminalHandler) WebSocket(c *gin.Context) {
 		return
 	}
 
-	termConn, err := h.manager.Attach(id, conn, terminal.AttachOptions{Reactivate: true})
+	termConn, err := h.manager.Attach(id, conn)
 	if err != nil {
 		log.Error().Err(err).Str("id", id).Msg("Failed to attach to terminal")
 		conn.Close()

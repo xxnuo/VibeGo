@@ -25,10 +25,6 @@ type CreateOptions struct {
 	Rows int
 }
 
-type AttachOptions struct {
-	Reactivate bool
-}
-
 type Connection struct {
 	Done <-chan struct{}
 }

@@ -106,7 +106,6 @@ func main() {
 
 	r.GET("/api/terminals/:id/ws", func(c *gin.Context) {
 		id := c.Param("id")
-		reactivate := c.Query("reactivate") == "true"
 
 		wsConn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
@@ -114,9 +113,7 @@ func main() {
 			return
 		}
 
-		conn, err := manager.Attach(id, wsConn, terminal.AttachOptions{
-			Reactivate: reactivate,
-		})
+		conn, err := manager.Attach(id, wsConn)
 		if err != nil {
 			log.Printf("attach error: %v", err)
 			wsConn.Close()
