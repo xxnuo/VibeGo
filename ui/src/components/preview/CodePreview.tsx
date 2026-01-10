@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { usePreviewStore, getLanguageFromExtension } from '@/stores/previewStore';
 import { useAppStore } from '@/stores/appStore';
