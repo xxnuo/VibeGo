@@ -214,10 +214,12 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick }) => {
                 onClick={button.onClick}
                 disabled={button.disabled}
                 title={button.label}
-                className={`${cornerButtonClass} ${button.label ? 'px-3' : 'w-8'} gap-1.5 text-xs ${button.active ? 'bg-ide-accent text-ide-bg border-ide-accent' : ''} ${button.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`${cornerButtonClass} ${button.label ? "px-3" : "w-8"} gap-1.5 text-xs ${button.active ? "bg-ide-accent text-ide-bg border-ide-accent" : ""} ${button.disabled ? "opacity-50 cursor-not-allowed" : ""}`}
               >
-                {button.icon}
-                {button.label && <span className="hidden sm:inline">{button.label}</span>}
+                <span className="text-[16px] leading-none">{button.icon}</span>
+                {button.label && (
+                  <span className="hidden sm:inline">{button.label}</span>
+                )}
               </button>
             ))}
           </div>
