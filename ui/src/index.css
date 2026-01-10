@@ -2,6 +2,8 @@
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant hacker (&:is(.hacker *));
+@custom-variant terminal (&:is(.terminal *));
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
@@ -42,6 +44,20 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* IDE Theme Colors */
+  --color-ide-bg: var(--ide-bg);
+  --color-ide-panel: var(--ide-panel);
+  --color-ide-border: var(--ide-border);
+  --color-ide-accent: var(--ide-accent);
+  --color-ide-text: var(--ide-text);
+  --color-ide-mute: var(--ide-mute);
+  --color-ide-diff-add: var(--ide-diff-add);
+  --color-ide-diff-add-bg: var(--ide-diff-add-bg);
+  --color-ide-diff-del: var(--ide-diff-del);
+  --color-ide-diff-del-bg: var(--ide-diff-del-bg);
+
+  --shadow-glow: var(--ide-shadow);
 }
 
 :root {
@@ -77,6 +93,20 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* IDE Defaults (Light) */
+  --ide-bg: #f8fafc;
+  --ide-panel: #ffffff;
+  --ide-border: #cbd5e1;
+  --ide-accent: #2563eb; /* Blue-600 */
+  --ide-text: #0f172a;
+  --ide-mute: #64748b;
+  --ide-diff-add: #166534;
+  --ide-diff-add-bg: #dcfce7;
+  --ide-diff-del: #991b1b;
+  --ide-diff-del-bg: #fee2e2;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --ide-shadow: none;
 }
 
 .dark {
@@ -111,6 +141,50 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  /* IDE Dark (VSCode Style) */
+  --ide-bg: #1e1e1e;
+  --ide-panel: #252526;
+  --ide-border: #333333;
+  --ide-accent: #007acc; /* VSCode Blue */
+  --ide-text: #cccccc;
+  --ide-mute: #858585;
+  --ide-diff-add: #4ade80;
+  --ide-diff-add-bg: rgba(74, 222, 128, 0.1);
+  --ide-diff-del: #f87171;
+  --ide-diff-del-bg: rgba(248, 113, 113, 0.1);
+  --ide-shadow: none;
+}
+
+.hacker {
+  --ide-bg: #050505;
+  --ide-panel: #111111;
+  --ide-border: #333333;
+  --ide-accent: #22c55e;
+  --ide-text: #f0f0f0;
+  --ide-mute: #666666;
+  --ide-diff-add: #22c55e;
+  --ide-diff-add-bg: rgba(34, 197, 94, 0.1);
+  --ide-diff-del: #ef4444;
+  --ide-diff-del-bg: rgba(239, 68, 68, 0.1);
+  --radius: 0px;
+  --ide-shadow: none;
+}
+
+.terminal {
+  --ide-bg: #000000;
+  --ide-panel: #0a0a0a;
+  --ide-border: #003300;
+  --ide-accent: #00ff41;
+  --ide-text: #e0e0e0;
+  --ide-mute: #005500;
+  --ide-diff-add: #00ff41;
+  --ide-diff-add-bg: rgba(0, 255, 65, 0.1);
+  --ide-diff-del: #ff0055;
+  --ide-diff-del-bg: rgba(255, 0, 85, 0.1);
+  --font-mono: "JetBrains Mono", monospace;
+  --radius: 0px;
+  --ide-shadow: 0 0 10px var(--ide-accent);
 }
 
 @layer base {
@@ -118,6 +192,27 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground transition-colors duration-300;
   }
+}
+
+/* CRT Scanline Effect (Only for terminal class) */
+.scanlines::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+    linear-gradient(
+      90deg,
+      rgba(255, 0, 0, 0.06),
+      rgba(0, 255, 0, 0.02),
+      rgba(0, 0, 255, 0.06)
+    );
+  z-index: 9999;
+  background-size: 100% 2px, 3px 100%;
+  pointer-events: none;
 }
