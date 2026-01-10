@@ -19,6 +19,7 @@ export type ViewMode = 'list' | 'grid';
 
 interface FileManagerState {
   currentPath: string;
+  rootPath: string;
   pathHistory: string[];
   historyIndex: number;
   files: FileItem[];
@@ -36,6 +37,7 @@ interface FileManagerState {
   detailFile: FileItem | null;
 
   setCurrentPath: (path: string) => void;
+  setRootPath: (path: string) => void;
   goToPath: (path: string) => void;
   goBack: () => void;
   goForward: () => void;
@@ -65,6 +67,7 @@ interface FileManagerState {
 
 export const useFileManagerStore = create<FileManagerState>((set, get) => ({
   currentPath: '.',
+  rootPath: '.',
   pathHistory: ['.'],
   historyIndex: 0,
   files: [],
@@ -82,6 +85,8 @@ export const useFileManagerStore = create<FileManagerState>((set, get) => ({
   detailFile: null,
 
   setCurrentPath: (path) => set({ currentPath: path }),
+
+  setRootPath: (path) => set({ rootPath: path }),
 
   goToPath: (path) => {
     const { pathHistory, historyIndex } = get();

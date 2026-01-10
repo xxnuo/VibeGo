@@ -85,11 +85,19 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
   const [renameFile, setRenameFile] = useState<FileItem | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const loadFiles = useCallback(async (path: string) => {
+  const loadFiles = useCallback(async (path: string, updatePath = false) => {
     setLoading(true);
     setError(null);
     try {
       const res = await fileApi.list(path);
+      if (updatePath && res.path && res.path !== path) {
+        useFileManagerStore.getState().setCurrentPath(res.path);
+        useFileManagerStore.getState().setRootPath(res.path);
+        useFileManagerStore.setState({
+          pathHistory: [res.path],
+          historyIndex: 0,
+        });
+      }
       const files: FileItem[] = res.files.map((f) => ({
         path: f.path,
         name: f.name,
@@ -111,10 +119,8 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
   }, [setFiles, setLoading, setError]);
 
   useEffect(() => {
-    if (initialPath && currentPath === '.') {
-      goToPath(initialPath);
-    }
-  }, [initialPath]);
+    loadFiles(initialPath, true);
+  }, []);
 
   useEffect(() => {
     loadFiles(currentPath);
@@ -203,6 +209,8 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (showNewDialog || renameFile) return;
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
       switch (e.key) {
         case 'ArrowUp':
           e.preventDefault();
