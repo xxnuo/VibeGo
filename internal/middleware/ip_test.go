@@ -44,6 +44,12 @@ func TestAllowWAN(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
+			name:           "LAN IP 172.16.x.x",
+			clientIP:       "172.16.0.1",
+			allowWAN:       false,
+			expectedStatus: http.StatusOK,
+		},
+		{
 			name:           "Public IP - AllowWAN False",
 			clientIP:       "8.8.8.8",
 			allowWAN:       false,
@@ -58,6 +64,12 @@ func TestAllowWAN(t *testing.T) {
 		{
 			name:           "IPv6 Link-Local",
 			clientIP:       "fe80::1",
+			allowWAN:       false,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "IPv6 Unique Local",
+			clientIP:       "fc00::1",
 			allowWAN:       false,
 			expectedStatus: http.StatusOK,
 		},
@@ -80,4 +92,22 @@ func TestAllowWAN(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, w.Code)
 		})
 	}
+}
+
+func TestAllowWANInvalidIP(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	r.Use(AllowWAN(false))
+	r.GET("/test", func(c *gin.Context) {
+		c.String(http.StatusOK, "Allowed")
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = "invalid-ip:12345"
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
 }

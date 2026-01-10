@@ -7,10 +7,28 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestInit(t *testing.T) {
-	Setup("debug")
-	assert.Equal(t, zerolog.DebugLevel, zerolog.GlobalLevel())
+func TestSetup(t *testing.T) {
+	tests := []struct {
+		level    string
+		expected zerolog.Level
+	}{
+		{"debug", zerolog.DebugLevel},
+		{"info", zerolog.InfoLevel},
+		{"warn", zerolog.WarnLevel},
+		{"warning", zerolog.WarnLevel},
+		{"error", zerolog.ErrorLevel},
+		{"unknown", zerolog.InfoLevel},
+		{"", zerolog.InfoLevel},
+		{"DEBUG", zerolog.DebugLevel},
+		{"INFO", zerolog.InfoLevel},
+		{"WARN", zerolog.WarnLevel},
+		{"ERROR", zerolog.ErrorLevel},
+	}
 
-	Setup("info")
-	assert.Equal(t, zerolog.InfoLevel, zerolog.GlobalLevel())
+	for _, tt := range tests {
+		t.Run(tt.level, func(t *testing.T) {
+			Setup(tt.level)
+			assert.Equal(t, tt.expected, zerolog.GlobalLevel())
+		})
+	}
 }

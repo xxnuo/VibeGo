@@ -184,17 +184,29 @@ func TestSetJSONSlice(t *testing.T) {
 	assert.Equal(t, "B", result[1].Name)
 }
 
-func TestSetJSONMap(t *testing.T) {
+func TestSetJSONInvalidValue(t *testing.T) {
 	db := setupTestDB(t)
 	store, _ := New(db)
 
-	data := map[string]int{"a": 1, "b": 2}
-	err := store.SetJSON("map", data)
-	require.NoError(t, err)
+	ch := make(chan int)
+	err := store.SetJSON("invalid", ch)
+	assert.Error(t, err)
+}
 
-	var result map[string]int
-	err = store.GetJSON("map", &result)
+func TestKeysEmpty(t *testing.T) {
+	db := setupTestDB(t)
+	store, _ := New(db)
+
+	keys, err := store.Keys()
 	require.NoError(t, err)
-	assert.Equal(t, 1, result["a"])
-	assert.Equal(t, 2, result["b"])
+	assert.Len(t, keys, 0)
+}
+
+func TestAllEmpty(t *testing.T) {
+	db := setupTestDB(t)
+	store, _ := New(db)
+
+	all, err := store.All()
+	require.NoError(t, err)
+	assert.Len(t, all, 0)
 }

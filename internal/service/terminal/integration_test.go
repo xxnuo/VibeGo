@@ -235,3 +235,110 @@ func TestManager_Resize(t *testing.T) {
 		t.Errorf("expected ErrTerminalNotFound, got %v", err)
 	}
 }
+
+func TestManager_List(t *testing.T) {
+	db := setupTestDB(t)
+	manager := NewManager(db, &ManagerConfig{Shell: "/bin/sh"})
+
+	info1, _ := manager.Create(CreateOptions{Name: "test1", Cwd: os.TempDir(), Cols: 80, Rows: 24})
+	info2, _ := manager.Create(CreateOptions{Name: "test2", Cwd: os.TempDir(), Cols: 80, Rows: 24})
+	defer manager.Close(info1.ID)
+	defer manager.Close(info2.ID)
+
+	list, err := manager.List()
+	if err != nil {
+		t.Fatalf("failed to list: %v", err)
+	}
+	if len(list) < 2 {
+		t.Errorf("expected at least 2 terminals, got %d", len(list))
+	}
+}
+
+func TestManager_Delete(t *testing.T) {
+	db := setupTestDB(t)
+	manager := NewManager(db, &ManagerConfig{Shell: "/bin/sh"})
+
+	info, _ := manager.Create(CreateOptions{Name: "test", Cwd: os.TempDir(), Cols: 80, Rows: 24})
+
+	err := manager.Delete(info.ID)
+	if err != nil {
+		t.Errorf("failed to delete: %v", err)
+	}
+
+	_, ok := manager.Get(info.ID)
+	if ok {
+		t.Error("expected terminal to be deleted")
+	}
+}
+
+func TestManager_CleanupOnStart(t *testing.T) {
+	db := setupTestDB(t)
+	manager := NewManager(db, &ManagerConfig{Shell: "/bin/sh"})
+
+	manager.CleanupOnStart()
+}
+
+func TestManager_CreateDefaultCwd(t *testing.T) {
+	db := setupTestDB(t)
+	manager := NewManager(db, &ManagerConfig{Shell: "/bin/sh"})
+
+	info, err := manager.Create(CreateOptions{Name: "test", Cols: 0, Rows: 0})
+	if err != nil {
+		t.Fatalf("failed to create terminal: %v", err)
+	}
+	defer manager.Close(info.ID)
+
+	if info.Cols != 80 {
+		t.Errorf("expected default cols 80, got %d", info.Cols)
+	}
+	if info.Rows != 24 {
+		t.Errorf("expected default rows 24, got %d", info.Rows)
+	}
+}
+
+func TestManager_CleanupExpiredHistory(t *testing.T) {
+	db := setupTestDB(t)
+	manager := NewManager(db, &ManagerConfig{Shell: "/bin/sh", HistoryMaxAge: time.Hour})
+
+	err := manager.CleanupExpiredHistory()
+	if err != nil {
+		t.Errorf("failed to cleanup expired history: %v", err)
+	}
+}
+
+func TestManager_CleanupExpiredHistoryDisabled(t *testing.T) {
+	db := setupTestDB(t)
+	manager := NewManager(db, &ManagerConfig{Shell: "/bin/sh", HistoryMaxAge: 0})
+
+	err := manager.CleanupExpiredHistory()
+	if err != nil {
+		t.Errorf("failed to cleanup expired history: %v", err)
+	}
+}
+
+func TestManager_AttachNonExistent(t *testing.T) {
+	db := setupTestDB(t)
+	manager := NewManager(db, &ManagerConfig{Shell: "/bin/sh"})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upgrader := websocket.Upgrader{}
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+
+		_, err = manager.Attach("nonexistent", conn)
+		if err != nil && err != ErrTerminalNotFound {
+			t.Logf("attach returned: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	conn, _, _ := websocket.DefaultDialer.Dial(wsURL, nil)
+	if conn != nil {
+		conn.Close()
+	}
+	time.Sleep(100 * time.Millisecond)
+}
