@@ -90,9 +90,9 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
   const showEditToggle = isCodeFile && activeTabId;
 
   return (
-    <div className="h-12 bg-ide-bg border-b border-ide-border flex items-center overflow-x-auto no-scrollbar px-2 gap-2 shrink-0 transition-colors duration-300">
+    <div className="h-12 bg-ide-bg border-b border-ide-border flex items-center px-2 gap-2 shrink-0 transition-colors duration-300 overflow-hidden">
       {showBackButton && (
-        <>
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={handleBackClick}
             className={`shrink-0 h-8 w-8 flex items-center justify-center rounded-md border transition-all ${
@@ -107,33 +107,37 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
           {tabs.length > 0 && (
             <div className="w-px h-5 bg-ide-border mx-1 shrink-0" />
           )}
-        </>
+        </div>
       )}
 
-      {tabs.map((tab) => (
-        <div
-          key={tab.id}
-          onClick={() => handleTabClick(tab.id)}
-          className={`shrink-0 px-2 h-7 rounded-md flex items-center gap-1 text-xs border transition-all cursor-pointer ${
-            activeTabId === tab.id
-              ? 'bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm'
-              : 'bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text'
-          }`}
-        >
-          {getTabIcon(tab)}
-          <span className={`max-w-[80px] truncate font-medium ${!tab.pinned ? 'italic' : ''}`}>{tab.title}</span>
-          {tab.closable !== false && (
-            <button
-              onClick={(e) => handleCloseTab(e, tab.id)}
-              className="hover:text-red-500 rounded-full p-0.5 hover:bg-ide-bg"
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+          {tabs.map((tab) => (
+            <div
+              key={tab.id}
+              onClick={() => handleTabClick(tab.id)}
+              className={`shrink-0 px-2 h-7 rounded-md flex items-center gap-1 text-xs border transition-all cursor-pointer ${
+                activeTabId === tab.id
+                  ? 'bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm'
+                  : 'bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text'
+              }`}
             >
-              <X size={12} />
-            </button>
-          )}
+              {getTabIcon(tab)}
+              <span className={`max-w-[80px] truncate font-medium ${!tab.pinned ? 'italic' : ''}`}>{tab.title}</span>
+              {tab.closable !== false && (
+                <button
+                  onClick={(e) => handleCloseTab(e, tab.id)}
+                  className="hover:text-red-500 rounded-full p-0.5 hover:bg-ide-bg"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          ))}
         </div>
-      ))}
+      </div>
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         {showEditToggle ? (
           <button
             onClick={handleToggleEdit}

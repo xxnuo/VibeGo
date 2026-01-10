@@ -30,7 +30,7 @@ const TopBar: React.FC = () => {
   const hasCenter = topBarConfig.centerContent;
 
   return (
-    <div className="h-12 bg-ide-bg border-b border-ide-border flex items-center px-2 gap-2 shrink-0 transition-colors duration-300">
+    <div className="h-12 bg-ide-bg border-b border-ide-border flex items-center px-2 gap-2 shrink-0 transition-colors duration-300 overflow-hidden">
       {hasLeftButtons && (
         <div className="flex items-center gap-2 shrink-0">
           {topBarConfig.leftButtons!.map((button, index) => (
@@ -40,14 +40,18 @@ const TopBar: React.FC = () => {
       )}
 
       {hasCenter && (
-        <div className="flex-1 flex items-center justify-center px-2">
-          {typeof topBarConfig.centerContent === 'string' ? (
-            <span className="text-sm font-medium text-ide-text truncate">
-              {topBarConfig.centerContent}
-            </span>
-          ) : (
-            topBarConfig.centerContent
-          )}
+        <div className="flex-1 min-w-0 px-2">
+          <div className="flex items-center justify-center overflow-x-auto no-scrollbar">
+            {typeof topBarConfig.centerContent === 'string' ? (
+              <span className="text-sm font-medium text-ide-text whitespace-nowrap">
+                {topBarConfig.centerContent}
+              </span>
+            ) : (
+              <div className="flex items-center min-w-max">
+                {topBarConfig.centerContent}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

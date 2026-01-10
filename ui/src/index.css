@@ -45,7 +45,6 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* IDE Theme Colors */
   --color-ide-bg: var(--ide-bg);
   --color-ide-panel: var(--ide-panel);
   --color-ide-border: var(--ide-border);
@@ -94,11 +93,10 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
-  /* IDE Defaults (Light) */
   --ide-bg: #f8fafc;
   --ide-panel: #ffffff;
   --ide-border: #cbd5e1;
-  --ide-accent: #2563eb; /* Blue-600 */
+  --ide-accent: #2563eb;
   --ide-text: #0f172a;
   --ide-mute: #64748b;
   --ide-diff-add: #166534;
@@ -142,11 +140,10 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 
-  /* IDE Dark (VSCode Style) */
   --ide-bg: #1e1e1e;
   --ide-panel: #252526;
   --ide-border: #333333;
-  --ide-accent: #007acc; /* VSCode Blue */
+  --ide-accent: #007acc;
   --ide-text: #cccccc;
   --ide-mute: #858585;
   --ide-diff-add: #4ade80;
@@ -191,12 +188,16 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
   body {
     @apply bg-background text-foreground transition-colors duration-300;
   }
 }
-
-/* CRT Scanline Effect (Only for terminal class) */
 .scanlines::before {
   content: " ";
   display: block;
