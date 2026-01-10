@@ -1,16 +1,11 @@
-import React from 'react';
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-} from './drawer';
+import React from "react";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "./drawer";
 
 export interface ContextMenuItem {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
-  variant?: 'default' | 'danger';
+  variant?: "default" | "danger";
 }
 
 export interface ContextSheetProps {
@@ -20,7 +15,12 @@ export interface ContextSheetProps {
   items: ContextMenuItem[];
 }
 
-const ContextSheet: React.FC<ContextSheetProps> = ({ open, onClose, title, items }) => {
+const ContextSheet: React.FC<ContextSheetProps> = ({
+  open,
+  onClose,
+  title,
+  items,
+}) => {
   return (
     <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
       <DrawerContent className="bg-ide-panel border-ide-border">
@@ -38,12 +38,16 @@ const ContextSheet: React.FC<ContextSheetProps> = ({ open, onClose, title, items
                 onClose();
               }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${
-                item.variant === 'danger'
-                  ? 'text-red-500 hover:bg-red-500/10'
-                  : 'text-ide-text hover:bg-ide-bg'
+                item.variant === "danger"
+                  ? "text-red-500 hover:bg-red-500/10"
+                  : "text-ide-text hover:bg-ide-bg"
               }`}
             >
-              <span className={item.variant === 'danger' ? 'text-red-500' : 'text-ide-mute'}>
+              <span
+                className={
+                  item.variant === "danger" ? "text-red-500" : "text-ide-mute"
+                }
+              >
                 {item.icon}
               </span>
               <span className="text-sm">{item.label}</span>

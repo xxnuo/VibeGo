@@ -1,9 +1,9 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
 export interface FileNode {
   id: string;
   name: string;
-  type: 'file' | 'folder';
+  type: "file" | "folder";
   children?: FileNode[];
   content?: string;
   language?: string;
@@ -25,7 +25,7 @@ interface FileState {
 
 export const useFileStore = create<FileState>((set) => ({
   fileTree: [],
-  currentPath: '.',
+  currentPath: ".",
   selectedFileId: null,
   expandedFolders: new Set<string>(),
 

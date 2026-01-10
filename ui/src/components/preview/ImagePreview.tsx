@@ -1,8 +1,14 @@
-import React, { useState, useRef, useCallback } from 'react';
-import type { FileItem } from '@/stores/fileManagerStore';
-import { ZoomIn, ZoomOut, RotateCcw, ExternalLink, Download } from 'lucide-react';
-import { fileApi } from '@/api/file';
-import { usePreviewStore } from '@/stores/previewStore';
+import React, { useState, useRef, useCallback } from "react";
+import type { FileItem } from "@/stores/fileManagerStore";
+import {
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  ExternalLink,
+  Download,
+} from "lucide-react";
+import { fileApi } from "@/api/file";
+import { usePreviewStore } from "@/stores/previewStore";
 
 const ImagePreviewContent: React.FC<{ file: FileItem }> = ({ file }) => {
   const [scale, setScale] = useState(1);
@@ -62,28 +68,47 @@ const ImagePreviewContent: React.FC<{ file: FileItem }> = ({ file }) => {
     }
   };
 
-
-
-
-
   return (
     <div className="h-full w-full flex flex-col bg-ide-bg">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-ide-border bg-ide-panel">
-        <button onClick={handleZoomOut} className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text" title="Zoom Out">
+        <button
+          onClick={handleZoomOut}
+          className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text"
+          title="Zoom Out"
+        >
           <ZoomOut size={16} />
         </button>
-        <span className="text-xs text-ide-mute min-w-[50px] text-center">{Math.round(scale * 100)}%</span>
-        <button onClick={handleZoomIn} className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text" title="Zoom In">
+        <span className="text-xs text-ide-mute min-w-[50px] text-center">
+          {Math.round(scale * 100)}%
+        </span>
+        <button
+          onClick={handleZoomIn}
+          className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text"
+          title="Zoom In"
+        >
           <ZoomIn size={16} />
         </button>
-        <button onClick={handleReset} className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text" title="Reset">
+        <button
+          onClick={handleReset}
+          className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text"
+          title="Reset"
+        >
           <RotateCcw size={16} />
         </button>
         <div className="flex-1" />
-        <a href={imageUrl} download={file.name} className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text" title="Download">
+        <a
+          href={imageUrl}
+          download={file.name}
+          className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text"
+          title="Download"
+        >
           <Download size={16} />
         </a>
-        <button onClick={() => window.open(imageUrl, '_blank')} className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text" title="Open in new tab">
+        <button
+          onClick={() => window.open(imageUrl, "_blank")}
+          className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text"
+          title="Open in new tab"
+        >
           <ExternalLink size={16} />
         </button>
       </div>
@@ -103,7 +128,7 @@ const ImagePreviewContent: React.FC<{ file: FileItem }> = ({ file }) => {
           className="max-w-none select-none"
           style={{
             transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-            transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+            transition: isDragging ? "none" : "transform 0.1s ease-out",
             opacity: imageLoaded ? 1 : 0,
           }}
           draggable={false}
@@ -113,8 +138,6 @@ const ImagePreviewContent: React.FC<{ file: FileItem }> = ({ file }) => {
     </div>
   );
 };
-
-
 
 const ImagePreview: React.FC = () => {
   const { file } = usePreviewStore();

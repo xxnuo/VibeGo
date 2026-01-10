@@ -1,9 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
-  Search, X, Eye, EyeOff, RefreshCw, FolderPlus, Trash2, CheckSquare, Square,
-  ArrowUpDown, LayoutList, LayoutGrid, FilePlus
-} from 'lucide-react';
-import { useFileManagerStore, type SortField } from '@/stores/fileManagerStore';
+  Search,
+  X,
+  Eye,
+  EyeOff,
+  RefreshCw,
+  FolderPlus,
+  Trash2,
+  CheckSquare,
+  Square,
+  ArrowUpDown,
+  LayoutList,
+  LayoutGrid,
+  FilePlus,
+} from "lucide-react";
+import { useFileManagerStore, type SortField } from "@/stores/fileManagerStore";
 
 interface FileManagerToolbarProps {
   onRefresh: () => void;
@@ -39,10 +50,10 @@ const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
   const [showSortMenu, setShowSortMenu] = useState(false);
 
   const sortOptions: { field: SortField; label: string }[] = [
-    { field: 'name', label: 'Name' },
-    { field: 'size', label: 'Size' },
-    { field: 'modTime', label: 'Date' },
-    { field: 'type', label: 'Type' },
+    { field: "name", label: "Name" },
+    { field: "size", label: "Size" },
+    { field: "modTime", label: "Date" },
+    { field: "type", label: "Type" },
   ];
 
   return (
@@ -96,7 +107,7 @@ const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
                 />
                 <button
                   onClick={() => {
-                    setSearchQuery('');
+                    setSearchQuery("");
                     setSearchActive(false);
                   }}
                   className="p-1 rounded hover:bg-ide-panel"
@@ -140,7 +151,9 @@ const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
                               setShowSortMenu(false);
                             }}
                             className={`w-full px-3 py-2 text-left text-xs hover:bg-ide-bg ${
-                              sortField === opt.field ? 'text-ide-accent' : 'text-ide-text'
+                              sortField === opt.field
+                                ? "text-ide-accent"
+                                : "text-ide-text"
                             }`}
                           >
                             {opt.label}
@@ -152,16 +165,24 @@ const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
                 </div>
 
                 <button
-                  onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
+                  onClick={() =>
+                    setViewMode(viewMode === "list" ? "grid" : "list")
+                  }
                   className="p-2 rounded-md text-ide-mute hover:bg-ide-bg hover:text-ide-text"
                 >
-                  {viewMode === 'list' ? <LayoutGrid size={18} /> : <LayoutList size={18} />}
+                  {viewMode === "list" ? (
+                    <LayoutGrid size={18} />
+                  ) : (
+                    <LayoutList size={18} />
+                  )}
                 </button>
 
                 <button
                   onClick={toggleShowHidden}
                   className={`p-2 rounded-md hover:bg-ide-bg ${
-                    showHidden ? 'text-ide-accent' : 'text-ide-mute hover:text-ide-text'
+                    showHidden
+                      ? "text-ide-accent"
+                      : "text-ide-mute hover:text-ide-text"
                   }`}
                 >
                   {showHidden ? <Eye size={18} /> : <EyeOff size={18} />}

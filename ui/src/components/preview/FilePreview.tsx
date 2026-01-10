@@ -1,16 +1,22 @@
-import React, { useEffect, useState } from 'react';
-import { usePreviewStore, getPreviewType } from '@/stores/previewStore';
-import type { FileItem } from '@/stores/fileManagerStore';
-import { fileApi } from '@/api/file';
-import { Loader2, AlertCircle, FileQuestion, Code, Download } from 'lucide-react';
-import { useTranslation } from '@/lib/i18n';
-import { useAppStore } from '@/stores';
-import { isFileTooLarge, formatFileSize } from './utils';
-import CodePreview from './CodePreview';
-import ImagePreview from './ImagePreview';
-import MediaPreview from './MediaPreview';
-import MarkdownPreview from './MarkdownPreview';
-import PDFPreview from './PDFPreview';
+import React, { useEffect, useState } from "react";
+import { usePreviewStore, getPreviewType } from "@/stores/previewStore";
+import type { FileItem } from "@/stores/fileManagerStore";
+import { fileApi } from "@/api/file";
+import {
+  Loader2,
+  AlertCircle,
+  FileQuestion,
+  Code,
+  Download,
+} from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
+import { useAppStore } from "@/stores";
+import { isFileTooLarge, formatFileSize } from "./utils";
+import CodePreview from "./CodePreview";
+import ImagePreview from "./ImagePreview";
+import MediaPreview from "./MediaPreview";
+import MarkdownPreview from "./MarkdownPreview";
+import PDFPreview from "./PDFPreview";
 
 interface FilePreviewProps {
   file: FileItem | null;
@@ -42,8 +48,8 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file }) => {
     setOpenAsCode(false);
     const previewType = getPreviewType(file.mimeType, file.extension);
 
-    if (previewType === 'code' || previewType === 'markdown') {
-      if (isFileTooLarge(file.size, 'text')) {
+    if (previewType === "code" || previewType === "markdown") {
+      if (isFileTooLarge(file.size, "text")) {
         setError(`File too large to preview (${formatFileSize(file.size)})`);
         return;
       }
@@ -58,7 +64,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file }) => {
           setOriginalContent(res.content);
         })
         .catch((e) => {
-          setError(e instanceof Error ? e.message : 'Failed to load file');
+          setError(e instanceof Error ? e.message : "Failed to load file");
         })
         .finally(() => {
           setLoading(false);
@@ -72,7 +78,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file }) => {
 
   const loadFileAsCode = () => {
     if (!file) return;
-    if (isFileTooLarge(file.size, 'text')) {
+    if (isFileTooLarge(file.size, "text")) {
       setError(`File too large to open (${formatFileSize(file.size)})`);
       return;
     }
@@ -86,7 +92,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file }) => {
         setOpenAsCode(true);
       })
       .catch((e) => {
-        setError(e instanceof Error ? e.message : 'Failed to load file');
+        setError(e instanceof Error ? e.message : "Failed to load file");
       })
       .finally(() => {
         setLoading(false);
@@ -126,29 +132,29 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file }) => {
       return <CodePreview />;
     }
     switch (previewType) {
-      case 'code':
+      case "code":
         return <CodePreview />;
-      case 'image':
+      case "image":
         return <ImagePreview />;
-      case 'video':
-      case 'audio':
+      case "video":
+      case "audio":
         return <MediaPreview />;
-      case 'markdown':
+      case "markdown":
         return <MarkdownPreview />;
-      case 'pdf':
+      case "pdf":
         return <PDFPreview />;
       default:
         return (
           <div className="flex-1 flex flex-col items-center justify-center text-ide-mute gap-4 p-4">
             <FileQuestion size={48} className="opacity-50" />
-            <p className="text-sm">{t('preview.notAvailable')}</p>
+            <p className="text-sm">{t("preview.notAvailable")}</p>
             <div className="flex flex-col gap-2">
               <button
                 onClick={loadFileAsCode}
                 className="flex items-center gap-2 px-4 py-2 bg-ide-panel border border-ide-border text-ide-text rounded text-sm hover:bg-ide-bg"
               >
                 <Code size={16} />
-                {t('preview.openAsText')}
+                {t("preview.openAsText")}
               </button>
               <a
                 href={fileApi.downloadUrl(file.path)}
@@ -156,7 +162,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file }) => {
                 className="flex items-center justify-center gap-2 px-4 py-2 bg-ide-accent text-ide-bg rounded text-sm hover:opacity-90"
               >
                 <Download size={16} />
-                {t('preview.download')}
+                {t("preview.download")}
               </a>
             </div>
           </div>
@@ -164,7 +170,11 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file }) => {
     }
   };
 
-  return <div className="h-full flex flex-col overflow-hidden">{renderContent()}</div>;
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+      {renderContent()}
+    </div>
+  );
 };
 
 export default FilePreview;

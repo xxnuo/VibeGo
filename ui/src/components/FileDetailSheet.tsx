@@ -1,10 +1,25 @@
-import React from 'react';
+import React from "react";
 import {
-  X, File, Folder, Calendar, HardDrive, Shield, Link2, Download, Trash2, Edit3, Copy
-} from 'lucide-react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import type { FileItem } from '@/stores/fileManagerStore';
-import { fileApi } from '@/api/file';
+  X,
+  File,
+  Folder,
+  Calendar,
+  HardDrive,
+  Shield,
+  Link2,
+  Download,
+  Trash2,
+  Edit3,
+  Copy,
+} from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import type { FileItem } from "@/stores/fileManagerStore";
+import { fileApi } from "@/api/file";
 
 interface FileDetailSheetProps {
   file: FileItem | null;
@@ -15,11 +30,11 @@ interface FileDetailSheetProps {
 }
 
 function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 B';
+  if (bytes === 0) return "0 B";
   const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
 function formatDate(dateStr: string): string {
@@ -29,7 +44,7 @@ function formatDate(dateStr: string): string {
 
 function formatPermissions(mode: string): string {
   const modeNum = parseInt(mode, 8);
-  const perms = ['---', '--x', '-w-', '-wx', 'r--', 'r-x', 'rw-', 'rwx'];
+  const perms = ["---", "--x", "-w-", "-wx", "r--", "r-x", "rw-", "rwx"];
   const owner = perms[(modeNum >> 6) & 7];
   const group = perms[(modeNum >> 3) & 7];
   const other = perms[modeNum & 7];
@@ -47,7 +62,7 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({
 
   const handleDownload = () => {
     if (!file.isDir) {
-      window.open(fileApi.downloadUrl(file.path), '_blank');
+      window.open(fileApi.downloadUrl(file.path), "_blank");
     }
   };
 
@@ -55,11 +70,21 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({
     await navigator.clipboard.writeText(file.path);
   };
 
-  const InfoRow = ({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) => (
+  const InfoRow = ({
+    icon: Icon,
+    label,
+    value,
+  }: {
+    icon: React.ElementType;
+    label: string;
+    value: string;
+  }) => (
     <div className="flex items-start gap-3 py-2">
       <Icon size={16} className="text-ide-mute mt-0.5 shrink-0" />
       <div className="flex-1 min-w-0">
-        <div className="text-[10px] text-ide-mute uppercase tracking-wider">{label}</div>
+        <div className="text-[10px] text-ide-mute uppercase tracking-wider">
+          {label}
+        </div>
         <div className="text-sm text-ide-text break-all">{value}</div>
       </div>
     </div>
@@ -67,7 +92,10 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" className="bg-ide-panel border-t border-ide-border rounded-t-xl max-h-[70vh]">
+      <SheetContent
+        side="bottom"
+        className="bg-ide-panel border-t border-ide-border rounded-t-xl max-h-[70vh]"
+      >
         <SheetHeader className="pb-2 border-b border-ide-border">
           <div className="flex items-center gap-3">
             {file.isDir ? (
@@ -88,9 +116,21 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({
         </SheetHeader>
 
         <div className="py-3 space-y-1 overflow-y-auto max-h-[40vh]">
-          <InfoRow icon={HardDrive} label="Size" value={file.isDir ? '--' : formatFileSize(file.size)} />
-          <InfoRow icon={Calendar} label="Modified" value={formatDate(file.modTime)} />
-          <InfoRow icon={Shield} label="Permissions" value={`${file.mode} (${formatPermissions(file.mode)})`} />
+          <InfoRow
+            icon={HardDrive}
+            label="Size"
+            value={file.isDir ? "--" : formatFileSize(file.size)}
+          />
+          <InfoRow
+            icon={Calendar}
+            label="Modified"
+            value={formatDate(file.modTime)}
+          />
+          <InfoRow
+            icon={Shield}
+            label="Permissions"
+            value={`${file.mode} (${formatPermissions(file.mode)})`}
+          />
           {file.mimeType && (
             <InfoRow icon={File} label="Type" value={file.mimeType} />
           )}

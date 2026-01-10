@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import MobileToolbar from '@/components/MobileToolbar';
+import React, { useState } from "react";
+import MobileToolbar from "@/components/MobileToolbar";
 
 interface CodeEditorProps {
   content: string;
@@ -16,7 +16,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ content, onChange }) => {
     onChange(value + char);
   };
 
-  const lines = value.split('\n');
+  const lines = value.split("\n");
 
   return (
     <div className="flex flex-col h-full relative">
@@ -24,7 +24,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ content, onChange }) => {
         {/* Line Numbers */}
         <div className="w-10 bg-ide-bg border-r border-ide-border pt-4 text-right pr-2 text-xs font-mono text-ide-mute select-none overflow-hidden">
           {lines.map((_, i) => (
-            <div key={i} className="leading-6">{i + 1}</div>
+            <div key={i} className="leading-6">
+              {i + 1}
+            </div>
           ))}
         </div>
 

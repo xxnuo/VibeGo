@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
 export interface FileItem {
   path: string;
@@ -13,9 +13,9 @@ export interface FileItem {
   extension: string;
 }
 
-export type SortField = 'name' | 'size' | 'modTime' | 'type';
-export type SortOrder = 'asc' | 'desc';
-export type ViewMode = 'list' | 'grid';
+export type SortField = "name" | "size" | "modTime" | "type";
+export type SortOrder = "asc" | "desc";
+export type ViewMode = "list" | "grid";
 
 interface FileManagerState {
   currentPath: string;
@@ -67,20 +67,20 @@ interface FileManagerState {
 }
 
 export const useFileManagerStore = create<FileManagerState>((set, get) => ({
-  currentPath: '.',
-  rootPath: '.',
+  currentPath: ".",
+  rootPath: ".",
   initialized: false,
-  pathHistory: ['.'],
+  pathHistory: ["."],
   historyIndex: 0,
   files: [],
   selectedFiles: new Set<string>(),
   focusIndex: 0,
-  searchQuery: '',
+  searchQuery: "",
   searchActive: false,
-  sortField: 'name',
-  sortOrder: 'asc',
+  sortField: "name",
+  sortOrder: "asc",
   showHidden: false,
-  viewMode: 'list',
+  viewMode: "list",
   selectionMode: false,
   loading: false,
   error: null,
@@ -99,7 +99,7 @@ export const useFileManagerStore = create<FileManagerState>((set, get) => ({
       pathHistory: newHistory,
       historyIndex: newHistory.length - 1,
       focusIndex: 0,
-      searchQuery: '',
+      searchQuery: "",
       searchActive: false,
     });
   },
@@ -128,10 +128,10 @@ export const useFileManagerStore = create<FileManagerState>((set, get) => ({
 
   goParent: () => {
     const { currentPath, goToPath } = get();
-    if (currentPath === '/' || currentPath === '.') return;
-    const parts = currentPath.split('/').filter(Boolean);
+    if (currentPath === "/" || currentPath === ".") return;
+    const parts = currentPath.split("/").filter(Boolean);
     parts.pop();
-    const parent = parts.length === 0 ? '/' : '/' + parts.join('/');
+    const parent = parts.length === 0 ? "/" : "/" + parts.join("/");
     goToPath(parent);
   },
 
@@ -172,9 +172,9 @@ export const useFileManagerStore = create<FileManagerState>((set, get) => ({
   toggleSort: (field) => {
     const { sortField, sortOrder } = get();
     if (sortField === field) {
-      set({ sortOrder: sortOrder === 'asc' ? 'desc' : 'asc' });
+      set({ sortOrder: sortOrder === "asc" ? "desc" : "asc" });
     } else {
-      set({ sortField: field, sortOrder: 'asc' });
+      set({ sortField: field, sortOrder: "asc" });
     }
   },
 
@@ -205,7 +205,11 @@ export const useFileManagerStore = create<FileManagerState>((set, get) => ({
     const { files, showHidden, searchQuery } = get();
     return files.filter((f) => {
       if (!showHidden && f.isHidden) return false;
-      if (searchQuery && !f.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      if (
+        searchQuery &&
+        !f.name.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+        return false;
       return true;
     });
   },
@@ -219,20 +223,20 @@ export const useFileManagerStore = create<FileManagerState>((set, get) => ({
 
       let cmp = 0;
       switch (sortField) {
-        case 'name':
+        case "name":
           cmp = a.name.toLowerCase().localeCompare(b.name.toLowerCase());
           break;
-        case 'size':
+        case "size":
           cmp = a.size - b.size;
           break;
-        case 'modTime':
+        case "modTime":
           cmp = new Date(a.modTime).getTime() - new Date(b.modTime).getTime();
           break;
-        case 'type':
-          cmp = (a.extension || '').localeCompare(b.extension || '');
+        case "type":
+          cmp = (a.extension || "").localeCompare(b.extension || "");
           break;
       }
-      return sortOrder === 'asc' ? cmp : -cmp;
+      return sortOrder === "asc" ? cmp : -cmp;
     });
   },
 }));

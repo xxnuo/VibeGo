@@ -304,9 +304,9 @@ var mimeTypes = map[string]string{
 	".mp4": "video/mp4", ".webm": "video/webm", ".avi": "video/x-msvideo", ".mkv": "video/x-matroska",
 	".pdf": "application/pdf", ".doc": "application/msword",
 	".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-	".xls": "application/vnd.ms-excel",
+	".xls":  "application/vnd.ms-excel",
 	".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-	".zip": "application/zip", ".tar": "application/x-tar",
+	".zip":  "application/zip", ".tar": "application/x-tar",
 	".gz": "application/gzip", ".rar": "application/vnd.rar", ".7z": "application/x-7z-compressed",
 	".wasm": "application/wasm", ".exe": "application/x-executable",
 }

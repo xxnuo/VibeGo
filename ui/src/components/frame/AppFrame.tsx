@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react';
-import { useFrameStore } from '@/stores/frameStore';
-import TopBar from './TopBar';
-import TabBar from './TabBar';
-import BottomBar from './BottomBar';
+import React, { useEffect } from "react";
+import { useFrameStore } from "@/stores/frameStore";
+import TopBar from "./TopBar";
+import TabBar from "./TabBar";
+import BottomBar from "./BottomBar";
 
 interface AppFrameProps {
   children: React.ReactNode;

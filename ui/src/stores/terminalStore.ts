@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
 export interface TerminalSession {
   id: string;
@@ -41,6 +41,8 @@ export const useTerminalStore = create<TerminalState>((set) => ({
   setActiveTerminalId: (id) => set({ activeTerminalId: id }),
   updateTerminal: (id, updates) =>
     set((s) => ({
-      terminals: s.terminals.map((t) => (t.id === id ? { ...t, ...updates } : t)),
+      terminals: s.terminals.map((t) =>
+        t.id === id ? { ...t, ...updates } : t,
+      ),
     })),
 }));

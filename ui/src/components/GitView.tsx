@@ -1,6 +1,6 @@
-import React from 'react';
-import { GitBranch, RotateCw, Play } from 'lucide-react';
-import type { GitFileNode, Locale } from '@/stores';
+import React from "react";
+import { GitBranch, RotateCw, Play } from "lucide-react";
+import type { GitFileNode, Locale } from "@/stores";
 
 interface GitViewProps {
   files: GitFileNode[];
@@ -9,13 +9,16 @@ interface GitViewProps {
 }
 
 const GitView: React.FC<GitViewProps> = ({ files, onFileClick }) => {
-
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'modified': return 'text-yellow-500';
-      case 'added': return 'text-green-500';
-      case 'deleted': return 'text-red-500';
-      default: return 'text-ide-mute';
+      case "modified":
+        return "text-yellow-500";
+      case "added":
+        return "text-green-500";
+      case "deleted":
+        return "text-red-500";
+      default:
+        return "text-ide-mute";
     }
   };
 
@@ -34,8 +37,12 @@ const GitView: React.FC<GitViewProps> = ({ files, onFileClick }) => {
       <div className="space-y-4 flex-1">
         <div className="border border-ide-border bg-ide-panel/30">
           <div className="flex justify-between items-center p-2 border-b border-ide-border bg-ide-panel">
-            <span className="text-xs font-bold text-ide-accent uppercase">STAGED_CHANGES</span>
-            <span className="text-xs bg-ide-accent text-black px-1 font-bold">{files.length}</span>
+            <span className="text-xs font-bold text-ide-accent uppercase">
+              STAGED_CHANGES
+            </span>
+            <span className="text-xs bg-ide-accent text-black px-1 font-bold">
+              {files.length}
+            </span>
           </div>
           <div className="divide-y divide-ide-border">
             {files.map((file) => (
@@ -44,12 +51,18 @@ const GitView: React.FC<GitViewProps> = ({ files, onFileClick }) => {
                 onClick={() => onFileClick(file)}
                 className="w-full flex items-center gap-3 p-2 hover:bg-ide-accent/10 transition-colors text-left group"
               >
-                <div className={`w-4 text-center font-bold text-xs ${getStatusColor(file.status)}`}>
+                <div
+                  className={`w-4 text-center font-bold text-xs ${getStatusColor(file.status)}`}
+                >
                   {file.status[0].toUpperCase()}
                 </div>
                 <div className="flex flex-col overflow-hidden">
-                  <span className="text-xs font-bold text-ide-text group-hover:text-ide-accent truncate">{file.name}</span>
-                  <span className="text-[9px] text-ide-mute truncate">{file.path}</span>
+                  <span className="text-xs font-bold text-ide-text group-hover:text-ide-accent truncate">
+                    {file.name}
+                  </span>
+                  <span className="text-[9px] text-ide-mute truncate">
+                    {file.path}
+                  </span>
                 </div>
               </button>
             ))}

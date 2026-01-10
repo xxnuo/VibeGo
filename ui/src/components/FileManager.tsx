@@ -1,22 +1,32 @@
-import React, { useEffect, useCallback, useState, useRef } from 'react';
+import React, { useEffect, useCallback, useState, useRef } from "react";
 import {
-  File, Folder, ChevronRight, FileText, Image, Film, Music, Archive, Code, FileJson,
-  AlertCircle, Loader2
-} from 'lucide-react';
-import { useFileManagerStore, type FileItem } from '@/stores/fileManagerStore';
-import { fileApi } from '@/api/file';
-import FileManagerBreadcrumb from './FileManagerBreadcrumb';
-import FileManagerToolbar from './FileManagerToolbar';
-import FileDetailSheet from './FileDetailSheet';
-import { useSettingsStore } from '@/lib/settings';
-import { useTranslation, type Locale } from '@/lib/i18n';
+  File,
+  Folder,
+  ChevronRight,
+  FileText,
+  Image,
+  Film,
+  Music,
+  Archive,
+  Code,
+  FileJson,
+  AlertCircle,
+  Loader2,
+} from "lucide-react";
+import { useFileManagerStore, type FileItem } from "@/stores/fileManagerStore";
+import { fileApi } from "@/api/file";
+import FileManagerBreadcrumb from "./FileManagerBreadcrumb";
+import FileManagerToolbar from "./FileManagerToolbar";
+import FileDetailSheet from "./FileDetailSheet";
+import { useSettingsStore } from "@/lib/settings";
+import { useTranslation, type Locale } from "@/lib/i18n";
 
 function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 B';
+  if (bytes === 0) return "0 B";
   const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const sizes = ["B", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
 
 function formatDate(dateStr: string): string {
@@ -25,11 +35,11 @@ function formatDate(dateStr: string): string {
   const diff = now.getTime() - date.getTime();
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
   if (days === 0) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   } else if (days < 7) {
     return `${days}d ago`;
   }
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return date.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 function getFileIcon(file: FileItem) {
@@ -37,19 +47,46 @@ function getFileIcon(file: FileItem) {
   const ext = file.extension?.toLowerCase();
   const iconClass = "text-ide-mute";
   switch (ext) {
-    case '.jpg': case '.jpeg': case '.png': case '.gif': case '.svg': case '.webp':
+    case ".jpg":
+    case ".jpeg":
+    case ".png":
+    case ".gif":
+    case ".svg":
+    case ".webp":
       return <Image size={20} className={iconClass} />;
-    case '.mp4': case '.mov': case '.avi': case '.mkv': case '.webm':
+    case ".mp4":
+    case ".mov":
+    case ".avi":
+    case ".mkv":
+    case ".webm":
       return <Film size={20} className={iconClass} />;
-    case '.mp3': case '.wav': case '.ogg': case '.flac':
+    case ".mp3":
+    case ".wav":
+    case ".ogg":
+    case ".flac":
       return <Music size={20} className={iconClass} />;
-    case '.zip': case '.tar': case '.gz': case '.rar': case '.7z':
+    case ".zip":
+    case ".tar":
+    case ".gz":
+    case ".rar":
+    case ".7z":
       return <Archive size={20} className={iconClass} />;
-    case '.js': case '.ts': case '.jsx': case '.tsx': case '.go': case '.py': case '.rs':
+    case ".js":
+    case ".ts":
+    case ".jsx":
+    case ".tsx":
+    case ".go":
+    case ".py":
+    case ".rs":
       return <Code size={20} className={iconClass} />;
-    case '.json': case '.yaml': case '.yml': case '.toml':
+    case ".json":
+    case ".yaml":
+    case ".yml":
+    case ".toml":
       return <FileJson size={20} className={iconClass} />;
-    case '.md': case '.txt': case '.log':
+    case ".md":
+    case ".txt":
+    case ".log":
       return <FileText size={20} className={iconClass} />;
     default:
       return <File size={20} className={iconClass} />;
@@ -61,7 +98,10 @@ interface FileManagerProps {
   onFileOpen?: (file: FileItem) => void;
 }
 
-const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen }) => {
+const FileManager: React.FC<FileManagerProps> = ({
+  initialPath = ".",
+  onFileOpen,
+}) => {
   const {
     currentPath,
     setFiles,
@@ -82,47 +122,52 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
     viewMode,
   } = useFileManagerStore();
 
-  const locale = (useSettingsStore((s) => s.settings.locale) || 'zh') as Locale;
+  const locale = (useSettingsStore((s) => s.settings.locale) || "zh") as Locale;
   const t = useTranslation(locale);
 
-  const [showNewDialog, setShowNewDialog] = useState<'file' | 'folder' | null>(null);
-  const [newName, setNewName] = useState('');
+  const [showNewDialog, setShowNewDialog] = useState<"file" | "folder" | null>(
+    null,
+  );
+  const [newName, setNewName] = useState("");
   const [renameFile, setRenameFile] = useState<FileItem | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const loadFiles = useCallback(async (path: string, initialize = false) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fileApi.list(path);
-      if (initialize && res.path) {
-        useFileManagerStore.getState().setCurrentPath(res.path);
-        useFileManagerStore.getState().setRootPath(res.path);
-        useFileManagerStore.setState({
-          pathHistory: [res.path],
-          historyIndex: 0,
-          initialized: true,
-        });
+  const loadFiles = useCallback(
+    async (path: string, initialize = false) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fileApi.list(path);
+        if (initialize && res.path) {
+          useFileManagerStore.getState().setCurrentPath(res.path);
+          useFileManagerStore.getState().setRootPath(res.path);
+          useFileManagerStore.setState({
+            pathHistory: [res.path],
+            historyIndex: 0,
+            initialized: true,
+          });
+        }
+        const files: FileItem[] = res.files.map((f) => ({
+          path: f.path,
+          name: f.name,
+          size: f.size,
+          isDir: f.isDir,
+          isSymlink: f.isSymlink,
+          isHidden: f.isHidden,
+          mode: f.mode,
+          mimeType: f.mimeType,
+          modTime: f.modTime,
+          extension: f.extension,
+        }));
+        setFiles(files);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to load files");
+      } finally {
+        setLoading(false);
       }
-      const files: FileItem[] = res.files.map((f) => ({
-        path: f.path,
-        name: f.name,
-        size: f.size,
-        isDir: f.isDir,
-        isSymlink: f.isSymlink,
-        isHidden: f.isHidden,
-        mode: f.mode,
-        mimeType: f.mimeType,
-        modTime: f.modTime,
-        extension: f.extension,
-      }));
-      setFiles(files);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load files');
-    } finally {
-      setLoading(false);
-    }
-  }, [setFiles, setLoading, setError]);
+    },
+    [setFiles, setLoading, setError],
+  );
 
   useEffect(() => {
     const { initialized } = useFileManagerStore.getState();
@@ -158,10 +203,10 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
     try {
       await fileApi.create({ path: `${currentPath}/${newName}`, isDir: false });
       setShowNewDialog(null);
-      setNewName('');
+      setNewName("");
       loadFiles(currentPath);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create file');
+      setError(e instanceof Error ? e.message : "Failed to create file");
     }
   };
 
@@ -170,10 +215,10 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
     try {
       await fileApi.mkdir(`${currentPath}/${newName}`);
       setShowNewDialog(null);
-      setNewName('');
+      setNewName("");
       loadFiles(currentPath);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create folder');
+      setError(e instanceof Error ? e.message : "Failed to create folder");
     }
   };
 
@@ -184,7 +229,7 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
       setDetailFile(null);
       loadFiles(currentPath);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete');
+      setError(e instanceof Error ? e.message : "Failed to delete");
     }
   };
 
@@ -196,22 +241,22 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
       clearSelection();
       loadFiles(currentPath);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete');
+      setError(e instanceof Error ? e.message : "Failed to delete");
     }
   };
 
   const handleRename = async () => {
     if (!renameFile || !newName.trim()) return;
-    const dir = renameFile.path.substring(0, renameFile.path.lastIndexOf('/'));
+    const dir = renameFile.path.substring(0, renameFile.path.lastIndexOf("/"));
     const newPath = `${dir}/${newName}`;
     try {
       await fileApi.rename(renameFile.path, newPath);
       setRenameFile(null);
-      setNewName('');
+      setNewName("");
       setDetailFile(null);
       loadFiles(currentPath);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to rename');
+      setError(e instanceof Error ? e.message : "Failed to rename");
     }
   };
 
@@ -219,21 +264,21 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
     const handleKeyDown = (e: KeyboardEvent) => {
       if (showNewDialog || renameFile) return;
       const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
       switch (e.key) {
-        case 'ArrowUp':
+        case "ArrowUp":
           e.preventDefault();
           setFocusIndex(Math.max(0, focusIndex - 1));
           break;
-        case 'ArrowDown':
+        case "ArrowDown":
           e.preventDefault();
           setFocusIndex(Math.min(sortedFiles.length - 1, focusIndex + 1));
           break;
-        case 'Enter':
+        case "Enter":
           e.preventDefault();
           if (sortedFiles[focusIndex]) handleFileClick(sortedFiles[focusIndex]);
           break;
-        case 'Backspace':
+        case "Backspace":
           if (!e.metaKey && !e.ctrlKey) {
             e.preventDefault();
             useFileManagerStore.getState().goParent();
@@ -241,8 +286,8 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
           break;
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [focusIndex, sortedFiles, showNewDialog, renameFile]);
 
   return (
@@ -250,8 +295,14 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
       <FileManagerBreadcrumb />
       <FileManagerToolbar
         onRefresh={handleRefresh}
-        onNewFile={() => { setShowNewDialog('file'); setNewName(''); }}
-        onNewFolder={() => { setShowNewDialog('folder'); setNewName(''); }}
+        onNewFile={() => {
+          setShowNewDialog("file");
+          setNewName("");
+        }}
+        onNewFolder={() => {
+          setShowNewDialog("folder");
+          setNewName("");
+        }}
         onDeleteSelected={handleDeleteSelected}
       />
 
@@ -270,9 +321,9 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
         ) : sortedFiles.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-ide-mute">
             <Folder size={32} className="mb-2 opacity-50" />
-            <span className="text-xs">{t('fileManager.emptyFolder')}</span>
+            <span className="text-xs">{t("fileManager.emptyFolder")}</span>
           </div>
-        ) : viewMode === 'list' ? (
+        ) : viewMode === "list" ? (
           <div className="divide-y divide-ide-border">
             {sortedFiles.map((file, index) => (
               <FileListItem
@@ -308,41 +359,63 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
         open={!!detailFile}
         onClose={() => setDetailFile(null)}
         onDelete={handleDelete}
-        onRename={(f) => { setRenameFile(f); setNewName(f.name); setDetailFile(null); }}
+        onRename={(f) => {
+          setRenameFile(f);
+          setNewName(f.name);
+          setDetailFile(null);
+        }}
       />
 
       {(showNewDialog || renameFile) && (
         <div
           className="fixed inset-0 bg-black/50 flex items-end justify-center z-50 backdrop-blur-sm"
-          onClick={() => { setShowNewDialog(null); setRenameFile(null); setNewName(''); }}
+          onClick={() => {
+            setShowNewDialog(null);
+            setRenameFile(null);
+            setNewName("");
+          }}
         >
           <div
             className="w-full max-w-md bg-ide-panel rounded-t-xl p-4"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-sm font-medium text-ide-text mb-3">
-              {renameFile ? t('common.rename') : showNewDialog === 'file' ? t('fileManager.newFile') : t('fileManager.newFolder')}
+              {renameFile
+                ? t("common.rename")
+                : showNewDialog === "file"
+                  ? t("fileManager.newFile")
+                  : t("fileManager.newFolder")}
             </h3>
             <input
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder={t('fileManager.enterName')}
+              placeholder={t("fileManager.enterName")}
               className="w-full px-3 py-2 bg-ide-bg border border-ide-border rounded-md text-sm text-ide-text mb-3"
               autoFocus
             />
             <div className="flex gap-2">
               <button
-                onClick={() => { setShowNewDialog(null); setRenameFile(null); setNewName(''); }}
+                onClick={() => {
+                  setShowNewDialog(null);
+                  setRenameFile(null);
+                  setNewName("");
+                }}
                 className="flex-1 py-2 rounded-md bg-ide-bg text-ide-mute text-sm"
               >
-                {t('common.cancel')}
+                {t("common.cancel")}
               </button>
               <button
-                onClick={renameFile ? handleRename : showNewDialog === 'file' ? handleNewFile : handleNewFolder}
+                onClick={
+                  renameFile
+                    ? handleRename
+                    : showNewDialog === "file"
+                      ? handleNewFile
+                      : handleNewFolder
+                }
                 className="flex-1 py-2 rounded-md bg-ide-accent text-ide-bg text-sm font-medium"
               >
-                {renameFile ? t('common.rename') : t('common.create')}
+                {renameFile ? t("common.rename") : t("common.create")}
               </button>
             </div>
           </div>
@@ -362,7 +435,12 @@ interface FileItemProps {
 }
 
 const FileListItem: React.FC<FileItemProps> = ({
-  file, selected, focused, selectionMode, onClick, onLongPress
+  file,
+  selected,
+  focused,
+  selectionMode,
+  onClick,
+  onLongPress,
 }) => {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -380,37 +458,51 @@ const FileListItem: React.FC<FileItemProps> = ({
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onTouchMove={handleTouchEnd}
-      onContextMenu={(e) => { e.preventDefault(); onLongPress(); }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onLongPress();
+      }}
       className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
-        focused ? 'bg-ide-accent/10' : ''
-      } ${selected ? 'bg-ide-accent/20' : 'hover:bg-ide-panel'}`}
+        focused ? "bg-ide-accent/10" : ""
+      } ${selected ? "bg-ide-accent/20" : "hover:bg-ide-panel"}`}
     >
       {selectionMode && (
-        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-          selected ? 'bg-ide-accent border-ide-accent' : 'border-ide-mute'
-        }`}>
+        <div
+          className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+            selected ? "bg-ide-accent border-ide-accent" : "border-ide-mute"
+          }`}
+        >
           {selected && <ChevronRight size={14} className="text-ide-bg" />}
         </div>
       )}
       {getFileIcon(file)}
       <div className="flex-1 min-w-0">
-        <div className={`text-sm truncate ${file.isHidden ? 'text-ide-mute' : 'text-ide-text'}`}>
+        <div
+          className={`text-sm truncate ${file.isHidden ? "text-ide-mute" : "text-ide-text"}`}
+        >
           {file.name}
         </div>
       </div>
       <div className="text-[10px] text-ide-mute shrink-0">
-        {file.isDir ? '--' : formatFileSize(file.size)}
+        {file.isDir ? "--" : formatFileSize(file.size)}
       </div>
       <div className="text-[10px] text-ide-mute shrink-0 w-12 text-right">
         {formatDate(file.modTime)}
       </div>
-      {file.isDir && <ChevronRight size={16} className="text-ide-mute shrink-0" />}
+      {file.isDir && (
+        <ChevronRight size={16} className="text-ide-mute shrink-0" />
+      )}
     </div>
   );
 };
 
 const FileGridItem: React.FC<FileItemProps> = ({
-  file, selected, focused, selectionMode, onClick, onLongPress
+  file,
+  selected,
+  focused,
+  selectionMode,
+  onClick,
+  onLongPress,
 }) => {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -428,20 +520,27 @@ const FileGridItem: React.FC<FileItemProps> = ({
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onTouchMove={handleTouchEnd}
-      onContextMenu={(e) => { e.preventDefault(); onLongPress(); }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onLongPress();
+      }}
       className={`flex flex-col items-center gap-1 p-3 rounded-lg cursor-pointer transition-colors ${
-        focused ? 'bg-ide-accent/10' : ''
-      } ${selected ? 'bg-ide-accent/20' : 'hover:bg-ide-panel'}`}
+        focused ? "bg-ide-accent/10" : ""
+      } ${selected ? "bg-ide-accent/20" : "hover:bg-ide-panel"}`}
     >
       {selectionMode && (
-        <div className={`absolute top-1 right-1 w-4 h-4 rounded border-2 flex items-center justify-center ${
-          selected ? 'bg-ide-accent border-ide-accent' : 'border-ide-mute'
-        }`} />
+        <div
+          className={`absolute top-1 right-1 w-4 h-4 rounded border-2 flex items-center justify-center ${
+            selected ? "bg-ide-accent border-ide-accent" : "border-ide-mute"
+          }`}
+        />
       )}
       <div className="w-10 h-10 flex items-center justify-center">
         {getFileIcon(file)}
       </div>
-      <div className={`text-[11px] text-center truncate w-full ${file.isHidden ? 'text-ide-mute' : 'text-ide-text'}`}>
+      <div
+        className={`text-[11px] text-center truncate w-full ${file.isHidden ? "text-ide-mute" : "text-ide-text"}`}
+      >
         {file.name}
       </div>
     </div>

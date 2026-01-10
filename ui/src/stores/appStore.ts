@@ -1,13 +1,13 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
-export type Theme = 'light' | 'dark' | 'hacker' | 'terminal';
-export type Locale = 'en' | 'zh';
+export type Theme = "light" | "dark" | "hacker" | "terminal";
+export type Locale = "en" | "zh";
 
 export enum AppView {
-  FILES = 'FILES',
-  GIT = 'GIT',
-  TERMINAL = 'TERMINAL',
-  PLUGIN = 'PLUGIN',
+  FILES = "FILES",
+  GIT = "GIT",
+  TERMINAL = "TERMINAL",
+  PLUGIN = "PLUGIN",
 }
 
 interface AppState {
@@ -24,11 +24,11 @@ interface AppState {
   setMenuOpen: (open: boolean) => void;
 }
 
-const THEME_ORDER: Theme[] = ['light', 'dark', 'hacker', 'terminal'];
+const THEME_ORDER: Theme[] = ["light", "dark", "hacker", "terminal"];
 
 export const useAppStore = create<AppState>((set, get) => ({
-  theme: 'light',
-  locale: 'zh',
+  theme: "light",
+  locale: "zh",
   currentView: AppView.FILES,
   isMenuOpen: false,
 
@@ -39,7 +39,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ theme: THEME_ORDER[nextIndex] });
   },
   setLocale: (locale) => set({ locale }),
-  toggleLocale: () => set((s) => ({ locale: s.locale === 'en' ? 'zh' : 'en' })),
+  toggleLocale: () => set((s) => ({ locale: s.locale === "en" ? "zh" : "en" })),
   setCurrentView: (view) => set({ currentView: view }),
   setMenuOpen: (open) => set({ isMenuOpen: open }),
 }));

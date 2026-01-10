@@ -1,9 +1,9 @@
-import { create } from 'zustand';
-import type { ReactNode } from 'react';
+import { create } from "zustand";
+import type { ReactNode } from "react";
 
-export type GroupType = 'workspace' | 'terminal' | 'plugin' | 'settings';
+export type GroupType = "workspace" | "terminal" | "plugin" | "settings";
 
-export type ViewType = 'files' | 'git' | 'terminal';
+export type ViewType = "files" | "git" | "terminal";
 
 export interface TopBarButton {
   icon: ReactNode;
@@ -55,7 +55,7 @@ export interface TabItem {
 const EMPTY_TABS: TabItem[] = [];
 
 export interface WorkspaceGroup {
-  type: 'workspace';
+  type: "workspace";
   id: string;
   name: string;
   path: string;
@@ -68,7 +68,7 @@ export interface WorkspaceGroup {
 }
 
 export interface TerminalGroup {
-  type: 'terminal';
+  type: "terminal";
   id: string;
   name: string;
   tabs: TabItem[];
@@ -76,7 +76,7 @@ export interface TerminalGroup {
 }
 
 export interface PluginGroup {
-  type: 'plugin';
+  type: "plugin";
   id: string;
   name: string;
   pluginId: string;
@@ -85,12 +85,16 @@ export interface PluginGroup {
 }
 
 export interface SettingsGroup {
-  type: 'settings';
+  type: "settings";
   id: string;
   name: string;
 }
 
-export type PageGroup = WorkspaceGroup | TerminalGroup | PluginGroup | SettingsGroup;
+export type PageGroup =
+  | WorkspaceGroup
+  | TerminalGroup
+  | PluginGroup
+  | SettingsGroup;
 
 interface FrameState {
   groups: PageGroup[];
@@ -115,7 +119,11 @@ interface FrameState {
 
   addTab: (groupId: string, tab: TabItem, view?: ViewType) => void;
   removeTab: (groupId: string, tabId: string, view?: ViewType) => void;
-  setActiveTab: (groupId: string, tabId: string | null, view?: ViewType) => void;
+  setActiveTab: (
+    groupId: string,
+    tabId: string | null,
+    view?: ViewType,
+  ) => void;
 
   getCurrentTabs: () => TabItem[];
   getCurrentActiveTabId: () => string | null;
@@ -127,12 +135,15 @@ interface FrameState {
   openPreviewTab: (tab: TabItem) => void;
 }
 
-const createDefaultWorkspace = (path: string, name?: string): WorkspaceGroup => ({
-  type: 'workspace',
+const createDefaultWorkspace = (
+  path: string,
+  name?: string,
+): WorkspaceGroup => ({
+  type: "workspace",
   id: `workspace-${Date.now()}`,
-  name: name || path.split('/').pop() || 'Workspace',
+  name: name || path.split("/").pop() || "Workspace",
   path,
-  activeView: 'files',
+  activeView: "files",
   views: {
     files: { tabs: [], activeTabId: null },
     git: { tabs: [], activeTabId: null },
@@ -141,15 +152,15 @@ const createDefaultWorkspace = (path: string, name?: string): WorkspaceGroup => 
 });
 
 const createTerminalGroup = (name?: string): TerminalGroup => ({
-  type: 'terminal',
+  type: "terminal",
   id: `terminal-${Date.now()}`,
-  name: name || 'Terminal',
+  name: name || "Terminal",
   tabs: [],
   activeTabId: null,
 });
 
 const createPluginGroup = (pluginId: string, name?: string): PluginGroup => ({
-  type: 'plugin',
+  type: "plugin",
   id: `plugin-${Date.now()}`,
   name: name || pluginId,
   pluginId,
@@ -158,28 +169,31 @@ const createPluginGroup = (pluginId: string, name?: string): PluginGroup => ({
 });
 
 const createSettingsGroup = (): SettingsGroup => ({
-  type: 'settings',
-  id: 'settings',
-  name: 'Settings',
+  type: "settings",
+  id: "settings",
+  name: "Settings",
 });
 
 const getGroupTabs = (group: PageGroup, view?: ViewType): TabItem[] => {
-  if (group.type === 'workspace') {
+  if (group.type === "workspace") {
     const v = view || group.activeView;
     return group.views[v].tabs;
   }
-  if (group.type === 'settings') {
+  if (group.type === "settings") {
     return EMPTY_TABS;
   }
   return group.tabs;
 };
 
-const getGroupActiveTabId = (group: PageGroup, view?: ViewType): string | null => {
-  if (group.type === 'workspace') {
+const getGroupActiveTabId = (
+  group: PageGroup,
+  view?: ViewType,
+): string | null => {
+  if (group.type === "workspace") {
     const v = view || group.activeView;
     return group.views[v].activeTabId;
   }
-  if (group.type === 'settings') {
+  if (group.type === "settings") {
     return null;
   }
   return group.activeTabId;
@@ -197,9 +211,9 @@ export const useFrameStore = create<FrameState>((set, get) => ({
   initDefaultGroups: () => {
     const { groups } = get();
     if (groups.length === 0) {
-      const defaultWorkspace = createDefaultWorkspace('.', 'Project');
-      defaultWorkspace.id = 'default-workspace';
-      set({ groups: [defaultWorkspace], activeGroupId: 'default-workspace' });
+      const defaultWorkspace = createDefaultWorkspace(".", "Project");
+      defaultWorkspace.id = "default-workspace";
+      set({ groups: [defaultWorkspace], activeGroupId: "default-workspace" });
     }
   },
 
@@ -220,7 +234,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
 
   addSettingsGroup: () => {
     const { groups } = get();
-    const existing = groups.find((g) => g.type === 'settings');
+    const existing = groups.find((g) => g.type === "settings");
     if (existing) {
       set({ activeGroupId: existing.id });
       return;
@@ -234,7 +248,9 @@ export const useFrameStore = create<FrameState>((set, get) => ({
       const groups = s.groups.filter((g) => g.id !== id);
       const activeGroupId =
         s.activeGroupId === id
-          ? groups.length > 0 ? groups[0].id : null
+          ? groups.length > 0
+            ? groups[0].id
+            : null
           : s.activeGroupId;
       return { groups, activeGroupId };
     }),
@@ -249,22 +265,24 @@ export const useFrameStore = create<FrameState>((set, get) => ({
   setWorkspaceView: (groupId, view) =>
     set((s) => ({
       groups: s.groups.map((g) =>
-        g.type === 'workspace' && g.id === groupId ? { ...g, activeView: view } : g
+        g.type === "workspace" && g.id === groupId
+          ? { ...g, activeView: view }
+          : g,
       ),
     })),
 
   getCurrentView: () => {
     const group = get().getActiveGroup();
     if (!group) return null;
-    if (group.type === 'workspace') return group.activeView;
-    if (group.type === 'terminal') return 'terminal';
+    if (group.type === "workspace") return group.activeView;
+    if (group.type === "terminal") return "terminal";
     return null;
   },
 
   setCurrentView: (view) => {
     const { activeGroupId, setWorkspaceView, getActiveGroup } = get();
     const group = getActiveGroup();
-    if (group?.type === 'workspace' && activeGroupId) {
+    if (group?.type === "workspace" && activeGroupId) {
       setWorkspaceView(activeGroupId, view);
     }
   },
@@ -273,12 +291,15 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     set((s) => ({
       groups: s.groups.map((g) => {
         if (g.id !== groupId) return g;
-        if (g.type === 'workspace') {
+        if (g.type === "workspace") {
           const v = view || g.activeView;
           const viewData = g.views[v];
           const exists = viewData.tabs.find((t) => t.id === tab.id);
           if (exists) {
-            return { ...g, views: { ...g.views, [v]: { ...viewData, activeTabId: tab.id } } };
+            return {
+              ...g,
+              views: { ...g.views, [v]: { ...viewData, activeTabId: tab.id } },
+            };
           }
           return {
             ...g,
@@ -288,7 +309,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
             },
           };
         }
-        if (g.type === 'settings') return g;
+        if (g.type === "settings") return g;
         const exists = g.tabs.find((t: TabItem) => t.id === tab.id);
         if (exists) return { ...g, activeTabId: tab.id };
         return { ...g, tabs: [...g.tabs, tab], activeTabId: tab.id };
@@ -299,20 +320,26 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     set((s) => ({
       groups: s.groups.map((g) => {
         if (g.id !== groupId) return g;
-        if (g.type === 'workspace') {
+        if (g.type === "workspace") {
           const v = view || g.activeView;
           const viewData = g.views[v];
           const tabs = viewData.tabs.filter((t) => t.id !== tabId);
-          const activeTabId = viewData.activeTabId === tabId
-            ? (tabs.length > 0 ? tabs[tabs.length - 1].id : null)
-            : viewData.activeTabId;
+          const activeTabId =
+            viewData.activeTabId === tabId
+              ? tabs.length > 0
+                ? tabs[tabs.length - 1].id
+                : null
+              : viewData.activeTabId;
           return { ...g, views: { ...g.views, [v]: { tabs, activeTabId } } };
         }
-        if (g.type === 'settings') return g;
+        if (g.type === "settings") return g;
         const tabs = g.tabs.filter((t: TabItem) => t.id !== tabId);
-        const activeTabId = g.activeTabId === tabId
-          ? (tabs.length > 0 ? tabs[tabs.length - 1].id : null)
-          : g.activeTabId;
+        const activeTabId =
+          g.activeTabId === tabId
+            ? tabs.length > 0
+              ? tabs[tabs.length - 1].id
+              : null
+            : g.activeTabId;
         return { ...g, tabs, activeTabId };
       }),
     })),
@@ -321,11 +348,14 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     set((s) => ({
       groups: s.groups.map((g) => {
         if (g.id !== groupId) return g;
-        if (g.type === 'workspace') {
+        if (g.type === "workspace") {
           const v = view || g.activeView;
-          return { ...g, views: { ...g.views, [v]: { ...g.views[v], activeTabId: tabId } } };
+          return {
+            ...g,
+            views: { ...g.views, [v]: { ...g.views[v], activeTabId: tabId } },
+          };
         }
-        if (g.type === 'settings') return g;
+        if (g.type === "settings") return g;
         return { ...g, activeTabId: tabId };
       }),
     })),
@@ -361,7 +391,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     set((s) => ({
       groups: s.groups.map((g) => {
         if (g.id !== s.activeGroupId) return g;
-        if (g.type === 'workspace') {
+        if (g.type === "workspace") {
           const v = g.activeView;
           const viewData = g.views[v];
           return {
@@ -371,16 +401,18 @@ export const useFrameStore = create<FrameState>((set, get) => ({
               [v]: {
                 ...viewData,
                 tabs: viewData.tabs.map((t) =>
-                  t.id === tabId ? { ...t, pinned: true } : t
+                  t.id === tabId ? { ...t, pinned: true } : t,
                 ),
               },
             },
           };
         }
-        if (g.type === 'settings') return g;
+        if (g.type === "settings") return g;
         return {
           ...g,
-          tabs: g.tabs.map((t: TabItem) => (t.id === tabId ? { ...t, pinned: true } : t)),
+          tabs: g.tabs.map((t: TabItem) =>
+            t.id === tabId ? { ...t, pinned: true } : t,
+          ),
         };
       }),
     })),
@@ -393,17 +425,22 @@ export const useFrameStore = create<FrameState>((set, get) => ({
       groups: s.groups.map((g) => {
         if (g.id !== activeGroupId) return g;
 
-        if (g.type === 'workspace') {
+        if (g.type === "workspace") {
           const v = g.activeView;
           const viewData = g.views[v];
           const existingTab = viewData.tabs.find((t) => t.id === tab.id);
           if (existingTab) {
-            return { ...g, views: { ...g.views, [v]: { ...viewData, activeTabId: tab.id } } };
+            return {
+              ...g,
+              views: { ...g.views, [v]: { ...viewData, activeTabId: tab.id } },
+            };
           }
           const previewTabIndex = viewData.tabs.findIndex((t) => !t.pinned);
           let newTabs: TabItem[];
           if (previewTabIndex !== -1) {
-            newTabs = viewData.tabs.map((t, i) => (i === previewTabIndex ? { ...tab, pinned: false } : t));
+            newTabs = viewData.tabs.map((t, i) =>
+              i === previewTabIndex ? { ...tab, pinned: false } : t,
+            );
           } else {
             newTabs = [...viewData.tabs, { ...tab, pinned: false }];
           }
@@ -413,7 +450,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
           };
         }
 
-        if (g.type === 'settings') return g;
+        if (g.type === "settings") return g;
 
         const existingTab = g.tabs.find((t: TabItem) => t.id === tab.id);
         if (existingTab) {
@@ -422,7 +459,9 @@ export const useFrameStore = create<FrameState>((set, get) => ({
         const previewTabIndex = g.tabs.findIndex((t: TabItem) => !t.pinned);
         let newTabs: TabItem[];
         if (previewTabIndex !== -1) {
-          newTabs = g.tabs.map((t: TabItem, i: number) => (i === previewTabIndex ? { ...tab, pinned: false } : t));
+          newTabs = g.tabs.map((t: TabItem, i: number) =>
+            i === previewTabIndex ? { ...tab, pinned: false } : t,
+          );
         } else {
           newTabs = [...g.tabs, { ...tab, pinned: false }];
         }

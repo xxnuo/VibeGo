@@ -1,47 +1,68 @@
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback, useState } from "react";
 import {
-  useAppStore, useTerminalStore, usePreviewStore,
-  useFileManagerStore, useFrameStore,
-  type GitFileNode, type FileItem, type Theme, type Locale
-} from '@/stores';
+  useAppStore,
+  useTerminalStore,
+  usePreviewStore,
+  useFileManagerStore,
+  useFrameStore,
+  type GitFileNode,
+  type FileItem,
+  type Theme,
+  type Locale,
+} from "@/stores";
 
-import { AppFrame, NewGroupMenu } from '@/components/frame';
-import FileManager from '@/components/FileManager';
-import GitView from '@/components/GitView';
-import TerminalView from '@/components/TerminalView';
-import ProjectMenu from '@/components/ProjectMenu';
-import DiffView from '@/components/DiffView';
-import { FilePreview } from '@/components/preview';
-import SettingsPage from '@/components/SettingsPage';
-import { fileApi } from '@/api/file';
-import { useSettingsStore } from '@/lib/settings';
+import { AppFrame, NewGroupMenu } from "@/components/frame";
+import FileManager from "@/components/FileManager";
+import GitView from "@/components/GitView";
+import TerminalView from "@/components/TerminalView";
+import ProjectMenu from "@/components/ProjectMenu";
+import DiffView from "@/components/DiffView";
+import { FilePreview } from "@/components/preview";
+import SettingsPage from "@/components/SettingsPage";
+import { fileApi } from "@/api/file";
+import { useSettingsStore } from "@/lib/settings";
 
 const MOCK_GIT_FILES: GitFileNode[] = [
   {
-    id: 'git-1', name: 'payload.js', path: 'src/kernel/payload.js', status: 'modified',
+    id: "git-1",
+    name: "payload.js",
+    path: "src/kernel/payload.js",
+    status: "modified",
     originalContent: "const deploy = () => console.log('Waiting...');",
-    modifiedContent: "const deploy = () => console.log('Payload delivered');"
+    modifiedContent: "const deploy = () => console.log('Payload delivered');",
   },
   {
-    id: 'git-2', name: 'decrypt.ts', path: 'src/kernel/decrypt.ts', status: 'added',
+    id: "git-2",
+    name: "decrypt.ts",
+    path: "src/kernel/decrypt.ts",
+    status: "added",
     originalContent: "",
-    modifiedContent: "export const crack = (hash) => { ... }"
+    modifiedContent: "export const crack = (hash) => { ... }",
   },
   {
-    id: 'git-3', name: 'logs.txt', path: 'logs.txt', status: 'deleted',
+    id: "git-3",
+    name: "logs.txt",
+    path: "logs.txt",
+    status: "deleted",
     originalContent: "ACCESS GRANTED",
-    modifiedContent: ""
-  }
+    modifiedContent: "",
+  },
 ];
 
 const MOCK_TERMINALS = [
-  { id: 'term-1', name: 'root@proxynode', history: ['> connecting to 192.168.0.1...', '> secure handshake... OK'] },
-  { id: 'term-2', name: 'net_watch', history: ['scanning ports...'] }
+  {
+    id: "term-1",
+    name: "root@proxynode",
+    history: ["> connecting to 192.168.0.1...", "> secure handshake... OK"],
+  },
+  { id: "term-2", name: "net_watch", history: ["scanning ports..."] },
 ];
 
 const App: React.FC = () => {
-  const { theme, locale, isMenuOpen, setMenuOpen, setTheme, setLocale } = useAppStore();
-  const { terminals, activeTerminalId, setTerminals, addTerminal } = useTerminalStore();
+  const { theme, locale, isMenuOpen, setMenuOpen, setTheme, setLocale } =
+    useAppStore();
+  const { terminals, activeTerminalId, setTerminals, addTerminal } =
+    useTerminalStore();
   const resetPreview = usePreviewStore((s) => s.reset);
   const { rootPath, goToPath, currentPath } = useFileManagerStore();
   const initSettings = useSettingsStore((s) => s.init);
@@ -80,45 +101,51 @@ const App: React.FC = () => {
   useEffect(() => {
     const root = document.documentElement;
     const body = document.body;
-    root.className = '';
-    body.classList.remove('scanlines');
+    root.className = "";
+    body.classList.remove("scanlines");
     switch (theme) {
-      case 'dark':
-        root.classList.add('dark');
+      case "dark":
+        root.classList.add("dark");
         break;
-      case 'hacker':
-        root.classList.add('dark', 'hacker');
+      case "hacker":
+        root.classList.add("dark", "hacker");
         break;
-      case 'terminal':
-        root.classList.add('dark', 'terminal');
-        body.classList.add('scanlines');
+      case "terminal":
+        root.classList.add("dark", "terminal");
+        body.classList.add("scanlines");
         break;
     }
   }, [theme]);
 
-  const handleGitFileClick = useCallback((gitFile: GitFileNode) => {
-    addCurrentTab({
-      id: `diff-${gitFile.id}`,
-      title: `${gitFile.name} [DIFF]`,
-      data: {
-        type: 'diff',
-        original: gitFile.originalContent,
-        modified: gitFile.modifiedContent
-      }
-    });
-  }, [addCurrentTab]);
+  const handleGitFileClick = useCallback(
+    (gitFile: GitFileNode) => {
+      addCurrentTab({
+        id: `diff-${gitFile.id}`,
+        title: `${gitFile.name} [DIFF]`,
+        data: {
+          type: "diff",
+          original: gitFile.originalContent,
+          modified: gitFile.modifiedContent,
+        },
+      });
+    },
+    [addCurrentTab],
+  );
 
-  const handleFileOpen = useCallback((file: FileItem) => {
-    openPreviewTab({
-      id: `tab-${file.path}`,
-      title: file.name,
-      data: { type: 'code', path: file.path }
-    });
-  }, [openPreviewTab]);
+  const handleFileOpen = useCallback(
+    (file: FileItem) => {
+      openPreviewTab({
+        id: `tab-${file.path}`,
+        title: file.name,
+        data: { type: "code", path: file.path },
+      });
+    },
+    [openPreviewTab],
+  );
 
   const handleBackToList = useCallback(() => {
     resetPreview();
-    if (currentView === 'files') {
+    if (currentView === "files") {
       goToPath(rootPath);
     }
   }, [resetPreview, currentView, goToPath, rootPath]);
@@ -126,9 +153,9 @@ const App: React.FC = () => {
   const handleTabAction = useCallback(async () => {
     if (!activeGroup) return;
 
-    if (activeGroup.type === 'workspace') {
+    if (activeGroup.type === "workspace") {
       switch (currentView) {
-        case 'files':
+        case "files":
           if (activeTabId === null) {
             useFileManagerStore.getState().setLoading(true);
             const path = useFileManagerStore.getState().currentPath;
@@ -151,35 +178,51 @@ const App: React.FC = () => {
               useFileManagerStore.getState().setLoading(false);
             }
           } else {
-            const newPath = prompt('New file name:');
+            const newPath = prompt("New file name:");
             if (newPath) {
-              await fileApi.create({ path: `${currentPath}/${newPath}`, isDir: false });
+              await fileApi.create({
+                path: `${currentPath}/${newPath}`,
+                isDir: false,
+              });
             }
           }
           break;
-        case 'terminal':
-          addTerminal({ id: `term-${Date.now()}`, name: `shell-${terminals.length + 1}`, history: [] });
+        case "terminal":
+          addTerminal({
+            id: `term-${Date.now()}`,
+            name: `shell-${terminals.length + 1}`,
+            history: [],
+          });
           break;
-        case 'git':
+        case "git":
           break;
       }
-    } else if (activeGroup.type === 'terminal') {
+    } else if (activeGroup.type === "terminal") {
       addCurrentTab({
         id: `term-${Date.now()}`,
         title: `Terminal ${tabs.length + 1}`,
-        data: { type: 'terminal' }
+        data: { type: "terminal" },
       });
-    } else if (activeGroup.type === 'plugin') {
+    } else if (activeGroup.type === "plugin") {
       addCurrentTab({
         id: `plugin-tab-${Date.now()}`,
         title: `${activeGroup.name} ${tabs.length + 1}`,
-        data: { type: 'plugin', pluginId: activeGroup.pluginId }
+        data: { type: "plugin", pluginId: activeGroup.pluginId },
       });
     }
-  }, [activeGroup, currentView, currentPath, terminals.length, addTerminal, addCurrentTab, tabs.length, activeTabId]);
+  }, [
+    activeGroup,
+    currentView,
+    currentPath,
+    terminals.length,
+    addTerminal,
+    addCurrentTab,
+    tabs.length,
+    activeTabId,
+  ]);
 
   const handleOpenDirectory = useCallback(() => {
-    const path = prompt('Enter directory path:');
+    const path = prompt("Enter directory path:");
     if (path) {
       addWorkspaceGroup(path);
     }
@@ -189,24 +232,32 @@ const App: React.FC = () => {
     addTerminalGroup();
   }, [addTerminalGroup]);
 
-  const handleNewPlugin = useCallback((pluginId: string) => {
-    addPluginGroup(pluginId, pluginId);
-  }, [addPluginGroup]);
+  const handleNewPlugin = useCallback(
+    (pluginId: string) => {
+      addPluginGroup(pluginId, pluginId);
+    },
+    [addPluginGroup],
+  );
 
-  const activeTab = tabs.find(t => t.id === activeTabId);
+  const activeTab = tabs.find((t) => t.id === activeTabId);
 
   const renderContent = () => {
     if (!activeGroup) return null;
 
-    if (activeGroup.type === 'settings') {
+    if (activeGroup.type === "settings") {
       return <SettingsPage />;
     }
 
-    if (activeGroup.type === 'terminal') {
-      return <TerminalView activeTerminalId={activeTerminalId || ''} terminals={terminals} />;
+    if (activeGroup.type === "terminal") {
+      return (
+        <TerminalView
+          activeTerminalId={activeTerminalId || ""}
+          terminals={terminals}
+        />
+      );
     }
 
-    if (activeGroup.type === 'plugin') {
+    if (activeGroup.type === "plugin") {
       return (
         <div className="h-full flex items-center justify-center text-ide-mute">
           Plugin: {activeGroup.pluginId}
@@ -214,21 +265,37 @@ const App: React.FC = () => {
       );
     }
 
-    if (activeGroup.type === 'workspace') {
-      if (currentView === 'git') {
+    if (activeGroup.type === "workspace") {
+      if (currentView === "git") {
         if (activeTabId === null) {
-          return <GitView files={MOCK_GIT_FILES} onFileClick={handleGitFileClick} locale={locale} />;
+          return (
+            <GitView
+              files={MOCK_GIT_FILES}
+              onFileClick={handleGitFileClick}
+              locale={locale}
+            />
+          );
         }
-        if (activeTab?.data?.type === 'diff') {
-          return <DiffView original={(activeTab.data.original as string) || ''} modified={(activeTab.data.modified as string) || ''} />;
+        if (activeTab?.data?.type === "diff") {
+          return (
+            <DiffView
+              original={(activeTab.data.original as string) || ""}
+              modified={(activeTab.data.modified as string) || ""}
+            />
+          );
         }
       }
 
-      if (currentView === 'terminal') {
-        return <TerminalView activeTerminalId={activeTerminalId || ''} terminals={terminals} />;
+      if (currentView === "terminal") {
+        return (
+          <TerminalView
+            activeTerminalId={activeTerminalId || ""}
+            terminals={terminals}
+          />
+        );
       }
 
-      if (currentView === 'files') {
+      if (currentView === "files") {
         if (activeTabId !== null && activeTab) {
           return (
             <FilePreview
@@ -239,9 +306,11 @@ const App: React.FC = () => {
                 isDir: false,
                 isSymlink: false,
                 isHidden: false,
-                mode: '',
-                modTime: '',
-                extension: activeTab.title.includes('.') ? '.' + activeTab.title.split('.').pop() : '',
+                mode: "",
+                modTime: "",
+                extension: activeTab.title.includes(".")
+                  ? "." + activeTab.title.split(".").pop()
+                  : "",
               }}
             />
           );
@@ -282,8 +351,8 @@ const App: React.FC = () => {
         onNewTerminal={handleNewTerminal}
         onNewPlugin={handleNewPlugin}
         availablePlugins={[
-          { id: 'claude-code', name: 'Claude Code' },
-          { id: 'gemini-cli', name: 'Gemini CLI' },
+          { id: "claude-code", name: "Claude Code" },
+          { id: "gemini-cli", name: "Gemini CLI" },
         ]}
       />
     </>

@@ -1,15 +1,19 @@
-import React from 'react';
-import type { TerminalSession } from '@/stores';
+import React from "react";
+import type { TerminalSession } from "@/stores";
 
 interface TerminalViewProps {
   activeTerminalId: string;
   terminals: TerminalSession[];
 }
 
-const TerminalView: React.FC<TerminalViewProps> = ({ activeTerminalId, terminals }) => {
-  const activeSession = terminals.find(t => t.id === activeTerminalId);
+const TerminalView: React.FC<TerminalViewProps> = ({
+  activeTerminalId,
+  terminals,
+}) => {
+  const activeSession = terminals.find((t) => t.id === activeTerminalId);
 
-  if (!activeSession) return <div className="p-4 text-ide-mute">No terminal session active</div>;
+  if (!activeSession)
+    return <div className="p-4 text-ide-mute">No terminal session active</div>;
 
   return (
     <div className="flex flex-col h-full bg-black text-green-400 font-mono text-sm p-4 overflow-auto">

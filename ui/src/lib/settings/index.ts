@@ -1,4 +1,4 @@
-export { useSettingsStore } from './store';
+export { useSettingsStore } from "./store";
 export {
   SETTINGS_SCHEMA,
   SETTING_CATEGORIES,
@@ -8,4 +8,4 @@ export {
   type SettingSchema,
   type SettingOption,
   type SettingType,
-} from './schema';
+} from "./schema";

@@ -1,12 +1,22 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { ChevronRight, Home, ChevronLeft, ChevronRight as Forward, ChevronUp, Check, X } from 'lucide-react';
-import { useFileManagerStore } from '@/stores/fileManagerStore';
+import React, { useRef, useEffect, useState } from "react";
+import {
+  ChevronRight,
+  Home,
+  ChevronLeft,
+  ChevronRight as Forward,
+  ChevronUp,
+  Check,
+  X,
+} from "lucide-react";
+import { useFileManagerStore } from "@/stores/fileManagerStore";
 
 interface FileManagerBreadcrumbProps {
   className?: string;
 }
 
-const FileManagerBreadcrumb: React.FC<FileManagerBreadcrumbProps> = ({ className = '' }) => {
+const FileManagerBreadcrumb: React.FC<FileManagerBreadcrumbProps> = ({
+  className = "",
+}) => {
   const {
     currentPath,
     rootPath,
@@ -21,17 +31,16 @@ const FileManagerBreadcrumb: React.FC<FileManagerBreadcrumbProps> = ({ className
   const scrollRef = useRef<HTMLDivElement>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState('');
+  const [editValue, setEditValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const pathParts = currentPath === '/'
-    ? []
-    : currentPath.split('/').filter(Boolean);
+  const pathParts =
+    currentPath === "/" ? [] : currentPath.split("/").filter(Boolean);
   const displayParts = pathParts;
 
   const canGoBack = historyIndex > 0;
   const canGoForward = historyIndex < pathHistory.length - 1;
-  const canGoUp = currentPath !== '/';
+  const canGoUp = currentPath !== "/";
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -50,7 +59,7 @@ const FileManagerBreadcrumb: React.FC<FileManagerBreadcrumbProps> = ({ className
     if (index === -1) {
       goToPath(rootPath);
     } else {
-      const newPath = '/' + displayParts.slice(0, index + 1).join('/');
+      const newPath = "/" + displayParts.slice(0, index + 1).join("/");
       goToPath(newPath);
     }
   };
@@ -81,22 +90,24 @@ const FileManagerBreadcrumb: React.FC<FileManagerBreadcrumbProps> = ({ className
   };
 
   const handleEditKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       handleEditSubmit();
-    } else if (e.key === 'Escape') {
+    } else if (e.key === "Escape") {
       setIsEditing(false);
     }
   };
 
   return (
-    <div className={`flex items-center gap-1 h-10 px-2 bg-ide-panel border-b border-ide-border ${className}`}>
+    <div
+      className={`flex items-center gap-1 h-10 px-2 bg-ide-panel border-b border-ide-border ${className}`}
+    >
       <button
         onClick={goBack}
         disabled={!canGoBack}
         className={`p-1.5 rounded-md transition-colors ${
           canGoBack
-            ? 'text-ide-text hover:bg-ide-bg active:bg-ide-accent/20'
-            : 'text-ide-mute/50 cursor-not-allowed'
+            ? "text-ide-text hover:bg-ide-bg active:bg-ide-accent/20"
+            : "text-ide-mute/50 cursor-not-allowed"
         }`}
       >
         <ChevronLeft size={18} />
@@ -106,8 +117,8 @@ const FileManagerBreadcrumb: React.FC<FileManagerBreadcrumbProps> = ({ className
         disabled={!canGoUp}
         className={`p-1.5 rounded-md transition-colors ${
           canGoUp
-            ? 'text-ide-text hover:bg-ide-bg active:bg-ide-accent/20'
-            : 'text-ide-mute/50 cursor-not-allowed'
+            ? "text-ide-text hover:bg-ide-bg active:bg-ide-accent/20"
+            : "text-ide-mute/50 cursor-not-allowed"
         }`}
       >
         <ChevronUp size={18} />
@@ -117,8 +128,8 @@ const FileManagerBreadcrumb: React.FC<FileManagerBreadcrumbProps> = ({ className
         disabled={!canGoForward}
         className={`p-1.5 rounded-md transition-colors ${
           canGoForward
-            ? 'text-ide-text hover:bg-ide-bg active:bg-ide-accent/20'
-            : 'text-ide-mute/50 cursor-not-allowed'
+            ? "text-ide-text hover:bg-ide-bg active:bg-ide-accent/20"
+            : "text-ide-mute/50 cursor-not-allowed"
         }`}
       >
         <Forward size={18} />
@@ -163,7 +174,11 @@ const FileManagerBreadcrumb: React.FC<FileManagerBreadcrumbProps> = ({ className
           onTouchStart={handleLongPressStart}
           onTouchEnd={handleLongPressEnd}
           onTouchMove={handleLongPressEnd}
-          onContextMenu={(e) => { e.preventDefault(); setEditValue(currentPath); setIsEditing(true); }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setEditValue(currentPath);
+            setIsEditing(true);
+          }}
         >
           {displayParts.map((part, index) => (
             <React.Fragment key={index}>
@@ -172,8 +187,8 @@ const FileManagerBreadcrumb: React.FC<FileManagerBreadcrumbProps> = ({ className
                 onClick={() => handlePartClick(index)}
                 className={`shrink-0 px-2 py-1 rounded-md text-xs font-medium transition-colors truncate max-w-[120px] ${
                   index === displayParts.length - 1
-                    ? 'text-ide-accent bg-ide-accent/10'
-                    : 'text-ide-text hover:text-ide-accent hover:bg-ide-bg'
+                    ? "text-ide-accent bg-ide-accent/10"
+                    : "text-ide-text hover:text-ide-accent hover:bg-ide-bg"
                 }`}
               >
                 {part}

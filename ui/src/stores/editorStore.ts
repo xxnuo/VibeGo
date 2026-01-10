@@ -1,11 +1,11 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
 export interface EditorTab {
   id: string;
   fileId: string;
   title: string;
   isDirty: boolean;
-  type: 'code' | 'diff';
+  type: "code" | "diff";
   data?: { original?: string; modified?: string };
 }
 
@@ -22,7 +22,12 @@ interface EditorState {
   setFileContent: (fileId: string, content: string) => void;
   getFileContent: (fileId: string) => string | undefined;
   markTabDirty: (id: string, dirty: boolean) => void;
-  openFileTab: (fileId: string, title: string, type?: 'code' | 'diff', data?: EditorTab['data']) => void;
+  openFileTab: (
+    fileId: string,
+    title: string,
+    type?: "code" | "diff",
+    data?: EditorTab["data"],
+  ) => void;
   closeTab: (id: string) => void;
 }
 
@@ -65,9 +70,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((s) => ({
       tabs: s.tabs.map((t) => (t.id === id ? { ...t, isDirty: dirty } : t)),
     })),
-  openFileTab: (fileId, title, type = 'code', data) => {
+  openFileTab: (fileId, title, type = "code", data) => {
     const { tabs, addTab } = get();
-    const tabId = type === 'diff' ? `diff-${fileId}` : `tab-${fileId}`;
+    const tabId = type === "diff" ? `diff-${fileId}` : `tab-${fileId}`;
     const exists = tabs.find((t) => t.id === tabId);
     if (exists) {
       set({ activeTabId: tabId });
@@ -76,7 +81,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     addTab({
       id: tabId,
       fileId,
-      title: type === 'diff' ? `${title} [DIFF]` : title,
+      title: type === "diff" ? `${title} [DIFF]` : title,
       isDirty: false,
       type,
       data,

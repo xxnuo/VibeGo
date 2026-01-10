@@ -1,7 +1,7 @@
-import { create } from 'zustand';
-import { settingsApi } from '@/api/settings';
-import { getDefaultSettings, SETTINGS_SCHEMA } from './schema';
-import type { Theme, Locale } from '@/stores/appStore';
+import { create } from "zustand";
+import { settingsApi } from "@/api/settings";
+import { getDefaultSettings, SETTINGS_SCHEMA } from "./schema";
+import type { Theme, Locale } from "@/stores/appStore";
 
 interface SettingsState {
   settings: Record<string, string>;
@@ -39,7 +39,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   get: (key: string) => {
     const { settings } = get();
     const schema = SETTINGS_SCHEMA.find((s) => s.key === key);
-    return settings[key] ?? schema?.defaultValue ?? '';
+    return settings[key] ?? schema?.defaultValue ?? "";
   },
 
   set: async (key: string, value: string) => {
@@ -47,7 +47,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     try {
       await settingsApi.set(key, value);
     } catch (e) {
-      console.error('Failed to save setting:', e);
+      console.error("Failed to save setting:", e);
     }
   },
 
@@ -57,10 +57,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     try {
       await settingsApi.reset();
     } catch (e) {
-      console.error('Failed to reset settings:', e);
+      console.error("Failed to reset settings:", e);
     }
   },
 
-  getTheme: () => get().settings.theme as Theme || 'light',
-  getLocale: () => get().settings.locale as Locale || 'zh',
+  getTheme: () => (get().settings.theme as Theme) || "light",
+  getLocale: () => (get().settings.locale as Locale) || "zh",
 }));

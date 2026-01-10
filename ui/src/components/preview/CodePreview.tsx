@@ -1,9 +1,12 @@
-import React, { useEffect, useRef, useMemo } from 'react';
-import Editor, { type OnMount } from '@monaco-editor/react';
-import { usePreviewStore, getLanguageFromExtension } from '@/stores/previewStore';
-import { useAppStore } from '@/stores/appStore';
-import { Loader2, Save } from 'lucide-react';
-import { fileApi } from '@/api/file';
+import React, { useEffect, useRef, useMemo } from "react";
+import Editor, { type OnMount } from "@monaco-editor/react";
+import {
+  usePreviewStore,
+  getLanguageFromExtension,
+} from "@/stores/previewStore";
+import { useAppStore } from "@/stores/appStore";
+import { Loader2, Save } from "lucide-react";
+import { fileApi } from "@/api/file";
 
 interface CodePreviewProps {
   onSave?: () => void;
@@ -27,11 +30,11 @@ const CodePreview: React.FC<CodePreviewProps> = ({ onSave }) => {
   const language = getLanguageFromExtension(file?.extension);
 
   const editorTheme = useMemo(() => {
-    return appTheme === 'light' ? 'light' : 'vs-dark';
+    return appTheme === "light" ? "light" : "vs-dark";
   }, [appTheme]);
 
   const isMobile = useMemo(() => {
-    return typeof window !== 'undefined' && window.innerWidth < 768;
+    return typeof window !== "undefined" && window.innerWidth < 768;
   }, []);
 
   const handleEditorMount: OnMount = (editor) => {
@@ -53,19 +56,19 @@ const CodePreview: React.FC<CodePreviewProps> = ({ onSave }) => {
       setIsDirty(false);
       onSave?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save file');
+      setError(e instanceof Error ? e.message : "Failed to save file");
     }
   };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
         handleSave();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [file, content, isDirty]);
 
   return (
@@ -99,11 +102,11 @@ const CodePreview: React.FC<CodePreviewProps> = ({ onSave }) => {
             readOnly: !editMode,
             minimap: { enabled: false },
             fontSize: isMobile ? 12 : 13,
-            fontFamily: 'JetBrains Mono, Fira Code, monospace',
+            fontFamily: "JetBrains Mono, Fira Code, monospace",
             scrollBeyondLastLine: false,
-            wordWrap: 'on',
-            lineNumbers: isMobile ? 'off' : 'on',
-            renderLineHighlight: 'line',
+            wordWrap: "on",
+            lineNumbers: isMobile ? "off" : "on",
+            renderLineHighlight: "line",
             scrollbar: {
               verticalScrollbarSize: isMobile ? 4 : 8,
               horizontalScrollbarSize: isMobile ? 4 : 8,

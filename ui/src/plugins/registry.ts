@@ -1,5 +1,5 @@
-import React from 'react';
-import type { LucideIcon } from 'lucide-react';
+import React from "react";
+import type { LucideIcon } from "lucide-react";
 
 export interface Plugin {
   id: string;
@@ -35,7 +35,9 @@ class PluginRegistry {
   }
 
   getAll(): Plugin[] {
-    return Array.from(this.plugins.values()).sort((a, b) => (a.order ?? 100) - (b.order ?? 100));
+    return Array.from(this.plugins.values()).sort(
+      (a, b) => (a.order ?? 100) - (b.order ?? 100),
+    );
   }
 
   subscribe(listener: () => void): () => void {

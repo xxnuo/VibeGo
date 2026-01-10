@@ -7,3 +7,7 @@ generate-docs:
 
 clean-code:
 	find . -type f \( -name "*.go" -o -name "*.html" -o -name "*.md" \) -exec perl -CSDA -i -pe 's/\p{Extended_Pictographic} //g' {} +
+
+format:
+	gofmt -w .
+	cd ui && pnpm format

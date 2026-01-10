@@ -1,6 +1,6 @@
-import React from 'react';
-import { Files, GitGraph, Terminal, Box } from 'lucide-react';
-import { AppView } from '@/stores/appStore';
+import React from "react";
+import { Files, GitGraph, Terminal, Box } from "lucide-react";
+import { AppView } from "@/stores/appStore";
 
 export interface PageConfig {
   id: string;
@@ -10,13 +10,17 @@ export interface PageConfig {
   component: React.ComponentType<PageComponentProps>;
   tabBarConfig?: {
     showBackButton?: boolean;
-    actionIcon?: 'plus' | 'refresh';
+    actionIcon?: "plus" | "refresh";
     actionLabel?: string;
   };
 }
 
 export interface PageComponentProps {
-  onOpenTab?: (tab: { id: string; title: string; data?: Record<string, unknown> }) => void;
+  onOpenTab?: (tab: {
+    id: string;
+    title: string;
+    data?: Record<string, unknown>;
+  }) => void;
 }
 
 const pageRegistry = new Map<string, PageConfig>();
@@ -33,7 +37,9 @@ export const getPage = (id: string): PageConfig | undefined => {
   return pageRegistry.get(id);
 };
 
-export const getPageByViewType = (viewType: AppView): PageConfig | undefined => {
+export const getPageByViewType = (
+  viewType: AppView,
+): PageConfig | undefined => {
   for (const config of pageRegistry.values()) {
     if (config.viewType === viewType) return config;
   }
@@ -44,49 +50,49 @@ export const getAllPages = (): PageConfig[] => {
   return Array.from(pageRegistry.values());
 };
 
-export const DEFAULT_PAGE_CONFIGS: Omit<PageConfig, 'component'>[] = [
+export const DEFAULT_PAGE_CONFIGS: Omit<PageConfig, "component">[] = [
   {
-    id: 'files',
+    id: "files",
     viewType: AppView.FILES,
     icon: <Files size={16} />,
-    label: 'Files',
+    label: "Files",
     tabBarConfig: {
       showBackButton: true,
-      actionIcon: 'plus',
-      actionLabel: 'New File',
+      actionIcon: "plus",
+      actionLabel: "New File",
     },
   },
   {
-    id: 'git',
+    id: "git",
     viewType: AppView.GIT,
     icon: <GitGraph size={16} />,
-    label: 'Git',
+    label: "Git",
     tabBarConfig: {
       showBackButton: true,
-      actionIcon: 'refresh',
-      actionLabel: 'Refresh',
+      actionIcon: "refresh",
+      actionLabel: "Refresh",
     },
   },
   {
-    id: 'terminal',
+    id: "terminal",
     viewType: AppView.TERMINAL,
     icon: <Terminal size={16} />,
-    label: 'Terminal',
+    label: "Terminal",
     tabBarConfig: {
       showBackButton: false,
-      actionIcon: 'plus',
-      actionLabel: 'New Terminal',
+      actionIcon: "plus",
+      actionLabel: "New Terminal",
     },
   },
   {
-    id: 'plugin',
+    id: "plugin",
     viewType: AppView.PLUGIN,
     icon: <Box size={16} />,
-    label: 'Plugin',
+    label: "Plugin",
     tabBarConfig: {
       showBackButton: true,
-      actionIcon: 'plus',
-      actionLabel: 'New',
+      actionIcon: "plus",
+      actionLabel: "New",
     },
   },
 ];

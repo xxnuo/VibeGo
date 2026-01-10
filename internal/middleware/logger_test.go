@@ -17,7 +17,7 @@ func captureLogs(f func()) string {
 	var buf bytes.Buffer
 	// Replace global logger with one writing to buf
 	originalLogger := log.Logger
-	
+
 	// Use JSON output for assertions
 	log.Logger = zerolog.New(&buf).With().Timestamp().Logger()
 

@@ -1,9 +1,9 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
 export interface GitFileNode {
   id: string;
   name: string;
-  status: 'modified' | 'added' | 'deleted';
+  status: "modified" | "added" | "deleted";
   path: string;
   originalContent?: string;
   modifiedContent?: string;
@@ -28,9 +28,9 @@ interface GitState {
 export const useGitStore = create<GitState>((set) => ({
   currentPath: null,
   files: [],
-  currentBranch: 'main',
+  currentBranch: "main",
   branches: [],
-  commitMessage: '',
+  commitMessage: "",
   isLoading: false,
 
   setCurrentPath: (path) => set({ currentPath: path }),

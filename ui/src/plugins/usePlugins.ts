@@ -1,10 +1,10 @@
-import { useSyncExternalStore } from 'react';
-import { pluginRegistry, type Plugin } from './registry';
+import { useSyncExternalStore } from "react";
+import { pluginRegistry, type Plugin } from "./registry";
 
 export function usePlugins(): Plugin[] {
   return useSyncExternalStore(
     (cb) => pluginRegistry.subscribe(cb),
-    () => pluginRegistry.getAll()
+    () => pluginRegistry.getAll(),
   );
 }
 

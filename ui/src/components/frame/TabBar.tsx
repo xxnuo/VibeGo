@@ -1,7 +1,23 @@
-import React, { useCallback, useRef } from 'react';
-import { X, Plus, RefreshCw, FolderOpen, GitGraph, FileText, FileDiff, Box, Terminal, Edit, Eye } from 'lucide-react';
-import { useFrameStore, type TabItem, type ViewType } from '@/stores/frameStore';
-import { usePreviewStore, getPreviewType } from '@/stores/previewStore';
+import React, { useCallback, useRef } from "react";
+import {
+  X,
+  Plus,
+  RefreshCw,
+  FolderOpen,
+  GitGraph,
+  FileText,
+  FileDiff,
+  Box,
+  Terminal,
+  Edit,
+  Eye,
+} from "lucide-react";
+import {
+  useFrameStore,
+  type TabItem,
+  type ViewType,
+} from "@/stores/frameStore";
+import { usePreviewStore, getPreviewType } from "@/stores/previewStore";
 
 interface TabBarProps {
   onAction?: () => void;
@@ -42,20 +58,26 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
     setEditMode(!editMode);
   }, [editMode, activeTabId, pinTab, setEditMode]);
 
-  const handleCloseTab = useCallback((e: React.MouseEvent, tabId: string) => {
-    e.stopPropagation();
-    removeCurrentTab(tabId);
-  }, [removeCurrentTab]);
+  const handleCloseTab = useCallback(
+    (e: React.MouseEvent, tabId: string) => {
+      e.stopPropagation();
+      removeCurrentTab(tabId);
+    },
+    [removeCurrentTab],
+  );
 
-  const handleTabClick = useCallback((tabId: string) => {
-    const now = Date.now();
-    const lastClick = lastClickTime.current[tabId] || 0;
-    if (now - lastClick < 300) {
-      pinTab(tabId);
-    }
-    lastClickTime.current[tabId] = now;
-    setCurrentActiveTab(tabId);
-  }, [setCurrentActiveTab, pinTab]);
+  const handleTabClick = useCallback(
+    (tabId: string) => {
+      const now = Date.now();
+      const lastClick = lastClickTime.current[tabId] || 0;
+      if (now - lastClick < 300) {
+        pinTab(tabId);
+      }
+      lastClickTime.current[tabId] = now;
+      setCurrentActiveTab(tabId);
+    },
+    [setCurrentActiveTab, pinTab],
+  );
 
   const handleBackClick = useCallback(() => {
     setCurrentActiveTab(null);
@@ -63,32 +85,37 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
   }, [setCurrentActiveTab, onBackToList]);
 
   const getTabIcon = (tab: TabItem) => {
-    const type = (tab.data?.type as string) || 'code';
+    const type = (tab.data?.type as string) || "code";
     return TAB_ICONS[type] || TAB_ICONS.code;
   };
 
   const getViewIcon = () => {
     if (!activeGroup) return <FolderOpen size={18} />;
-    if (activeGroup.type === 'workspace' && currentView) {
+    if (activeGroup.type === "workspace" && currentView) {
       return VIEW_ICONS[currentView];
     }
-    if (activeGroup.type === 'terminal') return <Terminal size={18} />;
-    if (activeGroup.type === 'plugin') return <Box size={18} />;
+    if (activeGroup.type === "terminal") return <Terminal size={18} />;
+    if (activeGroup.type === "plugin") return <Box size={18} />;
     return <FolderOpen size={18} />;
   };
 
-  const isFilesView = activeGroup?.type === 'workspace' && currentView === 'files' && activeTabId === null;
-  const isGitView = activeGroup?.type === 'workspace' && currentView === 'git';
+  const isFilesView =
+    activeGroup?.type === "workspace" &&
+    currentView === "files" &&
+    activeTabId === null;
+  const isGitView = activeGroup?.type === "workspace" && currentView === "git";
   const showRefreshButton = isFilesView || isGitView;
-  const showBackButton = activeGroup?.type === 'workspace' || tabs.length > 0;
+  const showBackButton = activeGroup?.type === "workspace" || tabs.length > 0;
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
-  const isCodeFile = activeTab && file && (
-    getPreviewType(file.mimeType, file.extension) === 'code' ||
-    getPreviewType(file.mimeType, file.extension) === 'markdown'
-  );
+  const isCodeFile =
+    activeTab &&
+    file &&
+    (getPreviewType(file.mimeType, file.extension) === "code" ||
+      getPreviewType(file.mimeType, file.extension) === "markdown");
   const showEditToggle = isCodeFile && activeTabId;
-  const cornerButtonClass = 'shrink-0 w-8 h-8 rounded-md text-ide-accent hover:bg-ide-accent hover:text-ide-bg flex items-center justify-center border border-ide-border transition-colors';
+  const cornerButtonClass =
+    "shrink-0 w-8 h-8 rounded-md text-ide-accent hover:bg-ide-accent hover:text-ide-bg flex items-center justify-center border border-ide-border transition-colors";
 
   return (
     <div className="h-12 bg-ide-bg border-b border-ide-border flex items-center px-2 gap-2 shrink-0 transition-colors duration-300 overflow-hidden">
@@ -96,7 +123,7 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={handleBackClick}
-            className={`${cornerButtonClass} ${activeTabId === null ? 'bg-ide-accent text-ide-bg border-ide-accent' : ''}`}
+            className={`${cornerButtonClass} ${activeTabId === null ? "bg-ide-accent text-ide-bg border-ide-accent" : ""}`}
             title="Back to List"
           >
             {getViewIcon()}
@@ -115,12 +142,16 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
               onClick={() => handleTabClick(tab.id)}
               className={`shrink-0 px-2 h-7 rounded-md flex items-center gap-1 text-xs border transition-all cursor-pointer ${
                 activeTabId === tab.id
-                  ? 'bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm'
-                  : 'bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text'
+                  ? "bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm"
+                  : "bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text"
               }`}
             >
               {getTabIcon(tab)}
-              <span className={`max-w-[80px] truncate font-medium ${!tab.pinned ? 'italic' : ''}`}>{tab.title}</span>
+              <span
+                className={`max-w-[80px] truncate font-medium ${!tab.pinned ? "italic" : ""}`}
+              >
+                {tab.title}
+              </span>
               {tab.closable !== false && (
                 <button
                   onClick={(e) => handleCloseTab(e, tab.id)}
@@ -138,8 +169,8 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
         {showEditToggle ? (
           <button
             onClick={handleToggleEdit}
-            className={`${cornerButtonClass} ${editMode ? 'bg-ide-accent text-ide-bg border-ide-accent' : ''}`}
-            title={editMode ? 'View' : 'Edit'}
+            className={`${cornerButtonClass} ${editMode ? "bg-ide-accent text-ide-bg border-ide-accent" : ""}`}
+            title={editMode ? "View" : "Edit"}
           >
             {editMode ? <Eye size={18} /> : <Edit size={18} />}
           </button>
@@ -147,7 +178,7 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
           <button
             onClick={onAction}
             className={cornerButtonClass}
-            title={showRefreshButton ? 'Refresh' : 'New'}
+            title={showRefreshButton ? "Refresh" : "New"}
           >
             {showRefreshButton ? <RefreshCw size={18} /> : <Plus size={18} />}
           </button>
