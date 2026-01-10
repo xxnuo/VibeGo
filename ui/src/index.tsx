@@ -4,6 +4,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import '@/index.css'
 import App from '@/App.tsx'
 
+window.addEventListener('unhandledrejection', (e) => {
+  if (e.reason?.message === 'Canceled' || e.reason?.name === 'Canceled') {
+    e.preventDefault();
+  }
+});
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
