@@ -1,15 +1,37 @@
 package handler
 
 import (
+	"errors"
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
+
+var systemPrefixes []string
+var exePath string
+
+func init() {
+	if runtime.GOOS == "windows" {
+		systemPrefixes = []string{`C:\Windows`, `C:\Program Files`, `C:\Program Files (x86)`}
+		if sysRoot := os.Getenv("SystemRoot"); sysRoot != "" {
+			systemPrefixes = append(systemPrefixes, sysRoot)
+		}
+	} else {
+		systemPrefixes = []string{"/bin", "/boot", "/dev", "/etc", "/lib", "/lib64", "/proc", "/root", "/sbin", "/sys", "/usr", "/var"}
+		if runtime.GOOS == "darwin" {
+			systemPrefixes = append(systemPrefixes, "/System", "/Library", "/Applications")
+		}
+	}
+	if exe, err := os.Executable(); err == nil {
+		exePath, _ = filepath.Abs(exe)
+	}
+}
 
 type FileHandler struct {
 	baseDir string
@@ -72,39 +94,13 @@ func (h *FileHandler) resolvePath(p string) (string, error) {
 }
 
 func (h *FileHandler) checkBlacklist(p string) error {
-	// Check against running executable
-	if exe, err := os.Executable(); err == nil {
-		if exeP, err := filepath.Abs(exe); err == nil {
-			if p == exeP {
-				return os.ErrPermission
-			}
-		}
-	}
-
-	// Check system paths
-	var systemPrefixes []string
-	if runtime.GOOS == "windows" {
-		systemPrefixes = []string{
-			`C:\Windows`, `C:\Program Files`, `C:\Program Files (x86)`,
-		}
-		// On Windows, checking env vars is safer but this covers basics
-		if sysRoot := os.Getenv("SystemRoot"); sysRoot != "" {
-			systemPrefixes = append(systemPrefixes, sysRoot)
-		}
-	} else {
-		systemPrefixes = []string{
-			"/bin", "/boot", "/dev", "/etc", "/lib", "/lib64",
-			"/proc", "/root", "/sbin", "/sys", "/usr", "/var",
-		}
-		if runtime.GOOS == "darwin" {
-			systemPrefixes = append(systemPrefixes, "/System", "/Library", "/Applications")
-		}
+	if exePath != "" && p == exePath {
+		return os.ErrPermission
 	}
 
 	for _, prefix := range systemPrefixes {
 		cleanPrefix := filepath.Clean(prefix)
 		if p == cleanPrefix || strings.HasPrefix(p, cleanPrefix+string(filepath.Separator)) {
-			// If baseDir is explicitly set and is inside the system prefix, allow it, e.g. macOS's temporary directory /var/folders/...
 			if h.baseDir != "" {
 				if absBase, err := filepath.Abs(h.baseDir); err == nil {
 					if absBase == cleanPrefix || strings.HasPrefix(absBase, cleanPrefix+string(filepath.Separator)) {
@@ -401,6 +397,7 @@ func (h *FileHandler) buildTree(node *TreeNode, path string, depth int) {
 // @Produce json
 // @Param path query string false "Search path"
 // @Param pattern query string true "Search pattern"
+// @Param limit query int false "Max results (default 100)"
 // @Success 200 {object} map[string][]FileInfo
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
@@ -415,15 +412,25 @@ func (h *FileHandler) Search(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "pattern is required"})
 		return
 	}
+	limit := 100
+	if l := c.Query("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 {
+			limit = n
+		}
+	}
 	p, err := h.resolvePath(path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	var matches []FileInfo
+	var limitErr = errors.New("limit reached")
 	err = filepath.WalkDir(p, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
+		}
+		if len(matches) >= limit {
+			return limitErr
 		}
 		matched, err := filepath.Match(pattern, d.Name())
 		if err != nil {
@@ -444,7 +451,7 @@ func (h *FileHandler) Search(c *gin.Context) {
 		}
 		return nil
 	})
-	if err != nil {
+	if err != nil && err != limitErr {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

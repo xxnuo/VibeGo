@@ -21,13 +21,22 @@ func GetDB(models ...any) *gorm.DB {
 	if err := os.MkdirAll(cfg.ConfigDir, 0755); err != nil {
 		panic(err)
 	}
+
 	var err error
-	GlobalDB, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+	GlobalDB, err = gorm.Open(sqlite.Open(dbPath+"?_journal_mode=WAL&_busy_timeout=5000"), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
 		panic(err)
 	}
+
+	sqlDB, err := GlobalDB.DB()
+	if err != nil {
+		panic(err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	sqlDB.SetMaxIdleConns(1)
+
 	if len(models) > 0 {
 		if err := GlobalDB.AutoMigrate(models...); err != nil {
 			panic(err)

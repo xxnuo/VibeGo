@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -9,21 +10,30 @@ import (
 	"gorm.io/gorm"
 )
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
-}
-
 type TerminalHandler struct {
-	manager *terminal.Manager
+	manager  *terminal.Manager
+	upgrader websocket.Upgrader
 }
 
 func NewTerminalHandler(db *gorm.DB, shell string) *TerminalHandler {
 	mgr := terminal.NewManager(db, &terminal.ManagerConfig{Shell: shell})
 	mgr.CleanupOnStart()
 
-	return &TerminalHandler{manager: mgr}
+	return &TerminalHandler{
+		manager: mgr,
+		upgrader: websocket.Upgrader{
+			CheckOrigin: func(r *http.Request) bool {
+				origin := r.Header.Get("Origin")
+				if origin == "" {
+					return true
+				}
+				return strings.HasPrefix(origin, "http://localhost") ||
+					strings.HasPrefix(origin, "http://127.0.0.1") ||
+					strings.HasPrefix(origin, "https://localhost") ||
+					strings.HasPrefix(origin, "https://127.0.0.1")
+			},
+		},
+	}
 }
 
 func (h *TerminalHandler) Register(r *gin.RouterGroup) {
@@ -152,7 +162,7 @@ func (h *TerminalHandler) WebSocket(c *gin.Context) {
 		return
 	}
 
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		return
 	}

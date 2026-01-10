@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"net/http"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
@@ -101,5 +105,27 @@ func main() {
 		})
 	}
 
-	r.Run(fmt.Sprintf("%s:%s", cfg.Host, cfg.Port))
+	srv := &http.Server{
+		Addr:    fmt.Sprintf("%s:%s", cfg.Host, cfg.Port),
+		Handler: r,
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal().Err(err).Msg("Server error")
+		}
+	}()
+
+	<-ctx.Done()
+	log.Info().Msg("Shutting down server...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Error().Err(err).Msg("Server shutdown error")
+	}
 }

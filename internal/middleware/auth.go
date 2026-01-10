@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"strings"
 
@@ -9,28 +10,26 @@ import (
 )
 
 func Auth(token string) gin.HandlerFunc {
+	tokenBytes := []byte(token)
 	return func(c *gin.Context) {
-
 		if token == "" {
 			c.Next()
 			return
 		}
 
-		_token := c.GetHeader("Authorization")
-		if _token != "" {
-			_token = strings.TrimPrefix(_token, "Bearer ")
+		reqToken := c.GetHeader("Authorization")
+		if reqToken != "" {
+			reqToken = strings.TrimPrefix(reqToken, "Bearer ")
 		} else {
-			_token = c.Query("token")
+			reqToken = c.Query("token")
 		}
 
-		if _token != token {
+		if subtle.ConstantTimeCompare([]byte(reqToken), tokenBytes) != 1 {
 			log.Warn().
 				Str("ip", c.ClientIP()).
 				Str("path", c.Request.URL.Path).
 				Msg("Unauthorized access attempt")
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "Unauthorized",
-			})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 			c.Abort()
 			return
 		}

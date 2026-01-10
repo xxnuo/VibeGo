@@ -621,7 +621,6 @@ func (h *GitHandler) Checkout(c *gin.Context) {
 	for _, p := range req.Files {
 		entry, err := idx.Entry(p)
 		if err != nil {
-			// Not in index. It might be untracked. Delete it if it exists.
 			absP := filepath.Join(baseDir, p)
 			if _, e := os.Stat(absP); e == nil {
 				os.Remove(absP)
@@ -629,20 +628,20 @@ func (h *GitHandler) Checkout(c *gin.Context) {
 			continue
 		}
 
-		// Restore from blob
 		blob, err := repo.BlobObject(entry.Hash)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Blob not found: " + err.Error()})
 			return
 		}
-		r, err := blob.Reader()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Blob read error: " + err.Error()})
-			return
-		}
-		defer r.Close()
 
-		content, err := io.ReadAll(r)
+		content, err := func() ([]byte, error) {
+			r, err := blob.Reader()
+			if err != nil {
+				return nil, err
+			}
+			defer r.Close()
+			return io.ReadAll(r)
+		}()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Read error: " + err.Error()})
 			return
