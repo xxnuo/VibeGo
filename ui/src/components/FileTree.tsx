@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { FileNode } from '@/types';
+import type { FileNode } from '@/stores';
 import { Folder, ChevronRight, ChevronDown, Hash } from 'lucide-react';
 
 interface FileTreeProps {

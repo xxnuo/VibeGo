@@ -1,5 +1,13 @@
 import { create } from 'zustand';
-import type { EditorTab } from '@/types';
+
+export interface EditorTab {
+  id: string;
+  fileId: string;
+  title: string;
+  isDirty: boolean;
+  type: 'code' | 'diff';
+  data?: { original?: string; modified?: string };
+}
 
 interface EditorState {
   tabs: EditorTab[];

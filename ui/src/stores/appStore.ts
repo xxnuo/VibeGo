@@ -1,6 +1,14 @@
 import { create } from 'zustand';
-import type { Theme, Locale } from '@/types';
-import { AppView } from '@/types';
+
+export type Theme = 'light' | 'dark' | 'hacker' | 'terminal';
+export type Locale = 'en' | 'zh';
+
+export enum AppView {
+  FILES = 'FILES',
+  GIT = 'GIT',
+  TERMINAL = 'TERMINAL',
+  PLUGIN = 'PLUGIN',
+}
 
 interface AppState {
   theme: Theme;

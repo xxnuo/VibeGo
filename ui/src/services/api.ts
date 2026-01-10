@@ -1,4 +1,4 @@
-import type { FileNode, GitFileNode, TerminalSession } from '@/types';
+import type { FileNode, GitFileNode, TerminalSession } from '@/stores';
 
 const API_BASE = '/api';
 

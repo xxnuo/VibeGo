@@ -1,5 +1,10 @@
 import { create } from 'zustand';
-import type { TerminalSession } from '@/types';
+
+export interface TerminalSession {
+  id: string;
+  name: string;
+  history: string[];
+}
 
 interface TerminalState {
   terminals: TerminalSession[];

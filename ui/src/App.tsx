@@ -1,12 +1,13 @@
 import React, { useEffect } from 'react';
-import type { FileNode, GitFileNode } from '@/types';
-import { AppView } from '@/types';
 import {
   Menu, Files, GitGraph, Terminal, Plus,
   X, FileText, LayoutTemplate, Box, FileDiff, Cpu, Wifi
 } from 'lucide-react';
 import { useTranslation } from '@/utils/i18n';
-import { useAppStore, useEditorStore, useTerminalStore, useFileStore } from '@/stores';
+import {
+  useAppStore, useEditorStore, useTerminalStore, useFileStore,
+  AppView, type FileNode, type GitFileNode
+} from '@/stores';
 
 import CodeEditor from '@/components/CodeEditor';
 import FileTree from '@/components/FileTree';
@@ -214,7 +215,7 @@ const App: React.FC = () => {
 
     if (activeTab) {
       if (activeTab.type === 'diff' && activeTab.data) {
-        return <DiffView original={activeTab.data.original} modified={activeTab.data.modified} />;
+        return <DiffView original={activeTab.data.original || ''} modified={activeTab.data.modified || ''} />;
       }
       return (
         <CodeEditor

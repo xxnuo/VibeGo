@@ -1,5 +1,13 @@
 import { create } from 'zustand';
-import type { FileNode } from '@/types';
+
+export interface FileNode {
+  id: string;
+  name: string;
+  type: 'file' | 'folder';
+  children?: FileNode[];
+  content?: string;
+  language?: string;
+}
 
 interface FileState {
   fileTree: FileNode[];

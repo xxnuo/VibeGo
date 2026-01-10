@@ -1,6 +1,6 @@
 import React from 'react';
 import { FolderOpen, Settings, Save, Download, Home, X, Sun, Moon, Globe, Terminal, Monitor } from 'lucide-react';
-import type { Locale, Theme } from '@/types';
+import type { Locale, Theme } from '@/stores';
 import { useTranslation } from '@/utils/i18n';
 
 interface ProjectMenuProps {

@@ -1,5 +1,13 @@
 import { create } from 'zustand';
-import type { GitFileNode } from '@/types';
+
+export interface GitFileNode {
+  id: string;
+  name: string;
+  status: 'modified' | 'added' | 'deleted';
+  path: string;
+  originalContent?: string;
+  modifiedContent?: string;
+}
 
 interface GitState {
   repoId: string | null;

@@ -1,6 +1,6 @@
 import React from 'react';
 import { GitBranch, RotateCw, Play } from 'lucide-react';
-import type { GitFileNode, Locale } from '@/types';
+import type { GitFileNode, Locale } from '@/stores';
 
 interface GitViewProps {
   files: GitFileNode[];
