@@ -1,5 +1,6 @@
 import React from 'react';
 import { FolderOpen, Terminal, Box, X } from 'lucide-react';
+import { useFrameStore } from '@/stores/frameStore';
 
 interface NewGroupMenuProps {
   isOpen: boolean;
@@ -18,6 +19,10 @@ const NewGroupMenu: React.FC<NewGroupMenuProps> = ({
   onNewPlugin,
   availablePlugins = [],
 }) => {
+  const groups = useFrameStore((s) => s.groups);
+  const activeGroupId = useFrameStore((s) => s.activeGroupId);
+  const removeGroup = useFrameStore((s) => s.removeGroup);
+  const activeGroup = groups.find((group) => group.id === activeGroupId);
   if (!isOpen) return null;
 
   return (
@@ -53,6 +58,21 @@ const NewGroupMenu: React.FC<NewGroupMenuProps> = ({
             <div className="text-left">
               <div className="text-sm font-medium text-ide-text">New Terminal</div>
               <div className="text-xs text-ide-mute">Open a terminal session</div>
+            </div>
+          </button>
+          <button
+            onClick={() => { if (activeGroupId) removeGroup(activeGroupId); onClose(); }}
+            className={`w-full px-4 py-3 flex items-center gap-4 rounded-lg transition-colors ${
+              activeGroupId ? 'hover:bg-ide-bg' : 'opacity-50 cursor-not-allowed'
+            }`}
+            disabled={!activeGroupId}
+          >
+            <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
+              <X size={20} className="text-red-500" />
+            </div>
+            <div className="text-left">
+              <div className="text-sm font-medium text-red-500">Close Group</div>
+              <div className="text-xs text-ide-mute">{activeGroup?.name || 'Close current group'}</div>
             </div>
           </button>
           {availablePlugins.length > 0 && (

@@ -76,6 +76,11 @@
       "description": "Enable word wrapping in editor"
     }
   },
+  "menu": {
+    "builtIn": "System",
+    "group": "Groups",
+    "page": "Page"
+  },
   "fileManager": {
     "newFile": "New File",
     "newFolder": "New Folder",

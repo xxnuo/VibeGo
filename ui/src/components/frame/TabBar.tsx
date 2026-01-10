@@ -88,6 +88,7 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
     getPreviewType(file.mimeType, file.extension) === 'markdown'
   );
   const showEditToggle = isCodeFile && activeTabId;
+  const cornerButtonClass = 'shrink-0 w-8 h-8 rounded-md text-ide-accent hover:bg-ide-accent hover:text-ide-bg flex items-center justify-center border border-ide-border transition-colors';
 
   return (
     <div className="h-12 bg-ide-bg border-b border-ide-border flex items-center px-2 gap-2 shrink-0 transition-colors duration-300 overflow-hidden">
@@ -95,11 +96,7 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={handleBackClick}
-            className={`shrink-0 h-8 w-8 flex items-center justify-center rounded-md border transition-all ${
-              activeTabId === null
-                ? 'bg-ide-accent text-ide-bg border-ide-accent shadow-glow'
-                : 'bg-transparent text-ide-mute border-transparent hover:bg-ide-panel hover:text-ide-text'
-            }`}
+            className={`${cornerButtonClass} ${activeTabId === null ? 'bg-ide-accent text-ide-bg border-ide-accent' : ''}`}
             title="Back to List"
           >
             {getViewIcon()}
@@ -111,7 +108,7 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
       )}
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar touch-pan-x">
           {tabs.map((tab) => (
             <div
               key={tab.id}
@@ -141,11 +138,7 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
         {showEditToggle ? (
           <button
             onClick={handleToggleEdit}
-            className={`shrink-0 w-8 h-8 rounded-md flex items-center justify-center border transition-all ${
-              editMode
-                ? 'bg-ide-accent text-ide-bg border-ide-accent'
-                : 'bg-transparent text-ide-mute border-ide-border hover:bg-ide-panel hover:text-ide-text'
-            }`}
+            className={`${cornerButtonClass} ${editMode ? 'bg-ide-accent text-ide-bg border-ide-accent' : ''}`}
             title={editMode ? 'View' : 'Edit'}
           >
             {editMode ? <Eye size={18} /> : <Edit size={18} />}
@@ -153,7 +146,7 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
         ) : (
           <button
             onClick={onAction}
-            className="shrink-0 w-8 h-8 rounded-md text-ide-accent hover:bg-ide-accent hover:text-ide-bg flex items-center justify-center border border-ide-border transition-colors"
+            className={cornerButtonClass}
             title={showRefreshButton ? 'Refresh' : 'New'}
           >
             {showRefreshButton ? <RefreshCw size={18} /> : <Plus size={18} />}

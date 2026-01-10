@@ -76,6 +76,11 @@
       "description": "在编辑器中启用自动换行"
     }
   },
+  "menu": {
+    "builtIn": "内置",
+    "group": "分组",
+    "page": "页面"
+  },
   "fileManager": {
     "newFile": "新建文件",
     "newFolder": "新建文件夹",

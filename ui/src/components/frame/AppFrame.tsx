@@ -25,7 +25,7 @@ const AppFrame: React.FC<AppFrameProps> = ({
   }, [initDefaultGroups]);
 
   return (
-    <div className="h-screen flex flex-col bg-ide-bg text-ide-text overflow-hidden font-mono transition-colors duration-300">
+    <div className="h-[100dvh] min-h-[100dvh] flex flex-col bg-ide-bg text-ide-text overflow-hidden font-mono transition-colors duration-300">
       {topBarConfig.show ? (
         <TopBar />
       ) : (

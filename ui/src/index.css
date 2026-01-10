@@ -192,10 +192,18 @@
   body,
   #root {
     height: 100%;
+    min-height: 100dvh;
     overflow: hidden;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
   body {
     @apply bg-background text-foreground transition-colors duration-300;
+  }
+  input, textarea, [contenteditable="true"] {
+    -webkit-user-select: text;
+    user-select: text;
   }
 }
 .scanlines::before {

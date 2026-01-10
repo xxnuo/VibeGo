@@ -20,6 +20,14 @@ export interface TopBarConfig {
   show?: boolean;
 }
 
+export interface BottomBarButton {
+  icon: ReactNode;
+  label?: string;
+  onClick?: () => void;
+  active?: boolean;
+  disabled?: boolean;
+}
+
 export interface BottomMenuItem {
   id: string;
   icon: ReactNode;
@@ -31,6 +39,7 @@ export interface BottomMenuItem {
 export interface BottomBarConfig {
   customItems?: BottomMenuItem[];
   activeItemId?: string;
+  rightButtons?: BottomBarButton[];
   show?: boolean;
 }
 
