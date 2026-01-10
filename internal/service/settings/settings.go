@@ -1,8 +1,11 @@
 package settings
 
 import (
+	"time"
+
 	"github.com/xxnuo/vibego/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Store struct {
@@ -19,8 +22,16 @@ func NewWithUser(db *gorm.DB, userID string) *Store {
 }
 
 func (s *Store) Set(key, value string) error {
-	setting := model.UserSetting{UserID: s.userID, Key: key, Value: value}
-	return s.db.Save(&setting).Error
+	setting := model.UserSetting{
+		UserID:    s.userID,
+		Key:       key,
+		Value:     value,
+		UpdatedAt: time.Now().Unix(),
+	}
+	return s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "user_id"}, {Name: "key"}},
+		DoUpdates: clause.AssignmentColumns([]string{"value", "updated_at"}),
+	}).Create(&setting).Error
 }
 
 func (s *Store) Get(key string) (string, error) {
