@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xxnuo/vibego/internal/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -25,7 +25,7 @@ func setupTestSessionHandler(t *testing.T) (*SessionHandler, *gin.Engine) {
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&Session{}))
+	require.NoError(t, db.AutoMigrate(&model.UserSession{}))
 	h := &SessionHandler{db: db}
 	r := gin.New()
 	g := r.Group("/api")
@@ -36,7 +36,7 @@ func setupTestSessionHandler(t *testing.T) (*SessionHandler, *gin.Engine) {
 func TestSessionNew(t *testing.T) {
 	_, r := setupTestSessionHandler(t)
 
-	body := `{"name":"Test Session"}`
+	body := `{"device_name":"Test Device"}`
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/api/session", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -52,13 +52,13 @@ func TestSessionNew(t *testing.T) {
 func TestSessionNewGeneratesUUID(t *testing.T) {
 	_, r := setupTestSessionHandler(t)
 
-	body := `{"name":"First"}`
+	body := `{"device_name":"First"}`
 	w1 := httptest.NewRecorder()
 	req1, _ := http.NewRequest("POST", "/api/session", bytes.NewBufferString(body))
 	req1.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w1, req1)
 
-	body = `{"name":"Second"}`
+	body = `{"device_name":"Second"}`
 	w2 := httptest.NewRecorder()
 	req2, _ := http.NewRequest("POST", "/api/session", bytes.NewBufferString(body))
 	req2.Header.Set("Content-Type", "application/json")
@@ -87,8 +87,8 @@ func TestSessionNewEmptyBody(t *testing.T) {
 func TestSessionList(t *testing.T) {
 	h, r := setupTestSessionHandler(t)
 
-	h.db.Create(&Session{ID: "s1", Name: "First", Messages: "[]", CreatedAt: 100, UpdatedAt: 200})
-	h.db.Create(&Session{ID: "s2", Name: "Second", Messages: "[]", CreatedAt: 150, UpdatedAt: 300})
+	h.db.Create(&model.UserSession{ID: "s1", DeviceName: "First", State: "{}", CreatedAt: 100, UpdatedAt: 200, ExpiresAt: 999999})
+	h.db.Create(&model.UserSession{ID: "s2", DeviceName: "Second", State: "{}", CreatedAt: 150, UpdatedAt: 300, ExpiresAt: 999999})
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/session", nil)
@@ -120,18 +120,18 @@ func TestSessionListEmpty(t *testing.T) {
 func TestSessionLoad(t *testing.T) {
 	h, r := setupTestSessionHandler(t)
 
-	h.db.Create(&Session{ID: "load1", Name: "Load Test", Messages: `[{"role":"user","content":"hi"}]`, CreatedAt: 100, UpdatedAt: 100})
+	h.db.Create(&model.UserSession{ID: "load1", DeviceName: "Load Test", State: `{"foo":"bar"}`, CreatedAt: 100, UpdatedAt: 100, ExpiresAt: 999999})
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/session/load1", nil)
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var result Session
+	var result model.UserSession
 	json.Unmarshal(w.Body.Bytes(), &result)
 	assert.Equal(t, "load1", result.ID)
-	assert.Equal(t, "Load Test", result.Name)
-	assert.Equal(t, `[{"role":"user","content":"hi"}]`, result.Messages)
+	assert.Equal(t, "Load Test", result.DeviceName)
+	assert.Equal(t, `{"foo":"bar"}`, result.State)
 }
 
 func TestSessionLoadNotFound(t *testing.T) {
@@ -144,61 +144,31 @@ func TestSessionLoadNotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-func TestSessionLoadMissingID(t *testing.T) {
-	_, r := setupTestSessionHandler(t)
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/api/session/", nil)
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusMovedPermanently, w.Code)
-}
-
-func TestSessionSave(t *testing.T) {
+func TestSessionSaveState(t *testing.T) {
 	h, r := setupTestSessionHandler(t)
 
-	h.db.Create(&Session{ID: "save1", Name: "Original", Messages: "[]", CreatedAt: 100, UpdatedAt: 100})
+	h.db.Create(&model.UserSession{ID: "save1", DeviceName: "Original", State: "{}", CreatedAt: 100, UpdatedAt: 100, ExpiresAt: 999999})
 
-	body := `{"name":"Updated","messages":"[{\"role\":\"user\",\"content\":\"hello\"}]"}`
+	body := `{"state":"{\"key\":\"value\"}"}`
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("PUT", "/api/session/save1", bytes.NewBufferString(body))
+	req, _ := http.NewRequest("PUT", "/api/session/save1/state", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var session Session
+	var session model.UserSession
 	h.db.First(&session, "id = ?", "save1")
-	assert.Equal(t, "Updated", session.Name)
-	assert.Contains(t, session.Messages, "hello")
+	assert.Contains(t, session.State, "value")
 	assert.Greater(t, session.UpdatedAt, int64(100))
 }
 
-func TestSessionSavePartial(t *testing.T) {
-	h, r := setupTestSessionHandler(t)
-
-	h.db.Create(&Session{ID: "partial1", Name: "Original", Messages: "[]", CreatedAt: 100, UpdatedAt: 100})
-
-	body := `{"messages":"[{\"msg\":\"new\"}]"}`
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("PUT", "/api/session/partial1", bytes.NewBufferString(body))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var session Session
-	h.db.First(&session, "id = ?", "partial1")
-	assert.Equal(t, "Original", session.Name)
-	assert.Contains(t, session.Messages, "new")
-}
-
-func TestSessionSaveNotFound(t *testing.T) {
+func TestSessionSaveStateNotFound(t *testing.T) {
 	_, r := setupTestSessionHandler(t)
 
-	body := `{"name":"New Name"}`
+	body := `{"state":"{}"}`
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("PUT", "/api/session/notexist", bytes.NewBufferString(body))
+	req, _ := http.NewRequest("PUT", "/api/session/notexist/state", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 
@@ -208,7 +178,7 @@ func TestSessionSaveNotFound(t *testing.T) {
 func TestSessionRemove(t *testing.T) {
 	h, r := setupTestSessionHandler(t)
 
-	h.db.Create(&Session{ID: "rm1", Name: "To Remove", Messages: "[]", CreatedAt: 100, UpdatedAt: 100})
+	h.db.Create(&model.UserSession{ID: "rm1", DeviceName: "To Remove", State: "{}", CreatedAt: 100, UpdatedAt: 100, ExpiresAt: 999999})
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("DELETE", "/api/session/rm1", nil)
@@ -216,7 +186,7 @@ func TestSessionRemove(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var session Session
+	var session model.UserSession
 	err := h.db.First(&session, "id = ?", "rm1").Error
 	assert.Error(t, err)
 }
@@ -231,20 +201,10 @@ func TestSessionRemoveNotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-func TestSessionRemoveMissingID(t *testing.T) {
-	_, r := setupTestSessionHandler(t)
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("DELETE", "/api/session/", nil)
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusNotFound, w.Code)
-}
-
 func TestSessionIntegration(t *testing.T) {
 	_, r := setupTestSessionHandler(t)
 
-	newBody := `{"name":"Integration Test"}`
+	newBody := `{"device_name":"Integration Test"}`
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/api/session", bytes.NewBufferString(newBody))
 	req.Header.Set("Content-Type", "application/json")
@@ -263,9 +223,9 @@ func TestSessionIntegration(t *testing.T) {
 	sessions := listResult["sessions"].([]any)
 	assert.Len(t, sessions, 1)
 
-	saveBody := `{"messages":"[{\"role\":\"assistant\",\"content\":\"Hello!\"}]"}`
+	saveBody := `{"state":"{\"test\":true}"}`
 	w = httptest.NewRecorder()
-	req, _ = http.NewRequest("PUT", "/api/session/"+sessionID, bytes.NewBufferString(saveBody))
+	req, _ = http.NewRequest("PUT", "/api/session/"+sessionID+"/state", bytes.NewBufferString(saveBody))
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -274,9 +234,9 @@ func TestSessionIntegration(t *testing.T) {
 	req, _ = http.NewRequest("GET", "/api/session/"+sessionID, nil)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
-	var session Session
+	var session model.UserSession
 	json.Unmarshal(w.Body.Bytes(), &session)
-	assert.Contains(t, session.Messages, "Hello!")
+	assert.Contains(t, session.State, "test")
 
 	w = httptest.NewRecorder()
 	req, _ = http.NewRequest("DELETE", "/api/session/"+sessionID, nil)
@@ -290,5 +250,3 @@ func TestSessionIntegration(t *testing.T) {
 	sessions = listResult["sessions"].([]any)
 	assert.Len(t, sessions, 0)
 }
-
-var _ = os.Remove

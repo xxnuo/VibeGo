@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/xxnuo/vibego/internal/model"
 	"gorm.io/gorm"
 )
 
@@ -25,7 +26,7 @@ type webTTYInstance struct {
 type activeTerminal struct {
 	ID            string
 	PTY           slave
-	Session       *TerminalSession
+	Session       *model.TerminalSession
 	WebTTYs       sync.Map
 	Done          chan struct{}
 	historyBuffer *historyBuffer
@@ -91,15 +92,16 @@ func (m *Manager) Create(opts CreateOptions) (*TerminalInfo, error) {
 	}
 
 	now := time.Now().Unix()
-	session := &TerminalSession{
+	session := &model.TerminalSession{
 		ID:        uuid.New().String(),
+		UserID:    opts.UserID,
 		Name:      opts.Name,
 		Shell:     m.shell,
 		Cwd:       cwd,
 		Cols:      cols,
 		Rows:      rows,
-		Status:    StatusActive,
-		PTYStatus: PTYStatusRunning,
+		Status:    model.StatusActive,
+		PTYStatus: model.PTYStatusRunning,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -119,7 +121,7 @@ func (m *Manager) Create(opts CreateOptions) (*TerminalInfo, error) {
 		bufferSize:    m.bufferSize,
 		encoder:       base64.StdEncoding,
 	}
-	active.ptyStatus.Store(PTYStatusRunning)
+	active.ptyStatus.Store(model.PTYStatusRunning)
 
 	m.terminals.Store(session.ID, active)
 
@@ -131,8 +133,8 @@ func (m *Manager) Create(opts CreateOptions) (*TerminalInfo, error) {
 }
 
 func (m *Manager) markClosed(id string) {
-	m.db.Model(&TerminalSession{}).Where("id = ?", id).Updates(map[string]any{
-		"status":     StatusClosed,
+	m.db.Model(&model.TerminalSession{}).Where("id = ?", id).Updates(map[string]any{
+		"status":     model.StatusClosed,
 		"updated_at": time.Now().Unix(),
 	})
 }
@@ -174,7 +176,7 @@ func (m *Manager) Resize(id string, cols, rows int) error {
 		return err
 	}
 
-	m.db.Model(&TerminalSession{}).Where("id = ?", id).Updates(map[string]any{
+	m.db.Model(&model.TerminalSession{}).Where("id = ?", id).Updates(map[string]any{
 		"cols":       cols,
 		"rows":       rows,
 		"updated_at": time.Now().Unix(),
@@ -205,9 +207,9 @@ func (m *Manager) Close(id string) error {
 	at.PTY.Close()
 	close(at.Done)
 
-	m.db.Model(&TerminalSession{}).Where("id = ?", id).Updates(map[string]any{
-		"status":     StatusClosed,
-		"pty_status": PTYStatusExited,
+	m.db.Model(&model.TerminalSession{}).Where("id = ?", id).Updates(map[string]any{
+		"status":     model.StatusClosed,
+		"pty_status": model.PTYStatusExited,
 		"updated_at": time.Now().Unix(),
 	})
 
@@ -216,8 +218,8 @@ func (m *Manager) Close(id string) error {
 
 func (m *Manager) Delete(id string) error {
 	m.Close(id)
-	m.db.Where("session_id = ?", id).Delete(&TerminalHistory{})
-	m.db.Where("id = ?", id).Delete(&TerminalSession{})
+	m.db.Where("session_id = ?", id).Delete(&model.TerminalHistory{})
+	m.db.Where("id = ?", id).Delete(&model.TerminalSession{})
 	return nil
 }
 
@@ -260,10 +262,10 @@ func (m *Manager) ptyReadLoop(at *activeTerminal) {
 func (m *Manager) monitorPTY(at *activeTerminal, pty *localCommand) {
 	<-pty.ptyClosed
 
-	at.ptyStatus.Store(PTYStatusExited)
+	at.ptyStatus.Store(model.PTYStatusExited)
 
-	m.db.Model(&TerminalSession{}).Where("id = ?", at.ID).Updates(map[string]any{
-		"pty_status": PTYStatusExited,
+	m.db.Model(&model.TerminalSession{}).Where("id = ?", at.ID).Updates(map[string]any{
+		"pty_status": model.PTYStatusExited,
 		"updated_at": time.Now().Unix(),
 	})
 
@@ -273,7 +275,7 @@ func (m *Manager) monitorPTY(at *activeTerminal, pty *localCommand) {
 }
 
 func (m *Manager) List() ([]TerminalInfo, error) {
-	var sessions []TerminalSession
+	var sessions []model.TerminalSession
 	if err := m.db.Order("updated_at DESC").Find(&sessions).Error; err != nil {
 		return nil, err
 	}
@@ -376,9 +378,9 @@ func (m *Manager) replayHistory(at *activeTerminal, mst master) error {
 }
 
 func (m *Manager) CleanupOnStart() {
-	m.db.Model(&TerminalSession{}).Where("pty_status = ?", PTYStatusRunning).Updates(map[string]any{
-		"status":     StatusClosed,
-		"pty_status": PTYStatusExited,
+	m.db.Model(&model.TerminalSession{}).Where("pty_status = ?", model.PTYStatusRunning).Updates(map[string]any{
+		"status":     model.StatusClosed,
+		"pty_status": model.PTYStatusExited,
 		"updated_at": time.Now().Unix(),
 	})
 }

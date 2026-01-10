@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
-import { Settings, Sun, Moon, Monitor, Terminal, Globe, Eye, EyeOff, List, Grid, AlignLeft, WrapText } from 'lucide-react';
+import { Settings, Sun, Moon, Monitor, Terminal, Globe, Eye, EyeOff, List, Grid, AlignLeft, WrapText, X } from 'lucide-react';
 import { useSettingsStore, SETTING_CATEGORIES, getSettingsByCategory, type SettingSchema } from '@/lib/settings';
 import { useTranslation, type Locale } from '@/lib/i18n';
+import { useFrameStore } from '@/stores/frameStore';
 
 const SettingItem: React.FC<{
   schema: SettingSchema;
@@ -119,10 +120,26 @@ const SettingsPage: React.FC = () => {
   const { settings, init, set, loading } = useSettingsStore();
   const locale = (settings.locale || 'zh') as Locale;
   const t = useTranslation(locale);
+  const setHeaderConfig = useFrameStore((s) => s.setHeaderConfig);
+  const removeGroup = useFrameStore((s) => s.removeGroup);
 
   useEffect(() => {
     init();
   }, [init]);
+
+  useEffect(() => {
+    setHeaderConfig({
+      leftButton: { icon: <Settings size={18} />, variant: 'accent' },
+      title: t('common.settings'),
+      rightButton: {
+        icon: <X size={18} />,
+        onClick: () => removeGroup('settings'),
+        variant: 'ghost',
+      },
+      showTabs: false,
+    });
+    return () => setHeaderConfig(null);
+  }, [t, setHeaderConfig, removeGroup]);
 
   if (loading) {
     return (
@@ -135,13 +152,6 @@ const SettingsPage: React.FC = () => {
   return (
     <div className="h-full overflow-y-auto bg-ide-bg">
       <div className="max-w-2xl mx-auto p-4">
-        <div className="flex items-center gap-3 mb-6 pb-4 border-b border-ide-border">
-          <div className="p-2 bg-ide-accent rounded-lg">
-            <Settings size={20} className="text-ide-bg" />
-          </div>
-          <h1 className="text-lg font-bold text-ide-text">{t('common.settings')}</h1>
-        </div>
-
         {SETTING_CATEGORIES.map((category) => {
           const categorySettings = getSettingsByCategory(category.key);
           if (categorySettings.length === 0) return null;

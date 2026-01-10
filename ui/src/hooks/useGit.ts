@@ -4,110 +4,89 @@ import { useGitStore } from '@/stores';
 
 export const gitKeys = {
   all: ['git'] as const,
-  repos: () => [...gitKeys.all, 'repos'] as const,
-  status: (id: string) => [...gitKeys.all, 'status', id] as const,
-  log: (id: string) => [...gitKeys.all, 'log', id] as const,
-  diff: (id: string, path: string) => [...gitKeys.all, 'diff', id, path] as const,
+  status: (path: string) => [...gitKeys.all, 'status', path] as const,
+  log: (path: string) => [...gitKeys.all, 'log', path] as const,
+  diff: (path: string, filePath: string) => [...gitKeys.all, 'diff', path, filePath] as const,
 };
 
-export function useGitRepos() {
+export function useGitStatus(path: string | null) {
   return useQuery({
-    queryKey: gitKeys.repos(),
-    queryFn: () => gitApi.list(),
+    queryKey: gitKeys.status(path || ''),
+    queryFn: () => gitApi.status(path!),
+    enabled: !!path,
   });
 }
 
-export function useGitStatus(id: string | null) {
+export function useGitLog(path: string | null, limit = 20) {
   return useQuery({
-    queryKey: gitKeys.status(id || ''),
-    queryFn: () => gitApi.status(id!),
-    enabled: !!id,
+    queryKey: gitKeys.log(path || ''),
+    queryFn: () => gitApi.log(path!, limit),
+    enabled: !!path,
   });
 }
 
-export function useGitLog(id: string | null, limit = 20) {
+export function useGitDiff(path: string | null, filePath: string) {
   return useQuery({
-    queryKey: gitKeys.log(id || ''),
-    queryFn: () => gitApi.log(id!, limit),
-    enabled: !!id,
-  });
-}
-
-export function useGitDiff(id: string | null, path: string) {
-  return useQuery({
-    queryKey: gitKeys.diff(id || '', path),
-    queryFn: () => gitApi.diff(id!, path),
-    enabled: !!id && !!path,
-  });
-}
-
-export function useGitBind() {
-  const queryClient = useQueryClient();
-  const setRepoId = useGitStore((s) => s.setRepoId);
-  return useMutation({
-    mutationFn: ({ path, remotes }: { path: string; remotes?: string }) =>
-      gitApi.bind(path, remotes),
-    onSuccess: (data) => {
-      setRepoId(data.id);
-      queryClient.invalidateQueries({ queryKey: gitKeys.repos() });
-    },
+    queryKey: gitKeys.diff(path || '', filePath),
+    queryFn: () => gitApi.diff(path!, filePath),
+    enabled: !!path && !!filePath,
   });
 }
 
 export function useGitAdd() {
   const queryClient = useQueryClient();
-  const repoId = useGitStore((s) => s.repoId);
+  const currentPath = useGitStore((s) => s.currentPath);
   return useMutation({
-    mutationFn: (files: string[]) => gitApi.add(repoId!, files),
+    mutationFn: (files: string[]) => gitApi.add(currentPath!, files),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: gitKeys.status(repoId!) });
+      queryClient.invalidateQueries({ queryKey: gitKeys.status(currentPath!) });
     },
   });
 }
 
 export function useGitReset() {
   const queryClient = useQueryClient();
-  const repoId = useGitStore((s) => s.repoId);
+  const currentPath = useGitStore((s) => s.currentPath);
   return useMutation({
-    mutationFn: (files?: string[]) => gitApi.reset(repoId!, files),
+    mutationFn: (files?: string[]) => gitApi.reset(currentPath!, files),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: gitKeys.status(repoId!) });
+      queryClient.invalidateQueries({ queryKey: gitKeys.status(currentPath!) });
     },
   });
 }
 
 export function useGitCommit() {
   const queryClient = useQueryClient();
-  const repoId = useGitStore((s) => s.repoId);
+  const currentPath = useGitStore((s) => s.currentPath);
   return useMutation({
     mutationFn: ({ message, author, email }: { message: string; author?: string; email?: string }) =>
-      gitApi.commit(repoId!, message, author, email),
+      gitApi.commit(currentPath!, message, author, email),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: gitKeys.status(repoId!) });
-      queryClient.invalidateQueries({ queryKey: gitKeys.log(repoId!) });
+      queryClient.invalidateQueries({ queryKey: gitKeys.status(currentPath!) });
+      queryClient.invalidateQueries({ queryKey: gitKeys.log(currentPath!) });
     },
   });
 }
 
 export function useGitCheckout() {
   const queryClient = useQueryClient();
-  const repoId = useGitStore((s) => s.repoId);
+  const currentPath = useGitStore((s) => s.currentPath);
   return useMutation({
-    mutationFn: (files: string[]) => gitApi.checkout(repoId!, files),
+    mutationFn: (files: string[]) => gitApi.checkout(currentPath!, files),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: gitKeys.status(repoId!) });
+      queryClient.invalidateQueries({ queryKey: gitKeys.status(currentPath!) });
     },
   });
 }
 
-export function useGitUndoCommit() {
+export function useGitUndo() {
   const queryClient = useQueryClient();
-  const repoId = useGitStore((s) => s.repoId);
+  const currentPath = useGitStore((s) => s.currentPath);
   return useMutation({
-    mutationFn: () => gitApi.undoCommit(repoId!),
+    mutationFn: () => gitApi.undo(currentPath!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: gitKeys.status(repoId!) });
-      queryClient.invalidateQueries({ queryKey: gitKeys.log(repoId!) });
+      queryClient.invalidateQueries({ queryKey: gitKeys.status(currentPath!) });
+      queryClient.invalidateQueries({ queryKey: gitKeys.log(currentPath!) });
     },
   });
 }

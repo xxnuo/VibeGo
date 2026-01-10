@@ -2,8 +2,6 @@ import type { FileNode, GitFileNode, TerminalSession } from '@/stores';
 
 const API_BASE = '/api';
 
-// --- File System ---
-
 interface BackendFile {
     name: string;
     path: string;
@@ -13,7 +11,6 @@ interface BackendFile {
     mod_time?: number;
 }
 
-// --- Filters ---
 const IGNORED_FILES = new Set(['.DS_Store', '.git', '__MACOSX', 'node_modules', 'dist', '.idea', '.vscode']);
 
 const isIgnored = (name: string) => {
@@ -41,7 +38,6 @@ export const getFileTree = async (path: string = '.'): Promise<FileNode[]> => {
         };
     };
 
-    // Flatten root: if request is for '.', return children directly
     if (path === '.' && root.children) {
         return root.children.map(transform).filter((n): n is FileNode => n !== null);
     }
@@ -66,60 +62,25 @@ export const writeFile = async (path: string, content: string): Promise<void> =>
     if (!res.ok) throw new Error('Failed to write file');
 };
 
-// --- Git ---
-
 interface GitStatusResponse {
     files: {
         path: string;
-        status: string; // "M", "A", "D", "?"
+        status: string;
         staged: boolean;
     }[];
 }
 
-let cachedRepoId: string | null = null;
+export const getGitStatus = async (repoPath: string): Promise<GitFileNode[]> => {
+    const res = await fetch(`${API_BASE}/git/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: repoPath }),
+        cache: 'no-store'
+    });
+    if (!res.ok) return [];
+    const data: GitStatusResponse = await res.json();
 
-const getRepoId = async (): Promise<string | null> => {
-    if (cachedRepoId) return cachedRepoId;
-    try {
-        const res = await fetch(`${API_BASE}/git`);
-        if (!res.ok) return null;
-        const data = await res.json();
-
-        if (data.repos && data.repos.length > 0) {
-            cachedRepoId = data.repos[0].id;
-            return cachedRepoId;
-        }
-
-        console.log("No git repos found, attempting to auto-bind '.'");
-        const bindRes = await fetch(`${API_BASE}/git/bind`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: '.' })
-        });
-
-        if (bindRes.ok) {
-            const bindData = await bindRes.json();
-            cachedRepoId = bindData.id;
-            return cachedRepoId;
-        } else {
-            console.warn("Failed to auto-bind git repo");
-        }
-
-    } catch (e) {
-        console.error("Failed to list/bind repos", e);
-    }
-    return null;
-}
-
-export const getGitStatus = async (): Promise<GitFileNode[]> => {
-    const repoId = await getRepoId();
-    if (!repoId) return [];
-
-    const statusRes = await fetch(`${API_BASE}/git/status?id=${repoId}`, { cache: 'no-store' });
-    if (!statusRes.ok) return [];
-    const statusData: GitStatusResponse = await statusRes.json();
-
-    return statusData.files
+    return data.files
         .filter(f => !isIgnored(f.path.split('/').pop() || ''))
         .map((f, idx) => ({
             id: `git-${idx}`,
@@ -130,42 +91,37 @@ export const getGitStatus = async (): Promise<GitFileNode[]> => {
         }));
 };
 
-export const getGitDiff = async (path: string): Promise<{ old: string, new: string }> => {
-    const repoId = await getRepoId();
-    if (!repoId) return { old: '', new: '' };
-
-    const res = await fetch(`${API_BASE}/git/diff?id=${repoId}&path=${encodeURIComponent(path)}`);
+export const getGitDiff = async (repoPath: string, filePath: string): Promise<{ old: string, new: string }> => {
+    const res = await fetch(`${API_BASE}/git/diff`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: repoPath, filePath })
+    });
     if (!res.ok) return { old: '', new: '' };
     return await res.json();
 };
 
-export const stageFile = async (files: string[]): Promise<void> => {
-    const repoId = await getRepoId();
-    if (!repoId) return;
+export const stageFile = async (repoPath: string, files: string[]): Promise<void> => {
     await fetch(`${API_BASE}/git/add`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: repoId, files })
+        body: JSON.stringify({ path: repoPath, files })
     });
 };
 
-export const unstageFile = async (): Promise<void> => {
-    const repoId = await getRepoId();
-    if (!repoId) return;
+export const unstageFile = async (repoPath: string): Promise<void> => {
     await fetch(`${API_BASE}/git/reset`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: repoId })
+        body: JSON.stringify({ path: repoPath })
     });
 };
 
-export const commitChanges = async (message: string): Promise<void> => {
-    const repoId = await getRepoId();
-    if (!repoId) return;
+export const commitChanges = async (repoPath: string, message: string): Promise<void> => {
     await fetch(`${API_BASE}/git/commit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: repoId, message })
+        body: JSON.stringify({ path: repoPath, message })
     });
 };
 
@@ -175,8 +131,6 @@ const mapGitStatus = (s: string): 'modified' | 'added' | 'deleted' => {
     if (s.includes('D')) return 'deleted';
     return 'modified';
 };
-
-// --- Terminal ---
 
 export const getTerminals = async (): Promise<TerminalSession[]> => {
     const res = await fetch(`${API_BASE}/terminal`);

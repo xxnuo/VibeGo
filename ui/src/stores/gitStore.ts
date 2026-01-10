@@ -10,14 +10,14 @@ export interface GitFileNode {
 }
 
 interface GitState {
-  repoId: string | null;
+  currentPath: string | null;
   files: GitFileNode[];
   currentBranch: string;
   branches: string[];
   commitMessage: string;
   isLoading: boolean;
 
-  setRepoId: (id: string | null) => void;
+  setCurrentPath: (path: string | null) => void;
   setFiles: (files: GitFileNode[]) => void;
   setCurrentBranch: (branch: string) => void;
   setBranches: (branches: string[]) => void;
@@ -26,14 +26,14 @@ interface GitState {
 }
 
 export const useGitStore = create<GitState>((set) => ({
-  repoId: null,
+  currentPath: null,
   files: [],
   currentBranch: 'main',
   branches: [],
   commitMessage: '',
   isLoading: false,
 
-  setRepoId: (id) => set({ repoId: id }),
+  setCurrentPath: (path) => set({ currentPath: path }),
   setFiles: (files) => set({ files }),
   setCurrentBranch: (branch) => set({ currentBranch: branch }),
   setBranches: (branches) => set({ branches }),

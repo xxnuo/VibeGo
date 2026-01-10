@@ -7,259 +7,134 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-git/go-git/v6"
 	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
-type GitRepository struct {
-	ID        string `gorm:"column:id;primaryKey" json:"id"`
-	Path      string `gorm:"column:path" json:"path"`
-	Remotes   string `gorm:"column:remotes;type:text" json:"remotes"`
-	CreatedAt int64  `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt int64  `gorm:"column:updated_at" json:"updated_at"`
-}
+type GitHandler struct{}
 
-type GitHandler struct {
-	db *gorm.DB
-}
-
-func NewGitHandler(db *gorm.DB) *GitHandler {
-	return &GitHandler{db: db}
+func NewGitHandler() *GitHandler {
+	return &GitHandler{}
 }
 
 func (h *GitHandler) Register(r *gin.RouterGroup) {
 	g := r.Group("/git")
-	g.POST("/bind", h.Bind)
-	g.DELETE("/:id", h.Unbind)
-	g.GET("", h.List)
-	g.POST("/init", h.New)
+	g.POST("/init", h.Init)
 	g.POST("/clone", h.Clone)
-	g.GET("/status", h.Status)
-	g.GET("/log", h.Log)
-	g.GET("/diff", h.Diff)
-	g.GET("/show", h.Show)
-	g.POST("/commit", h.Commit)
+	g.POST("/status", h.Status)
+	g.POST("/log", h.Log)
+	g.POST("/diff", h.Diff)
+	g.POST("/show", h.Show)
 	g.POST("/add", h.Add)
 	g.POST("/reset", h.Reset)
 	g.POST("/checkout", h.Checkout)
-	g.POST("/undo-commit", h.UndoCommit)
+	g.POST("/commit", h.Commit)
+	g.POST("/undo", h.UndoCommit)
 }
 
-func (h *GitHandler) openRepo(id string) (*git.Repository, error) {
-	if id == "" {
-		return nil, os.ErrInvalid
-	}
-	var repoModel GitRepository
-	if err := h.db.First(&repoModel, "id = ?", id).Error; err != nil {
-		return nil, err
-	}
-	// Verify it's a git repo or inside one
-	return git.PlainOpenWithOptions(repoModel.Path, &git.PlainOpenOptions{DetectDotGit: true})
+func (h *GitHandler) openRepo(path string) (*git.Repository, error) {
+	return git.PlainOpenWithOptions(path, &git.PlainOpenOptions{DetectDotGit: true})
 }
 
-// @Summary List bound repos
-// @Tags Git
-// @Produce json
-// @Param page query int false "Page number (default 1)"
-// @Param page_size query int false "Page size (default 20)"
-// @Success 200 {object} map[string]interface{}
-// @Router /api/git [get]
-func (h *GitHandler) List(c *gin.Context) {
-	page := 1
-	pageSize := 20
-	if p := c.Query("page"); p != "" {
-		if n, err := strconv.Atoi(p); err == nil && n > 0 {
-			page = n
-		}
-	}
-	if ps := c.Query("page_size"); ps != "" {
-		if n, err := strconv.Atoi(ps); err == nil && n > 0 && n <= 100 {
-			pageSize = n
-		}
-	}
-
-	var total int64
-	h.db.Model(&GitRepository{}).Count(&total)
-
-	var repos []GitRepository
-	offset := (page - 1) * pageSize
-	if err := h.db.Offset(offset).Limit(pageSize).Find(&repos).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"repos": repos, "page": page, "page_size": pageSize, "total": total})
-}
-
-type NewRepoRequest struct {
+type GitInitRequest struct {
 	Path string `json:"path" binding:"required"`
 }
 
-// @Summary Initialize new git repository
+// Init godoc
+// @Summary Initialize git repository
+// @Description Initialize a new git repository
 // @Tags Git
 // @Accept json
 // @Produce json
-// @Param request body NewRepoRequest true "New repo request"
-// @Success 200 {object} map[string]interface{}
+// @Param request body GitInitRequest true "Init request"
+// @Success 200 {object} map[string]bool
+// @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/git/new [post]
-func (h *GitHandler) New(c *gin.Context) {
-	var req NewRepoRequest
+// @Router /api/git/init [post]
+func (h *GitHandler) Init(c *gin.Context) {
+	var req GitInitRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Init repo
 	_, err := git.PlainInit(req.Path, false)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to init repo: " + err.Error()})
-		return
-	}
-
-	// Bind
-	now := time.Now().Unix()
-	repo := GitRepository{
-		ID:        uuid.New().String(),
-		Path:      req.Path,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
-	if err := h.db.Create(&repo).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": true, "id": repo.ID})
+
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
-type CloneRepoRequest struct {
+type GitCloneRequest struct {
 	URL  string `json:"url" binding:"required"`
 	Path string `json:"path" binding:"required"`
 }
 
+// Clone godoc
 // @Summary Clone git repository
+// @Description Clone a git repository from URL
 // @Tags Git
 // @Accept json
 // @Produce json
-// @Param request body CloneRepoRequest true "Clone repo request"
-// @Success 200 {object} map[string]interface{}
+// @Param request body GitCloneRequest true "Clone request"
+// @Success 200 {object} map[string]bool
+// @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /api/git/clone [post]
 func (h *GitHandler) Clone(c *gin.Context) {
-	var req CloneRepoRequest
+	var req GitCloneRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Clone repo
 	_, err := git.PlainClone(req.Path, &git.CloneOptions{
 		URL:      req.URL,
 		Progress: os.Stdout,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clone repo: " + err.Error()})
-		return
-	}
-
-	// Bind
-	now := time.Now().Unix()
-	repo := GitRepository{
-		ID:        uuid.New().String(),
-		Path:      req.Path,
-		Remotes:   req.URL, // Simple assumption: storing URL as Remotes for now
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
-	if err := h.db.Create(&repo).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": true, "id": repo.ID})
-}
 
-// @Summary Unbind repo
-// @Tags Git
-// @Produce json
-// @Param id path string true "Repo ID"
-// @Success 200 {object} map[string]bool
-// @Failure 500 {object} map[string]string
-// @Router /api/git/{id} [delete]
-func (h *GitHandler) Unbind(c *gin.Context) {
-	id := c.Param("id")
-	if err := h.db.Delete(&GitRepository{}, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
-type BindRepoRequest struct {
-	Path    string `json:"path" binding:"required"`
-	Remotes string `json:"remotes"`
+type GitPathRequest struct {
+	Path string `json:"path" binding:"required"`
 }
 
-// @Summary Bind git repository
+type FileStatus struct {
+	Path   string `json:"path"`
+	Status string `json:"status"`
+	Staged bool   `json:"staged"`
+}
+
+// Status godoc
+// @Summary Get git status
+// @Description Get the status of files in the repository
 // @Tags Git
 // @Accept json
 // @Produce json
-// @Param request body BindRepoRequest true "Bind repo request"
+// @Param request body GitPathRequest true "Path request"
 // @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/git/bind [post]
-func (h *GitHandler) Bind(c *gin.Context) {
-	var req BindRepoRequest
+// @Router /api/git/status [post]
+func (h *GitHandler) Status(c *gin.Context) {
+	var req GitPathRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Verify path exists and is a git repo
-	if _, err := git.PlainOpenWithOptions(req.Path, &git.PlainOpenOptions{DetectDotGit: true}); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid git repository: " + err.Error()})
-		return
-	}
-
-	now := time.Now().Unix()
-	repo := GitRepository{
-		ID:        uuid.New().String(),
-		Path:      req.Path,
-		Remotes:   req.Remotes,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
-	if err := h.db.Create(&repo).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"ok": true, "id": repo.ID})
-}
-
-type FileStatus struct {
-	Path   string `json:"path"`
-	Status string `json:"status"` // "M", "A", "D", "?", etc.
-	Staged bool   `json:"staged"`
-}
-
-// @Summary Get git status
-// @Tags Git
-// @Produce json
-// @Param id query string true "Repo ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]string
-// @Router /api/git/status [get]
-func (h *GitHandler) Status(c *gin.Context) {
-	id := c.Query("id")
-	repo, err := h.openRepo(id)
+	repo, err := h.openRepo(req.Path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -279,32 +154,32 @@ func (h *GitHandler) Status(c *gin.Context) {
 
 	var fileStatuses []FileStatus
 	for path, s := range status {
-		// Staged status
 		if s.Staging != git.Unmodified {
-			code := string(s.Staging)
 			fileStatuses = append(fileStatuses, FileStatus{
 				Path:   path,
-				Status: code,
+				Status: string(s.Staging),
 				Staged: true,
 			})
 		}
-		// Worktree status
 		if s.Worktree != git.Unmodified {
-			code := string(s.Worktree)
 			fileStatuses = append(fileStatuses, FileStatus{
 				Path:   path,
-				Status: code,
+				Status: string(s.Worktree),
 				Staged: false,
 			})
 		}
 	}
 
-	// Sort by path
 	sort.Slice(fileStatuses, func(i, j int) bool {
 		return fileStatuses[i].Path < fileStatuses[j].Path
 	})
 
 	c.JSON(http.StatusOK, gin.H{"files": fileStatuses})
+}
+
+type GitLogRequest struct {
+	Path  string `json:"path" binding:"required"`
+	Limit int    `json:"limit"`
 }
 
 type CommitInfo struct {
@@ -314,25 +189,33 @@ type CommitInfo struct {
 	Date    string `json:"date"`
 }
 
-// @Summary Get git commit log
+// Log godoc
+// @Summary Get git log
+// @Description Get commit history
 // @Tags Git
+// @Accept json
 // @Produce json
-// @Param id query string true "Repo ID"
-// @Param limit query int false "Limit"
+// @Param request body GitLogRequest true "Log request"
 // @Success 200 {object} map[string]interface{}
-// @Router /api/git/log [get]
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/git/log [post]
 func (h *GitHandler) Log(c *gin.Context) {
-	id := c.Query("id")
-	repo, err := h.openRepo(id)
+	var req GitLogRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	repo, err := h.openRepo(req.Path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Get HEAD ref
 	ref, err := repo.Head()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "No HEAD found (empty repo?)"})
+		c.JSON(http.StatusOK, gin.H{"commits": []CommitInfo{}})
 		return
 	}
 
@@ -343,23 +226,21 @@ func (h *GitHandler) Log(c *gin.Context) {
 	}
 
 	var commits []CommitInfo
-	limit := 20 // Default limit
-	if l := c.Query("limit"); l != "" {
-		if n, err := strconv.Atoi(l); err == nil && n > 0 {
-			limit = n
-		}
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 20
 	}
 	count := 0
 
-	err = cIter.ForEach(func(c *object.Commit) error {
+	err = cIter.ForEach(func(commit *object.Commit) error {
 		if count >= limit {
 			return io.EOF
 		}
 		commits = append(commits, CommitInfo{
-			Hash:    c.Hash.String(),
-			Message: c.Message,
-			Author:  c.Author.Name,
-			Date:    c.Author.When.Format(time.RFC3339),
+			Hash:    commit.Hash.String(),
+			Message: commit.Message,
+			Author:  commit.Author.Name,
+			Date:    commit.Author.When.Format(time.RFC3339),
 		})
 		count++
 		return nil
@@ -372,108 +253,113 @@ func (h *GitHandler) Log(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"commits": commits})
 }
 
+type GitDiffRequest struct {
+	Path     string `json:"path" binding:"required"`
+	FilePath string `json:"filePath" binding:"required"`
+}
+
+// Diff godoc
 // @Summary Get file diff
+// @Description Get diff between working tree and HEAD for a file
 // @Tags Git
+// @Accept json
 // @Produce json
-// @Param id query string true "Repo ID"
-// @Param path query string true "File path"
-// @Success 200 {object} map[string]string
-// @Router /api/git/diff [get]
+// @Param request body GitDiffRequest true "Diff request"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/git/diff [post]
 func (h *GitHandler) Diff(c *gin.Context) {
-	id := c.Query("id")
-	path := c.Query("path")
-	if path == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "path is required"})
+	var req GitDiffRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	repo, err := h.openRepo(id)
+	repo, err := h.openRepo(req.Path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	headRef, err := repo.Head()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "No HEAD"})
-		return
-	}
-	headCommit, err := repo.CommitObject(headRef.Hash())
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	tree, err := headCommit.Tree()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Old content (HEAD)
 	var oldContent string
-	file, err := tree.File(path)
+	headRef, err := repo.Head()
 	if err == nil {
-		r, err := file.Reader()
+		headCommit, err := repo.CommitObject(headRef.Hash())
 		if err == nil {
-			buf := new(bytes.Buffer)
-			buf.ReadFrom(r)
-			oldContent = buf.String()
-			r.Close()
+			tree, err := headCommit.Tree()
+			if err == nil {
+				file, err := tree.File(req.FilePath)
+				if err == nil {
+					r, err := file.Reader()
+					if err == nil {
+						buf := new(bytes.Buffer)
+						buf.ReadFrom(r)
+						oldContent = buf.String()
+						r.Close()
+					}
+				}
+			}
 		}
 	}
 
-	// New content (Worktree/Disk)
-	// We read directly from disk for the "current" state
 	w, err := repo.Worktree()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	absPath := filepath.Join(w.Filesystem.Root(), path)
+
+	absPath := filepath.Join(w.Filesystem.Root(), req.FilePath)
 	newContentBytes, err := os.ReadFile(absPath)
 	if err != nil {
-		// File might be deleted
 		newContentBytes = []byte{}
 	}
-	newContent := string(newContentBytes)
 
 	c.JSON(http.StatusOK, gin.H{
-		"path": path,
+		"path": req.FilePath,
 		"old":  oldContent,
-		"new":  newContent,
+		"new":  string(newContentBytes),
 	})
 }
 
-// @Summary Show file content at specific ref
+type GitShowRequest struct {
+	Path     string `json:"path" binding:"required"`
+	FilePath string `json:"filePath" binding:"required"`
+	Ref      string `json:"ref"`
+}
+
+// Show godoc
+// @Summary Show file at ref
+// @Description Get file content at a specific ref
 // @Tags Git
+// @Accept json
 // @Produce json
-// @Param id query string true "Repo ID"
-// @Param path query string true "File path"
-// @Param ref query string false "Ref (default: HEAD)"
+// @Param request body GitShowRequest true "Show request"
 // @Success 200 {object} map[string]string
-// @Router /api/git/show [get]
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/git/show [post]
 func (h *GitHandler) Show(c *gin.Context) {
-	id := c.Query("id")
-	path := c.Query("path")
-	if path == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "path is required"})
+	var req GitShowRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	refStr := c.Query("ref")
-	if refStr == "" {
-		refStr = "HEAD"
+
+	if req.Ref == "" {
+		req.Ref = "HEAD"
 	}
 
-	repo, err := h.openRepo(id)
+	repo, err := h.openRepo(req.Path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Resolve ref
-	hash, err := repo.ResolveRevision(plumbing.Revision(refStr))
+	hash, err := repo.ResolveRevision(plumbing.Revision(req.Ref))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ref: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ref: " + err.Error()})
 		return
 	}
 
@@ -489,9 +375,9 @@ func (h *GitHandler) Show(c *gin.Context) {
 		return
 	}
 
-	file, err := tree.File(path)
+	file, err := tree.File(req.FilePath)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "File not found in tree"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
 		return
 	}
 
@@ -508,28 +394,30 @@ func (h *GitHandler) Show(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"content": buf.String()})
 }
 
-type GitActionRequest struct {
-	ID      string   `json:"id" binding:"required"`
-	Files   []string `json:"files"`
-	Message string   `json:"message"`
-	Author  string   `json:"author"`
-	Email   string   `json:"email"`
+type GitFilesRequest struct {
+	Path  string   `json:"path" binding:"required"`
+	Files []string `json:"files" binding:"required"`
 }
 
+// Add godoc
 // @Summary Stage files
+// @Description Add files to git staging area
 // @Tags Git
 // @Accept json
 // @Produce json
-// @Param request body GitActionRequest true "Files to add"
+// @Param request body GitFilesRequest true "Add request"
+// @Success 200 {object} map[string]bool
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Router /api/git/add [post]
 func (h *GitHandler) Add(c *gin.Context) {
-	var req GitActionRequest
+	var req GitFilesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	repo, err := h.openRepo(req.ID)
+	repo, err := h.openRepo(req.Path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -542,9 +430,8 @@ func (h *GitHandler) Add(c *gin.Context) {
 	}
 
 	for _, file := range req.Files {
-		_, err := w.Add(file)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add " + file + ": " + err.Error()})
+		if _, err := w.Add(file); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add " + file + ": " + err.Error()})
 			return
 		}
 	}
@@ -552,20 +439,30 @@ func (h *GitHandler) Add(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
-// @Summary Unstage files (Reset)
+type GitResetRequest struct {
+	Path  string   `json:"path" binding:"required"`
+	Files []string `json:"files"`
+}
+
+// Reset godoc
+// @Summary Unstage files
+// @Description Reset files from staging area
 // @Tags Git
 // @Accept json
 // @Produce json
-// @Param request body GitActionRequest true "Files to reset (empty for all)"
+// @Param request body GitResetRequest true "Reset request"
+// @Success 200 {object} map[string]bool
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Router /api/git/reset [post]
 func (h *GitHandler) Reset(c *gin.Context) {
-	var req GitActionRequest
+	var req GitResetRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	repo, err := h.openRepo(req.ID)
+	repo, err := h.openRepo(req.Path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -580,40 +477,44 @@ func (h *GitHandler) Reset(c *gin.Context) {
 	if len(req.Files) == 0 {
 		head, err := repo.Head()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot reset without HEAD"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "cannot reset without HEAD"})
 			return
 		}
-		err = w.Reset(&git.ResetOptions{Commit: head.Hash(), Mode: git.MixedReset})
-		if err != nil {
+		if err := w.Reset(&git.ResetOptions{Commit: head.Hash(), Mode: git.MixedReset}); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"ok": true, "message": "All changes unstaged"})
 	} else {
 		for _, file := range req.Files {
 			if _, err := w.Remove(file); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unstage " + file + ": " + err.Error()})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to unstage " + file + ": " + err.Error()})
 				return
 			}
 		}
-		c.JSON(http.StatusOK, gin.H{"ok": true, "message": "Files unstaged"})
 	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
-// @Summary Discard changes (Checkout file from index/HEAD)
+// Checkout godoc
+// @Summary Checkout files
+// @Description Discard changes in working directory
 // @Tags Git
 // @Accept json
 // @Produce json
-// @Param request body GitActionRequest true "Files to restore"
+// @Param request body GitFilesRequest true "Checkout request"
+// @Success 200 {object} map[string]bool
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Router /api/git/checkout [post]
 func (h *GitHandler) Checkout(c *gin.Context) {
-	var req GitActionRequest
+	var req GitFilesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	repo, err := h.openRepo(req.ID)
+	repo, err := h.openRepo(req.Path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -632,11 +533,6 @@ func (h *GitHandler) Checkout(c *gin.Context) {
 	}
 	baseDir := w.Filesystem.Root()
 
-	if len(req.Files) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No files specified to discard"})
-		return
-	}
-
 	for _, p := range req.Files {
 		entry, err := idx.Entry(p)
 		if err != nil {
@@ -649,7 +545,7 @@ func (h *GitHandler) Checkout(c *gin.Context) {
 
 		blob, err := repo.BlobObject(entry.Hash)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Blob not found: " + err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "blob not found: " + err.Error()})
 			return
 		}
 
@@ -662,13 +558,13 @@ func (h *GitHandler) Checkout(c *gin.Context) {
 			return io.ReadAll(r)
 		}()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Read error: " + err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "read error: " + err.Error()})
 			return
 		}
 
 		absP := filepath.Join(baseDir, p)
 		if err := os.WriteFile(absP, content, 0644); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Write error: " + err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "write error: " + err.Error()})
 			return
 		}
 	}
@@ -676,20 +572,32 @@ func (h *GitHandler) Checkout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
-// @Summary Commit staged changes
+type GitCommitRequest struct {
+	Path    string `json:"path" binding:"required"`
+	Message string `json:"message" binding:"required"`
+	Author  string `json:"author"`
+	Email   string `json:"email"`
+}
+
+// Commit godoc
+// @Summary Create commit
+// @Description Commit staged changes
 // @Tags Git
 // @Accept json
 // @Produce json
-// @Param request body GitActionRequest true "Commit message and author"
+// @Param request body GitCommitRequest true "Commit request"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Router /api/git/commit [post]
 func (h *GitHandler) Commit(c *gin.Context) {
-	var req GitActionRequest
+	var req GitCommitRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	repo, err := h.openRepo(req.ID)
+	repo, err := h.openRepo(req.Path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -703,11 +611,11 @@ func (h *GitHandler) Commit(c *gin.Context) {
 
 	author := req.Author
 	if author == "" {
-		author = "Code Vibe User"
+		author = "VibeGo User"
 	}
 	email := req.Email
 	if email == "" {
-		email = "user@codevibe.local"
+		email = "user@vibego.local"
 	}
 
 	hash, err := w.Commit(req.Message, &git.CommitOptions{
@@ -725,20 +633,25 @@ func (h *GitHandler) Commit(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true, "hash": hash.String()})
 }
 
-// @Summary Undo last commit (Soft reset to HEAD~1)
+// UndoCommit godoc
+// @Summary Undo last commit
+// @Description Soft reset to parent commit
 // @Tags Git
 // @Accept json
 // @Produce json
-// @Param request body GitActionRequest true "Repo ID"
-// @Router /api/git/undo-commit [post]
+// @Param request body GitPathRequest true "Path request"
+// @Success 200 {object} map[string]bool
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/git/undo [post]
 func (h *GitHandler) UndoCommit(c *gin.Context) {
-	var req GitActionRequest
+	var req GitPathRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	repo, err := h.openRepo(req.ID)
+	repo, err := h.openRepo(req.Path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -750,10 +663,9 @@ func (h *GitHandler) UndoCommit(c *gin.Context) {
 		return
 	}
 
-	// Resolve HEAD~1
 	head, err := repo.Head()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot find HEAD"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "cannot find HEAD"})
 		return
 	}
 
@@ -764,7 +676,7 @@ func (h *GitHandler) UndoCommit(c *gin.Context) {
 	}
 
 	if commit.NumParents() == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Initial commit cannot be undone"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "initial commit cannot be undone"})
 		return
 	}
 
@@ -774,15 +686,13 @@ func (h *GitHandler) UndoCommit(c *gin.Context) {
 		return
 	}
 
-	// Soft reset to parent (keeps changes in index/stage)
-	err = w.Reset(&git.ResetOptions{
+	if err := w.Reset(&git.ResetOptions{
 		Commit: parent.Hash,
 		Mode:   git.SoftReset,
-	})
-	if err != nil {
+	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"ok": true, "message": "Undid last commit (Soft Reset)"})
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

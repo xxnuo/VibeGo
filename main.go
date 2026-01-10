@@ -20,8 +20,7 @@ import (
 	"github.com/xxnuo/vibego/internal/handler"
 	"github.com/xxnuo/vibego/internal/logger"
 	"github.com/xxnuo/vibego/internal/middleware"
-	"github.com/xxnuo/vibego/internal/service/kv"
-	"github.com/xxnuo/vibego/internal/service/terminal"
+	"github.com/xxnuo/vibego/internal/model"
 	"github.com/xxnuo/vibego/internal/version"
 	"github.com/xxnuo/vibego/ui"
 )
@@ -72,23 +71,27 @@ func main() {
 
 	handler.NewSystemHandler().Register(r)
 
-	r.Use(middleware.Auth(cfg.Token))
-
 	db := config.GetDB(
-		&kv.KV{},
-		&handler.Session{},
-		&handler.GitRepository{},
-		&terminal.TerminalSession{},
-		&terminal.TerminalHistory{},
+		&model.User{},
+		&model.UserSession{},
+		&model.KV{},
+		&model.UserSetting{},
+		&model.TerminalSession{},
+		&model.TerminalHistory{},
 	)
 
 	api := r.Group("/api")
+
+	authHandler := handler.NewAuthHandler(db, cfg.Token)
+	authHandler.Register(api)
+
+	r.Use(middleware.Auth(cfg.Token))
 
 	handler.NewSettingsHandler(db).Register(api)
 	handler.NewSessionHandler(db).Register(api)
 	handler.NewFileHandler().Register(api)
 	handler.NewTerminalHandler(db, cfg.DefaultShell).Register(api)
-	handler.NewGitHandler(db).Register(api)
+	handler.NewGitHandler().Register(api)
 
 	distFS, err := ui.GetDistFS()
 	if err == nil {

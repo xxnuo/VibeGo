@@ -40,7 +40,7 @@ const MOCK_TERMINALS = [
 ];
 
 const App: React.FC = () => {
-  const { theme, locale, isMenuOpen, toggleTheme, toggleLocale, setMenuOpen } = useAppStore();
+  const { theme, locale, isMenuOpen, setMenuOpen } = useAppStore();
   const { terminals, activeTerminalId, setTerminals, addTerminal } = useTerminalStore();
   const resetPreview = usePreviewStore((s) => s.reset);
   const { rootPath, goToPath, currentPath } = useFileManagerStore();
@@ -51,7 +51,6 @@ const App: React.FC = () => {
   const activeTabId = useFrameStore((s) => s.getCurrentActiveTabId());
   const tabs = useFrameStore((s) => s.getCurrentTabs());
   const addCurrentTab = useFrameStore((s) => s.addCurrentTab);
-  const removeCurrentTab = useFrameStore((s) => s.removeCurrentTab);
   const openPreviewTab = useFrameStore((s) => s.openPreviewTab);
   const addWorkspaceGroup = useFrameStore((s) => s.addWorkspaceGroup);
   const addTerminalGroup = useFrameStore((s) => s.addTerminalGroup);
@@ -234,7 +233,6 @@ const App: React.FC = () => {
                 modTime: '',
                 extension: activeTab.title.includes('.') ? '.' + activeTab.title.split('.').pop() : '',
               }}
-              onClose={() => removeCurrentTab(activeTabId)}
             />
           );
         }
@@ -262,10 +260,7 @@ const App: React.FC = () => {
       <ProjectMenu
         isOpen={isMenuOpen}
         onClose={() => setMenuOpen(false)}
-        theme={theme}
-        toggleTheme={toggleTheme}
         locale={locale}
-        toggleLocale={toggleLocale}
         onOpenSettings={addSettingsGroup}
         onOpenDirectory={handleOpenDirectory}
         onNewTerminal={handleNewTerminal}

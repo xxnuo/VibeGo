@@ -9,7 +9,11 @@
     "home": "Home",
     "newGroup": "New Group",
     "openFolder": "Open Folder",
-    "newTerminal": "Terminal"
+    "newTerminal": "Terminal",
+    "close": "Close",
+    "cancel": "Cancel",
+    "create": "Create",
+    "rename": "Rename"
   },
   "sidebar": {
     "project": "Project",
@@ -31,6 +35,11 @@
   },
   "fileTree": {
     "projectRoot": "Project Root"
+  },
+  "preview": {
+    "notAvailable": "Preview not available for this file type",
+    "openAsText": "Open as Text",
+    "download": "Download"
   },
   "settings": {
     "category": {
@@ -66,5 +75,14 @@
       "label": "Word Wrap",
       "description": "Enable word wrapping in editor"
     }
+  },
+  "fileManager": {
+    "newFile": "New File",
+    "newFolder": "New Folder",
+    "enterName": "Enter name...",
+    "emptyFolder": "Empty folder"
+  },
+  "contextMenu": {
+    "closeGroup": "Close Group"
   }
 }

@@ -2,19 +2,9 @@ package terminal
 
 import (
 	"time"
+
+	"github.com/xxnuo/vibego/internal/model"
 )
-
-type TerminalHistory struct {
-	ID        int64  `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	SessionID string `gorm:"column:session_id;index" json:"session_id"`
-	Sequence  int64  `gorm:"column:sequence" json:"sequence"`
-	Data      []byte `gorm:"column:data" json:"data"`
-	CreatedAt int64  `gorm:"column:created_at" json:"created_at"`
-}
-
-func (TerminalHistory) TableName() string {
-	return "terminal_history"
-}
 
 func (m *Manager) flushHistoryToDB(at *activeTerminal) error {
 	data := at.historyBuffer.Read()
@@ -22,7 +12,7 @@ func (m *Manager) flushHistoryToDB(at *activeTerminal) error {
 		return nil
 	}
 
-	history := &TerminalHistory{
+	history := &model.TerminalHistory{
 		SessionID: at.ID,
 		Data:      data,
 		CreatedAt: time.Now().Unix(),
@@ -32,7 +22,7 @@ func (m *Manager) flushHistoryToDB(at *activeTerminal) error {
 		return err
 	}
 
-	m.db.Model(&TerminalSession{}).Where("id = ?", at.ID).Update("history_size", int64(len(data)))
+	m.db.Model(&model.TerminalSession{}).Where("id = ?", at.ID).Update("history_size", int64(len(data)))
 
 	if m.historyMaxRecords > 0 {
 		m.pruneOldHistoryRecords(at.ID)
@@ -43,7 +33,7 @@ func (m *Manager) flushHistoryToDB(at *activeTerminal) error {
 
 func (m *Manager) pruneOldHistoryRecords(sessionID string) error {
 	var count int64
-	m.db.Model(&TerminalHistory{}).Where("session_id = ?", sessionID).Count(&count)
+	m.db.Model(&model.TerminalHistory{}).Where("session_id = ?", sessionID).Count(&count)
 
 	if count <= int64(m.historyMaxRecords) {
 		return nil
@@ -52,7 +42,7 @@ func (m *Manager) pruneOldHistoryRecords(sessionID string) error {
 	toDelete := count - int64(m.historyMaxRecords)
 	return m.db.Where("session_id = ? AND id IN (SELECT id FROM terminal_history WHERE session_id = ? ORDER BY created_at ASC LIMIT ?)",
 		sessionID, sessionID, toDelete).
-		Delete(&TerminalHistory{}).Error
+		Delete(&model.TerminalHistory{}).Error
 }
 
 func (m *Manager) CleanupExpiredHistory() error {
@@ -61,7 +51,7 @@ func (m *Manager) CleanupExpiredHistory() error {
 	}
 
 	cutoff := time.Now().Add(-m.historyMaxAge).Unix()
-	return m.db.Where("created_at < ?", cutoff).Delete(&TerminalHistory{}).Error
+	return m.db.Where("created_at < ?", cutoff).Delete(&model.TerminalHistory{}).Error
 }
 
 func (m *Manager) flushHistory(at *activeTerminal) {
@@ -78,7 +68,7 @@ func (m *Manager) flushHistory(at *activeTerminal) {
 }
 
 func (m *Manager) loadHistoryFromDB(sessionID string) ([]byte, error) {
-	var histories []TerminalHistory
+	var histories []model.TerminalHistory
 	if err := m.db.Where("session_id = ?", sessionID).
 		Order("created_at ASC").
 		Find(&histories).Error; err != nil {

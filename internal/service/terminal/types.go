@@ -3,6 +3,8 @@ package terminal
 import (
 	"os"
 	"time"
+
+	"github.com/xxnuo/vibego/internal/model"
 )
 
 type TerminalInfo struct {
@@ -19,10 +21,11 @@ type TerminalInfo struct {
 }
 
 type CreateOptions struct {
-	Name string
-	Cwd  string
-	Cols int
-	Rows int
+	Name   string
+	Cwd    string
+	Cols   int
+	Rows   int
+	UserID string
 }
 
 type Connection struct {
@@ -63,7 +66,7 @@ func (c *ManagerConfig) applyDefaults() {
 	}
 }
 
-func sessionToInfo(s *TerminalSession) *TerminalInfo {
+func sessionToInfo(s *model.TerminalSession) *TerminalInfo {
 	return &TerminalInfo{
 		ID:        s.ID,
 		Name:      s.Name,

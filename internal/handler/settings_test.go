@@ -11,7 +11,8 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/xxnuo/vibego/internal/service/kv"
+	"github.com/xxnuo/vibego/internal/model"
+	"github.com/xxnuo/vibego/internal/service/settings"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -22,9 +23,8 @@ func setupTestSettingsHandler(t *testing.T) (*SettingsHandler, *gin.Engine) {
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&kv.KV{}))
-	store, err := kv.New(db)
-	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.UserSetting{}))
+	store := settings.New(db)
 	h := &SettingsHandler{store: store}
 	r := gin.New()
 	g := r.Group("/api")

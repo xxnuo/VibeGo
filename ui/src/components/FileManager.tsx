@@ -8,6 +8,8 @@ import { fileApi } from '@/api/file';
 import FileManagerBreadcrumb from './FileManagerBreadcrumb';
 import FileManagerToolbar from './FileManagerToolbar';
 import FileDetailSheet from './FileDetailSheet';
+import { useSettingsStore } from '@/lib/settings';
+import { useTranslation, type Locale } from '@/lib/i18n';
 
 function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -79,6 +81,9 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
     setDetailFile,
     viewMode,
   } = useFileManagerStore();
+
+  const locale = (useSettingsStore((s) => s.settings.locale) || 'zh') as Locale;
+  const t = useTranslation(locale);
 
   const [showNewDialog, setShowNewDialog] = useState<'file' | 'folder' | null>(null);
   const [newName, setNewName] = useState('');
@@ -265,7 +270,7 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
         ) : sortedFiles.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-ide-mute">
             <Folder size={32} className="mb-2 opacity-50" />
-            <span className="text-xs">Empty folder</span>
+            <span className="text-xs">{t('fileManager.emptyFolder')}</span>
           </div>
         ) : viewMode === 'list' ? (
           <div className="divide-y divide-ide-border">
@@ -316,13 +321,13 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-sm font-medium text-ide-text mb-3">
-              {renameFile ? 'Rename' : showNewDialog === 'file' ? 'New File' : 'New Folder'}
+              {renameFile ? t('common.rename') : showNewDialog === 'file' ? t('fileManager.newFile') : t('fileManager.newFolder')}
             </h3>
             <input
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="Enter name..."
+              placeholder={t('fileManager.enterName')}
               className="w-full px-3 py-2 bg-ide-bg border border-ide-border rounded-md text-sm text-ide-text mb-3"
               autoFocus
             />
@@ -331,13 +336,13 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
                 onClick={() => { setShowNewDialog(null); setRenameFile(null); setNewName(''); }}
                 className="flex-1 py-2 rounded-md bg-ide-bg text-ide-mute text-sm"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={renameFile ? handleRename : showNewDialog === 'file' ? handleNewFile : handleNewFolder}
                 className="flex-1 py-2 rounded-md bg-ide-accent text-ide-bg text-sm font-medium"
               >
-                {renameFile ? 'Rename' : 'Create'}
+                {renameFile ? t('common.rename') : t('common.create')}
               </button>
             </div>
           </div>

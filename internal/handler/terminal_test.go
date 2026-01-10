@@ -6,27 +6,26 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/gorilla/websocket"
+	"github.com/xxnuo/vibego/internal/model"
 	"github.com/xxnuo/vibego/internal/service/terminal"
 	"gorm.io/gorm"
 )
 
 func setupTestHandler(t *testing.T) (*TerminalHandler, func()) {
 	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
 
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(tmpDir+"/test.db"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
 
-	if err := db.AutoMigrate(&terminal.TerminalSession{}, &terminal.TerminalHistory{}); err != nil {
+	if err := db.AutoMigrate(&model.TerminalSession{}, &model.TerminalHistory{}); err != nil {
 		t.Fatalf("failed to migrate: %v", err)
 	}
 
@@ -111,11 +110,11 @@ func TestTerminalHandlerList(t *testing.T) {
 	for _, term := range terminals {
 		if term.ID == info1.ID || term.ID == info2.ID {
 			found = true
-			if term.Status != terminal.StatusActive {
-				t.Errorf("expected status %s, got %s", terminal.StatusActive, term.Status)
+			if term.Status != model.StatusActive {
+				t.Errorf("expected status %s, got %s", model.StatusActive, term.Status)
 			}
-			if term.PTYStatus != terminal.PTYStatusRunning {
-				t.Errorf("expected PTY status %s, got %s", terminal.PTYStatusRunning, term.PTYStatus)
+			if term.PTYStatus != model.PTYStatusRunning {
+				t.Errorf("expected PTY status %s, got %s", model.PTYStatusRunning, term.PTYStatus)
 			}
 		}
 	}
@@ -202,7 +201,7 @@ func TestTerminalHistoryPersistence(t *testing.T) {
 		t.Fatal("session not found")
 	}
 
-	if found.PTYStatus != terminal.PTYStatusRunning {
-		t.Errorf("expected PTY status %s, got %s", terminal.PTYStatusRunning, found.PTYStatus)
+	if found.PTYStatus != model.PTYStatusRunning {
+		t.Errorf("expected PTY status %s, got %s", model.PTYStatusRunning, found.PTYStatus)
 	}
 }

@@ -4,20 +4,16 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/xxnuo/vibego/internal/service/kv"
+	"github.com/xxnuo/vibego/internal/service/settings"
 	"gorm.io/gorm"
 )
 
 type SettingsHandler struct {
-	store *kv.Store
+	store *settings.Store
 }
 
 func NewSettingsHandler(db *gorm.DB) *SettingsHandler {
-	store, err := kv.New(db)
-	if err != nil {
-		panic(err)
-	}
-	return &SettingsHandler{store: store}
+	return &SettingsHandler{store: settings.New(db)}
 }
 
 func (h *SettingsHandler) Register(r *gin.RouterGroup) {
@@ -28,7 +24,9 @@ func (h *SettingsHandler) Register(r *gin.RouterGroup) {
 	g.POST("/reset", h.Reset)
 }
 
+// List godoc
 // @Summary List all settings
+// @Description Get all user settings as key-value pairs
 // @Tags Settings
 // @Produce json
 // @Success 200 {object} map[string]string
@@ -48,7 +46,9 @@ type SetRequest struct {
 	Value string `json:"value" binding:"required"`
 }
 
+// Set godoc
 // @Summary Set a setting
+// @Description Set a user setting by key
 // @Tags Settings
 // @Accept json
 // @Produce json
@@ -70,7 +70,9 @@ func (h *SettingsHandler) Set(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// Get godoc
 // @Summary Get a setting by key
+// @Description Get a user setting value by key
 // @Tags Settings
 // @Produce json
 // @Param key query string true "Setting key"
@@ -92,7 +94,9 @@ func (h *SettingsHandler) Get(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"key": key, "value": val})
 }
 
+// Reset godoc
 // @Summary Reset all settings
+// @Description Clear all user settings
 // @Tags Settings
 // @Produce json
 // @Success 200 {object} map[string]bool

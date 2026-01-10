@@ -1,7 +1,8 @@
-package terminal
+package model
 
 type TerminalSession struct {
 	ID          string `gorm:"column:id;primaryKey" json:"id"`
+	UserID      string `gorm:"column:user_id;index" json:"user_id"`
 	Name        string `gorm:"column:name" json:"name"`
 	Shell       string `gorm:"column:shell" json:"shell"`
 	Cwd         string `gorm:"column:cwd" json:"cwd"`

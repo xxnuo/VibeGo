@@ -1,8 +1,25 @@
 import { create } from 'zustand';
+import type { ReactNode } from 'react';
 
 export type GroupType = 'workspace' | 'terminal' | 'plugin' | 'settings';
 
 export type ViewType = 'files' | 'git' | 'terminal';
+
+export type HeaderButtonVariant = 'ghost' | 'accent' | 'outline';
+
+export interface HeaderButton {
+  icon: ReactNode;
+  label?: string;
+  onClick?: () => void;
+  variant?: HeaderButtonVariant;
+}
+
+export interface HeaderConfig {
+  leftButton?: HeaderButton;
+  title?: string;
+  rightButton?: HeaderButton;
+  showTabs?: boolean;
+}
 
 export interface TabItem {
   id: string;
@@ -56,7 +73,9 @@ export type PageGroup = WorkspaceGroup | TerminalGroup | PluginGroup | SettingsG
 interface FrameState {
   groups: PageGroup[];
   activeGroupId: string | null;
+  headerConfig: HeaderConfig | null;
 
+  setHeaderConfig: (config: HeaderConfig | null) => void;
   initDefaultGroups: () => void;
   addWorkspaceGroup: (path: string, name?: string) => void;
   addTerminalGroup: (name?: string) => void;
@@ -145,6 +164,9 @@ const getGroupActiveTabId = (group: PageGroup, view?: ViewType): string | null =
 export const useFrameStore = create<FrameState>((set, get) => ({
   groups: [],
   activeGroupId: null,
+  headerConfig: null,
+
+  setHeaderConfig: (config) => set({ headerConfig: config }),
 
   initDefaultGroups: () => {
     const { groups } = get();
