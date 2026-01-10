@@ -2,10 +2,10 @@ package handler
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/rs/zerolog/log"
 	"github.com/xxnuo/vibego/internal/service/terminal"
 	"gorm.io/gorm"
 )
@@ -23,14 +23,7 @@ func NewTerminalHandler(db *gorm.DB, shell string) *TerminalHandler {
 		manager: mgr,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
-				origin := r.Header.Get("Origin")
-				if origin == "" {
-					return true
-				}
-				return strings.HasPrefix(origin, "http://localhost") ||
-					strings.HasPrefix(origin, "http://127.0.0.1") ||
-					strings.HasPrefix(origin, "https://localhost") ||
-					strings.HasPrefix(origin, "https://127.0.0.1")
+				return true
 			},
 		},
 	}
@@ -164,14 +157,18 @@ func (h *TerminalHandler) WebSocket(c *gin.Context) {
 
 	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
+		log.Error().Err(err).Msg("Failed to upgrade websocket")
 		return
 	}
 
 	termConn, err := h.manager.Attach(id, conn, terminal.AttachOptions{Reactivate: true})
 	if err != nil {
+		log.Error().Err(err).Str("id", id).Msg("Failed to attach to terminal")
 		conn.Close()
 		return
 	}
+
+	log.Info().Str("id", id).Msg("Terminal attached via WebSocket")
 
 	<-termConn.Done
 }

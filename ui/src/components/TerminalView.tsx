@@ -76,8 +76,9 @@ const TerminalView: React.FC<TerminalViewProps> = ({ activeTerminalId }) => {
             }
         };
 
-        ws.onclose = () => {
-            term.write('\r\n\x1b[31mConnection Closed.\x1b[0m\r\n');
+        ws.onclose = (event) => {
+            console.log("WS Closed", event.code, event.reason);
+            term.write(`\r\n\x1b[31mConnection Closed (Code: ${event.code}).\x1b[0m\r\n`);
         };
 
         ws.onerror = (e) => {
@@ -105,7 +106,7 @@ const TerminalView: React.FC<TerminalViewProps> = ({ activeTerminalId }) => {
         return () => {
             window.removeEventListener('resize', handleResize);
             term.dispose();
-            if (ws.readyState === WebSocket.OPEN) {
+            if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
                 ws.close();
             }
         };
