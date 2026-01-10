@@ -36,7 +36,7 @@ func (m *wsMaster) Write(p []byte) (int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	err := m.conn.WriteMessage(websocket.BinaryMessage, p)
+	err := m.conn.WriteMessage(websocket.TextMessage, p)
 	if err != nil {
 		return 0, err
 	}

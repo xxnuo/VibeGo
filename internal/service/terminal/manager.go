@@ -3,6 +3,7 @@ package terminal
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -241,12 +242,15 @@ func (m *Manager) ptyReadLoop(at *activeTerminal) {
 			at.historyBuffer.Write(buf[:n])
 			at.historyMu.Unlock()
 
-			encoded := at.encoder.EncodeToString(buf[:n])
-			msg := append([]byte{MsgOutput}, []byte(encoded)...)
+			msg := WSMessage{
+				Type: MsgTypeCmd,
+				Data: at.encoder.EncodeToString(buf[:n]),
+			}
+			msgData, _ := json.Marshal(msg)
 
 			at.WebTTYs.Range(func(key, value any) bool {
 				instance := value.(*webTTYInstance)
-				instance.Master.Write(msg)
+				instance.Master.Write(msgData)
 				return true
 			})
 		}
@@ -387,9 +391,12 @@ func (m *Manager) sendHistoryOnly(id string, conn *websocket.Conn) (*Connection,
 	mst := newWSMaster(conn)
 
 	if len(historyData) > 0 {
-		encoded := base64.StdEncoding.EncodeToString(historyData)
-		msg := append([]byte{MsgOutput}, []byte(encoded)...)
-		mst.Write(msg)
+		msg := WSMessage{
+			Type: MsgTypeCmd,
+			Data: base64.StdEncoding.EncodeToString(historyData),
+		}
+		msgData, _ := json.Marshal(msg)
+		mst.Write(msgData)
 	}
 
 	doneCh := make(chan struct{})
@@ -410,9 +417,12 @@ func (m *Manager) replayHistory(at *activeTerminal, mst master) error {
 	}
 
 	if len(historyData) > 0 {
-		encoded := base64.StdEncoding.EncodeToString(historyData)
-		msg := append([]byte{MsgOutput}, []byte(encoded)...)
-		mst.Write(msg)
+		msg := WSMessage{
+			Type: MsgTypeCmd,
+			Data: base64.StdEncoding.EncodeToString(historyData),
+		}
+		msgData, _ := json.Marshal(msg)
+		mst.Write(msgData)
 	}
 
 	return nil

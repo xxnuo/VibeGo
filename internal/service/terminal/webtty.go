@@ -37,6 +37,23 @@ func newWebTTY(master master, slave slave, options ...webTTYOption) *webTTY {
 	return wt
 }
 
+func (wt *webTTY) sendOutput(data []byte) error {
+	msg := WSMessage{
+		Type: MsgTypeCmd,
+		Data: wt.encoder.EncodeToString(data),
+	}
+	return wt.sendJSON(msg)
+}
+
+func (wt *webTTY) sendJSON(msg WSMessage) error {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+	_, err = wt.masterWrite(data)
+	return err
+}
+
 func (wt *webTTY) Run(ctx context.Context) error {
 	if err := wt.sendInitMessage(); err != nil {
 		return err
@@ -87,10 +104,7 @@ func (wt *webTTY) slaveReadLoop() error {
 				wt.historyWriter.Write(buf[:n])
 			}
 
-			encoded := wt.encoder.EncodeToString(buf[:n])
-			msg := append([]byte{MsgOutput}, []byte(encoded)...)
-
-			if _, err := wt.masterWrite(msg); err != nil {
+			if err := wt.sendOutput(buf[:n]); err != nil {
 				return ErrMasterClosed
 			}
 		}
@@ -117,31 +131,34 @@ func (wt *webTTY) handleMessage(data []byte) error {
 		return nil
 	}
 
-	msgType := data[0]
-	payload := data[1:]
+	var msg WSMessage
+	if err := json.Unmarshal(data, &msg); err != nil {
+		return nil
+	}
 
-	switch msgType {
-	case MsgInput:
+	switch msg.Type {
+	case MsgTypeCmd:
 		if !wt.permitWrite {
 			return nil
 		}
-		decoded, err := wt.encoder.DecodeString(string(payload))
+		decoded, err := wt.encoder.DecodeString(msg.Data)
 		if err != nil {
-			decoded = payload
+			return nil
 		}
 		if _, err := wt.slave.Write(decoded); err != nil {
 			return ErrSlaveClosed
 		}
 
-	case MsgPing:
-		if _, err := wt.masterWrite([]byte{MsgPong}); err != nil {
-			return ErrMasterClosed
+	case MsgTypeHeartbeat:
+		resp := WSMessage{
+			Type:      MsgTypeHeartbeat,
+			Timestamp: msg.Timestamp,
 		}
+		wt.sendJSON(resp)
 
-	case MsgResize:
-		var resize ResizeMessage
-		if err := json.Unmarshal(payload, &resize); err == nil {
-			wt.slave.ResizeTerminal(resize.Cols, resize.Rows)
+	case MsgTypeResize:
+		if msg.Cols > 0 && msg.Rows > 0 {
+			wt.slave.ResizeTerminal(msg.Cols, msg.Rows)
 		}
 	}
 
@@ -149,13 +166,6 @@ func (wt *webTTY) handleMessage(data []byte) error {
 }
 
 func (wt *webTTY) sendInitMessage() error {
-	titleVars := wt.slave.WindowTitleVariables()
-	titleData, _ := json.Marshal(titleVars)
-	wt.masterWrite(append([]byte{MsgSetWindowTitle}, titleData...))
-
-	bufData, _ := json.Marshal(wt.bufferSize)
-	wt.masterWrite(append([]byte{MsgSetBufferSize}, bufData...))
-
 	return nil
 }
 

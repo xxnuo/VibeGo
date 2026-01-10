@@ -1,15 +1,18 @@
 package terminal
 
 const (
-	MsgInput  byte = '0'
-	MsgPing   byte = '2'
-	MsgResize byte = '4'
-
-	MsgOutput         byte = '1'
-	MsgPong           byte = '3'
-	MsgSetWindowTitle byte = '5'
-	MsgSetBufferSize  byte = '6'
+	MsgTypeCmd       = "cmd"
+	MsgTypeResize    = "resize"
+	MsgTypeHeartbeat = "heartbeat"
 )
+
+type WSMessage struct {
+	Type      string `json:"type"`
+	Data      string `json:"data,omitempty"`
+	Cols      int    `json:"cols,omitempty"`
+	Rows      int    `json:"rows,omitempty"`
+	Timestamp int64  `json:"timestamp,omitempty"`
+}
 
 type ResizeMessage struct {
 	Cols int `json:"cols"`

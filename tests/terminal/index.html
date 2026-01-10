@@ -174,25 +174,21 @@
         <div class="info">
             <h3>协议信息</h3>
             <pre id="protocolInfo">
-协议版本: WebTTY (基于 gotty)
+协议版本: JSON + Base64 (参考 1Panel)
 消息格式:
-  客户端 → 服务端:
-    '0' + base64(data)  = 输入
-    '2'                 = Ping
-    '4' + JSON          = Resize
+  客户端 → 服务端 (JSON):
+    {"type":"cmd","data":"base64..."}      = 输入
+    {"type":"resize","cols":80,"rows":24}  = 调整大小
+    {"type":"heartbeat","timestamp":123}   = 心跳
 
-  服务端 → 客户端:
-    '1' + base64(data)  = 输出 (Base64 编码)
-    '3'                 = Pong
-    '5' + JSON          = SetWindowTitle
-    '6' + JSON          = SetBufferSize
+  服务端 → 客户端 (JSON):
+    {"type":"cmd","data":"base64..."}      = 输出
+    {"type":"heartbeat","timestamp":123}   = 心跳响应
 
 特性:
-  WebTTY 桥接层架构
+  JSON 协议 + Base64 编码
   多客户端共享终端 (N:1)
-  Base64 编码输出
-  心跳机制
-  初始化消息
+  心跳保活机制 (10秒)
   动态调整窗口大小
   历史缓存和持久化 (10MB 环形缓冲区)
   PTY 进程状态监控
@@ -215,13 +211,7 @@
         let currentSessionId = null;
         let fitAddon = null;
         let sessionsCache = {};
-        const MsgInput = '0'.charCodeAt(0);
-        const MsgOutput = '1'.charCodeAt(0);
-        const MsgPing = '2'.charCodeAt(0);
-        const MsgPong = '3'.charCodeAt(0);
-        const MsgResize = '4'.charCodeAt(0);
-        const MsgSetWindowTitle = '5'.charCodeAt(0);
-        const MsgSetBufferSize = '6'.charCodeAt(0);
+        let heartbeatInterval = null;
 
         function log(msg) {
             const debugLog = document.getElementById('debugLog');
@@ -251,6 +241,12 @@
                 closeBtn.disabled = true;
                 deleteBtn.disabled = !currentSessionId;
                 reactivateBtn.disabled = true;
+            }
+        }
+
+        function sendMsg(msg) {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify(msg));
             }
         }
 
@@ -386,16 +382,15 @@
                 fitAddon.fit();
 
                 term.onData(data => {
-                    if (socket && socket.readyState === WebSocket.OPEN && !isReadOnly) {
-                        const encoded = btoa(unescape(encodeURIComponent(data)));
-                        const msg = new Uint8Array([MsgInput, ...new TextEncoder().encode(encoded)]);
-                        socket.send(msg);
+                    if (!isReadOnly) {
+                        sendMsg({ type: 'cmd', data: btoa(unescape(encodeURIComponent(data))) });
                     }
                 });
 
                 window.addEventListener('resize', () => {
                     if (fitAddon) {
                         fitAddon.fit();
+                        sendMsg({ type: 'resize', cols: term.cols, rows: term.rows });
                     }
                 });
             }
@@ -405,44 +400,35 @@
 
             const wsUrl = `ws://${window.location.host}/api/terminals/${sessionId}/ws${reactivate ? '?reactivate=true' : ''}`;
             socket = new WebSocket(wsUrl);
-            socket.binaryType = 'arraybuffer';
 
             socket.onopen = () => {
                 log('WebSocket 连接已建立');
                 updateStatus(true);
                 refreshSessions();
+                sendMsg({ type: 'resize', cols: term.cols, rows: term.rows });
+                heartbeatInterval = setInterval(() => {
+                    sendMsg({ type: 'heartbeat', timestamp: Date.now() });
+                }, 10000);
             };
 
             socket.onmessage = (event) => {
-                const data = new Uint8Array(event.data);
-                if (data.length === 0) return;
-
-                const msgType = data[0];
-                const payload = data.slice(1);
-
-                switch (msgType) {
-                    case MsgOutput:
-                        const encoded = new TextDecoder().decode(payload);
-                        const decoded = decodeURIComponent(escape(atob(encoded)));
-                        term.write(decoded);
-                        break;
-
-                    case MsgPong:
-                        log('收到 Pong');
-                        break;
-
-                    case MsgSetWindowTitle:
-                        const titleData = JSON.parse(new TextDecoder().decode(payload));
-                        log(`窗口标题: ${JSON.stringify(titleData)}`);
-                        break;
-
-                    case MsgSetBufferSize:
-                        const bufferSize = JSON.parse(new TextDecoder().decode(payload));
-                        log(`缓冲区大小: ${bufferSize}`);
-                        break;
-
-                    default:
-                        log(`未知消息类型: ${msgType} (${String.fromCharCode(msgType)})`);
+                try {
+                    const msg = JSON.parse(event.data);
+                    switch (msg.type) {
+                        case 'cmd':
+                            if (msg.data) {
+                                const decoded = decodeURIComponent(escape(atob(msg.data)));
+                                term.write(decoded);
+                            }
+                            break;
+                        case 'heartbeat':
+                            log(`心跳响应: ${msg.timestamp}`);
+                            break;
+                        default:
+                            log(`未知消息类型: ${msg.type}`);
+                    }
+                } catch (e) {
+                    log(`解析消息失败: ${e.message}`);
                 }
             };
 
@@ -453,10 +439,18 @@
             socket.onclose = () => {
                 log('WebSocket 连接已关闭');
                 updateStatus(false);
+                if (heartbeatInterval) {
+                    clearInterval(heartbeatInterval);
+                    heartbeatInterval = null;
+                }
             };
         }
 
         function disconnect() {
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
             if (socket) {
                 socket.close();
                 socket = null;

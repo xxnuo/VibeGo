@@ -6,6 +6,14 @@ import '@xterm/xterm/css/xterm.css';
 import { getTerminalWsUrl } from '../services/api';
 import type { TerminalSession } from '../types';
 
+interface WSMessage {
+    type: 'cmd' | 'resize' | 'heartbeat';
+    data?: string;
+    cols?: number;
+    rows?: number;
+    timestamp?: number;
+}
+
 interface TerminalViewProps {
     activeTerminalId: string;
     terminals: TerminalSession[];
@@ -16,16 +24,25 @@ const TerminalView: React.FC<TerminalViewProps> = ({ activeTerminalId }) => {
     const terminalRef = useRef<Terminal | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
+    const heartbeatRef = useRef<number | null>(null);
+
+    const sendMsg = (ws: WebSocket, msg: WSMessage) => {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(msg));
+        }
+    };
 
     useEffect(() => {
         if (!containerRef.current || !activeTerminalId) return;
 
-        // cleanup previous
         if (terminalRef.current) {
             terminalRef.current.dispose();
         }
         if (wsRef.current) {
             wsRef.current.close();
+        }
+        if (heartbeatRef.current) {
+            clearInterval(heartbeatRef.current);
         }
 
         const term = new Terminal({
@@ -33,9 +50,9 @@ const TerminalView: React.FC<TerminalViewProps> = ({ activeTerminalId }) => {
             fontSize: 14,
             fontFamily: 'Menlo, Monaco, "Courier New", monospace',
             theme: {
-                background: '#09090b', // zinc-950
-                foreground: '#d4d4d8', // zinc-300
-                cursor: '#22c55e', // green-500
+                background: '#09090b',
+                foreground: '#d4d4d8',
+                cursor: '#22c55e',
             }
         });
 
@@ -51,60 +68,60 @@ const TerminalView: React.FC<TerminalViewProps> = ({ activeTerminalId }) => {
         terminalRef.current = term;
         fitAddonRef.current = fitAddon;
 
-        // Connect WebSocket
         const wsUrl = getTerminalWsUrl(activeTerminalId);
-        console.log(`Connecting to terminal WS: ${wsUrl}`);
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
 
         ws.onopen = () => {
             term.write('\r\n\x1b[32mTarget Connected.\x1b[0m\r\n');
-            // Initial resize
             fitAddon.fit();
+            sendMsg(ws, { type: 'resize', cols: term.cols, rows: term.rows });
+
+            heartbeatRef.current = window.setInterval(() => {
+                sendMsg(ws, { type: 'heartbeat', timestamp: Date.now() });
+            }, 10000);
         };
 
         ws.onmessage = (event) => {
-            if (typeof event.data === 'string') {
+            try {
+                const msg: WSMessage = JSON.parse(event.data);
+                if (msg.type === 'cmd' && msg.data) {
+                    const decoded = atob(msg.data);
+                    term.write(decoded);
+                }
+            } catch {
                 term.write(event.data);
-            } else {
-                // Blob?
-                const reader = new FileReader();
-                reader.onload = () => {
-                    term.write(reader.result as string);
-                };
-                reader.readAsText(event.data);
             }
         };
 
         ws.onclose = (event) => {
-            console.log("WS Closed", event.code, event.reason);
             term.write(`\r\n\x1b[31mConnection Closed (Code: ${event.code}).\x1b[0m\r\n`);
+            if (heartbeatRef.current) {
+                clearInterval(heartbeatRef.current);
+            }
         };
 
-        ws.onerror = (e) => {
-            console.error("WS Error", e);
+        ws.onerror = () => {
             term.write('\r\n\x1b[31mConnection Error.\x1b[0m\r\n');
         };
 
         term.onData((data: string) => {
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.send(data);
-            }
+            sendMsg(ws, { type: 'cmd', data: btoa(data) });
         });
 
-        // Handle Window Resize
         const handleResize = () => {
             fitAddon.fit();
-            // TODO: Send resize to backend if supported
-            // ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+            sendMsg(ws, { type: 'resize', cols: term.cols, rows: term.rows });
         };
 
         window.addEventListener('resize', handleResize);
-        // Also resize on mount slightly delayed to ensure layout
         setTimeout(() => fitAddon.fit(), 100);
 
         return () => {
             window.removeEventListener('resize', handleResize);
+            if (heartbeatRef.current) {
+                clearInterval(heartbeatRef.current);
+            }
             term.dispose();
             if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
                 ws.close();
