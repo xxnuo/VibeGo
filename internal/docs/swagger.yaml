@@ -1,24 +1,5 @@
 basePath: /api
 definitions:
-  handler.BindRepoRequest:
-    properties:
-      path:
-        type: string
-      remotes:
-        type: string
-    required:
-    - path
-    type: object
-  handler.CloneRepoRequest:
-    properties:
-      path:
-        type: string
-      url:
-        type: string
-    required:
-    - path
-    - url
-    type: object
   handler.CloseTerminalRequest:
     properties:
       id:
@@ -325,33 +306,116 @@ definitions:
       path:
         type: string
     type: object
-  handler.GitActionRequest:
+  handler.GitCloneRequest:
+    properties:
+      path:
+        type: string
+      url:
+        type: string
+    required:
+    - path
+    - url
+    type: object
+  handler.GitCommitRequest:
     properties:
       author:
         type: string
       email:
         type: string
+      message:
+        type: string
+      path:
+        type: string
+    required:
+    - message
+    - path
+    type: object
+  handler.GitDiffRequest:
+    properties:
+      filePath:
+        type: string
+      path:
+        type: string
+    required:
+    - filePath
+    - path
+    type: object
+  handler.GitFilesRequest:
+    properties:
       files:
         items:
           type: string
         type: array
-      id:
-        type: string
-      message:
+      path:
         type: string
     required:
-    - id
+    - files
+    - path
     type: object
-  handler.NewRepoRequest:
+  handler.GitInitRequest:
     properties:
       path:
         type: string
     required:
     - path
     type: object
-  handler.NewSessionRequest:
+  handler.GitLogRequest:
     properties:
-      name:
+      limit:
+        type: integer
+      path:
+        type: string
+    required:
+    - path
+    type: object
+  handler.GitPathRequest:
+    properties:
+      path:
+        type: string
+    required:
+    - path
+    type: object
+  handler.GitResetRequest:
+    properties:
+      files:
+        items:
+          type: string
+        type: array
+      path:
+        type: string
+    required:
+    - path
+    type: object
+  handler.GitShowRequest:
+    properties:
+      filePath:
+        type: string
+      path:
+        type: string
+      ref:
+        type: string
+    required:
+    - filePath
+    - path
+    type: object
+  handler.LoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  handler.LoginResponse:
+    properties:
+      error:
+        type: string
+      ok:
+        type: boolean
+      session_id:
+        type: string
+      user_id:
+        type: string
+      username:
         type: string
     type: object
   handler.NewTerminalRequest:
@@ -365,26 +429,6 @@ definitions:
       rows:
         type: integer
     type: object
-  handler.SaveSessionRequest:
-    properties:
-      messages:
-        type: string
-      name:
-        type: string
-    type: object
-  handler.Session:
-    properties:
-      created_at:
-        type: integer
-      id:
-        type: string
-      messages:
-        type: string
-      name:
-        type: string
-      updated_at:
-        type: integer
-    type: object
   handler.SetRequest:
     properties:
       key:
@@ -394,6 +438,17 @@ definitions:
     required:
     - key
     - value
+    type: object
+  handler.StatusResponse:
+    properties:
+      need_login:
+        type: boolean
+      session_id:
+        type: string
+      user_id:
+        type: string
+      username:
+        type: string
     type: object
   handler.TerminalInfo:
     properties:
@@ -453,6 +508,60 @@ paths:
       summary: LBHeartbeat check
       tags:
       - System
+  /api/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user with username and password
+      parameters:
+      - description: Login request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.LoginResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.LoginResponse'
+      summary: User login
+      tags:
+      - Auth
+  /api/auth/logout:
+    post:
+      description: End user session
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+      summary: User logout
+      tags:
+      - Auth
+  /api/auth/status:
+    get:
+      description: Check if login is required and get current user info
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.StatusResponse'
+      summary: Check auth status
+      tags:
+      - Auth
   /api/file:
     delete:
       parameters:
@@ -1061,36 +1170,18 @@ paths:
       summary: Write file content
       tags:
       - File
-  /api/git:
-    get:
-      parameters:
-      - description: Page number (default 1)
-        in: query
-        name: page
-        type: integer
-      - description: Page size (default 20)
-        in: query
-        name: page_size
-        type: integer
-      produces:
+  /api/git/add:
+    post:
+      consumes:
       - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      summary: List bound repos
-      tags:
-      - Git
-  /api/git/{id}:
-    delete:
+      description: Add files to git staging area
       parameters:
-      - description: Repo ID
-        in: path
-        name: id
+      - description: Add request
+        in: body
+        name: request
         required: true
-        type: string
+        schema:
+          $ref: '#/definitions/handler.GitFilesRequest'
       produces:
       - application/json
       responses:
@@ -1100,95 +1191,83 @@ paths:
             additionalProperties:
               type: boolean
             type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: Internal Server Error
           schema:
             additionalProperties:
               type: string
             type: object
-      summary: Unbind repo
-      tags:
-      - Git
-  /api/git/add:
-    post:
-      consumes:
-      - application/json
-      parameters:
-      - description: Files to add
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.GitActionRequest'
-      produces:
-      - application/json
-      responses: {}
       summary: Stage files
-      tags:
-      - Git
-  /api/git/bind:
-    post:
-      consumes:
-      - application/json
-      parameters:
-      - description: Bind repo request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.BindRepoRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Bind git repository
       tags:
       - Git
   /api/git/checkout:
     post:
       consumes:
       - application/json
+      description: Discard changes in working directory
       parameters:
-      - description: Files to restore
+      - description: Checkout request
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/handler.GitActionRequest'
-      produces:
-      - application/json
-      responses: {}
-      summary: Discard changes (Checkout file from index/HEAD)
-      tags:
-      - Git
-  /api/git/clone:
-    post:
-      consumes:
-      - application/json
-      parameters:
-      - description: Clone repo request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.CloneRepoRequest'
+          $ref: '#/definitions/handler.GitFilesRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            additionalProperties: true
+            additionalProperties:
+              type: boolean
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Checkout files
+      tags:
+      - Git
+  /api/git/clone:
+    post:
+      consumes:
+      - application/json
+      description: Clone a git repository from URL
+      parameters:
+      - description: Clone request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.GitCloneRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
             type: object
         "500":
           description: Internal Server Error
@@ -1203,149 +1282,14 @@ paths:
     post:
       consumes:
       - application/json
+      description: Commit staged changes
       parameters:
-      - description: Commit message and author
+      - description: Commit request
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/handler.GitActionRequest'
-      produces:
-      - application/json
-      responses: {}
-      summary: Commit staged changes
-      tags:
-      - Git
-  /api/git/diff:
-    get:
-      parameters:
-      - description: Repo ID
-        in: query
-        name: id
-        required: true
-        type: string
-      - description: File path
-        in: query
-        name: path
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Get file diff
-      tags:
-      - Git
-  /api/git/log:
-    get:
-      parameters:
-      - description: Repo ID
-        in: query
-        name: id
-        required: true
-        type: string
-      - description: Limit
-        in: query
-        name: limit
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Get git commit log
-      tags:
-      - Git
-  /api/git/new:
-    post:
-      consumes:
-      - application/json
-      parameters:
-      - description: New repo request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.NewRepoRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Initialize new git repository
-      tags:
-      - Git
-  /api/git/reset:
-    post:
-      consumes:
-      - application/json
-      parameters:
-      - description: Files to reset (empty for all)
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.GitActionRequest'
-      produces:
-      - application/json
-      responses: {}
-      summary: Unstage files (Reset)
-      tags:
-      - Git
-  /api/git/show:
-    get:
-      parameters:
-      - description: Repo ID
-        in: query
-        name: id
-        required: true
-        type: string
-      - description: File path
-        in: query
-        name: path
-        required: true
-        type: string
-      - description: 'Ref (default: HEAD)'
-        in: query
-        name: ref
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Show file content at specific ref
-      tags:
-      - Git
-  /api/git/status:
-    get:
-      parameters:
-      - description: Repo ID
-        in: query
-        name: id
-        required: true
-        type: string
+          $ref: '#/definitions/handler.GitCommitRequest'
       produces:
       - application/json
       responses:
@@ -1360,176 +1304,273 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create commit
+      tags:
+      - Git
+  /api/git/diff:
+    post:
+      consumes:
+      - application/json
+      description: Get diff between working tree and HEAD for a file
+      parameters:
+      - description: Diff request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.GitDiffRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get file diff
+      tags:
+      - Git
+  /api/git/init:
+    post:
+      consumes:
+      - application/json
+      description: Initialize a new git repository
+      parameters:
+      - description: Init request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.GitInitRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Initialize git repository
+      tags:
+      - Git
+  /api/git/log:
+    post:
+      consumes:
+      - application/json
+      description: Get commit history
+      parameters:
+      - description: Log request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.GitLogRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get git log
+      tags:
+      - Git
+  /api/git/reset:
+    post:
+      consumes:
+      - application/json
+      description: Reset files from staging area
+      parameters:
+      - description: Reset request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.GitResetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Unstage files
+      tags:
+      - Git
+  /api/git/show:
+    post:
+      consumes:
+      - application/json
+      description: Get file content at a specific ref
+      parameters:
+      - description: Show request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.GitShowRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Show file at ref
+      tags:
+      - Git
+  /api/git/status:
+    post:
+      consumes:
+      - application/json
+      description: Get the status of files in the repository
+      parameters:
+      - description: Path request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.GitPathRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       summary: Get git status
       tags:
       - Git
-  /api/git/undo-commit:
+  /api/git/undo:
     post:
       consumes:
       - application/json
+      description: Soft reset to parent commit
       parameters:
-      - description: Repo ID
+      - description: Path request
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/handler.GitActionRequest'
+          $ref: '#/definitions/handler.GitPathRequest'
       produces:
       - application/json
-      responses: {}
-      summary: Undo last commit (Soft reset to HEAD~1)
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Undo last commit
       tags:
       - Git
-  /api/session:
-    get:
-      parameters:
-      - description: Page number (default 1)
-        in: query
-        name: page
-        type: integer
-      - description: Page size (default 20)
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: List all sessions
-      tags:
-      - Session
-    post:
-      consumes:
-      - application/json
-      parameters:
-      - description: New session request
-        in: body
-        name: request
-        schema:
-          $ref: '#/definitions/handler.NewSessionRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Create new session
-      tags:
-      - Session
-  /api/session/{id}:
-    delete:
-      parameters:
-      - description: Session ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              type: boolean
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Remove session
-      tags:
-      - Session
-    get:
-      parameters:
-      - description: Session ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handler.Session'
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Load session by ID
-      tags:
-      - Session
-    put:
-      consumes:
-      - application/json
-      parameters:
-      - description: Session ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Save session request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.SaveSessionRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              type: boolean
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Save session
-      tags:
-      - Session
   /api/settings/get:
     get:
+      description: Get a user setting value by key
       parameters:
       - description: Setting key
         in: query
@@ -1562,6 +1603,7 @@ paths:
       - Settings
   /api/settings/list:
     get:
+      description: Get all user settings as key-value pairs
       produces:
       - application/json
       responses:
@@ -1582,6 +1624,7 @@ paths:
       - Settings
   /api/settings/reset:
     post:
+      description: Clear all user settings
       produces:
       - application/json
       responses:
@@ -1604,6 +1647,7 @@ paths:
     post:
       consumes:
       - application/json
+      description: Set a user setting by key
       parameters:
       - description: Set request
         in: body

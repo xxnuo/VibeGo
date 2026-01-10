@@ -53,6 +53,89 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/auth/login": {
+            "post": {
+                "description": "Authenticate user with username and password",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "User login",
+                "parameters": [
+                    {
+                        "description": "Login request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.LoginResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handler.LoginResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/logout": {
+            "post": {
+                "description": "End user session",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "User logout",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "boolean"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/status": {
+            "get": {
+                "description": "Check if login is required and get current user info",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Check auth status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.StatusResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/file": {
             "delete": {
                 "produces": [
@@ -992,42 +1075,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/git": {
-            "get": {
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Git"
-                ],
-                "summary": "List bound repos",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Page number (default 1)",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Page size (default 20)",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
         "/api/git/add": {
             "post": {
+                "description": "Add files to git staging area",
                 "consumes": [
                     "application/json"
                 ],
@@ -1040,38 +1090,12 @@ const docTemplate = `{
                 "summary": "Stage files",
                 "parameters": [
                     {
-                        "description": "Files to add",
+                        "description": "Add request",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handler.GitActionRequest"
-                        }
-                    }
-                ],
-                "responses": {}
-            }
-        },
-        "/api/git/bind": {
-            "post": {
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Git"
-                ],
-                "summary": "Bind git repository",
-                "parameters": [
-                    {
-                        "description": "Bind repo request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.BindRepoRequest"
+                            "$ref": "#/definitions/handler.GitFilesRequest"
                         }
                     }
                 ],
@@ -1080,7 +1104,18 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "type": "object",
-                            "additionalProperties": true
+                            "additionalProperties": {
+                                "type": "boolean"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "500": {
@@ -1097,6 +1132,7 @@ const docTemplate = `{
         },
         "/api/git/checkout": {
             "post": {
+                "description": "Discard changes in working directory",
                 "consumes": [
                     "application/json"
                 ],
@@ -1106,23 +1142,52 @@ const docTemplate = `{
                 "tags": [
                     "Git"
                 ],
-                "summary": "Discard changes (Checkout file from index/HEAD)",
+                "summary": "Checkout files",
                 "parameters": [
                     {
-                        "description": "Files to restore",
+                        "description": "Checkout request",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handler.GitActionRequest"
+                            "$ref": "#/definitions/handler.GitFilesRequest"
                         }
                     }
                 ],
-                "responses": {}
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "boolean"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/api/git/clone": {
             "post": {
+                "description": "Clone a git repository from URL",
                 "consumes": [
                     "application/json"
                 ],
@@ -1135,12 +1200,12 @@ const docTemplate = `{
                 "summary": "Clone git repository",
                 "parameters": [
                     {
-                        "description": "Clone repo request",
+                        "description": "Clone request",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handler.CloneRepoRequest"
+                            "$ref": "#/definitions/handler.GitCloneRequest"
                         }
                     }
                 ],
@@ -1149,7 +1214,18 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "type": "object",
-                            "additionalProperties": true
+                            "additionalProperties": {
+                                "type": "boolean"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "500": {
@@ -1166,6 +1242,7 @@ const docTemplate = `{
         },
         "/api/git/commit": {
             "post": {
+                "description": "Commit staged changes",
                 "consumes": [
                     "application/json"
                 ],
@@ -1175,223 +1252,16 @@ const docTemplate = `{
                 "tags": [
                     "Git"
                 ],
-                "summary": "Commit staged changes",
+                "summary": "Create commit",
                 "parameters": [
                     {
-                        "description": "Commit message and author",
+                        "description": "Commit request",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handler.GitActionRequest"
+                            "$ref": "#/definitions/handler.GitCommitRequest"
                         }
-                    }
-                ],
-                "responses": {}
-            }
-        },
-        "/api/git/diff": {
-            "get": {
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Git"
-                ],
-                "summary": "Get file diff",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Repo ID",
-                        "name": "id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "File path",
-                        "name": "path",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/git/log": {
-            "get": {
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Git"
-                ],
-                "summary": "Get git commit log",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Repo ID",
-                        "name": "id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Limit",
-                        "name": "limit",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/git/new": {
-            "post": {
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Git"
-                ],
-                "summary": "Initialize new git repository",
-                "parameters": [
-                    {
-                        "description": "New repo request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.NewRepoRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/git/reset": {
-            "post": {
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Git"
-                ],
-                "summary": "Unstage files (Reset)",
-                "parameters": [
-                    {
-                        "description": "Files to reset (empty for all)",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.GitActionRequest"
-                        }
-                    }
-                ],
-                "responses": {}
-            }
-        },
-        "/api/git/show": {
-            "get": {
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Git"
-                ],
-                "summary": "Show file content at specific ref",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Repo ID",
-                        "name": "id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "File path",
-                        "name": "path",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Ref (default: HEAD)",
-                        "name": "ref",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/git/status": {
-            "get": {
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Git"
-                ],
-                "summary": "Get git status",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Repo ID",
-                        "name": "id",
-                        "in": "query",
-                        "required": true
                     }
                 ],
                 "responses": {
@@ -1410,63 +1280,6 @@ const docTemplate = `{
                                 "type": "string"
                             }
                         }
-                    }
-                }
-            }
-        },
-        "/api/git/undo-commit": {
-            "post": {
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Git"
-                ],
-                "summary": "Undo last commit (Soft reset to HEAD~1)",
-                "parameters": [
-                    {
-                        "description": "Repo ID",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.GitActionRequest"
-                        }
-                    }
-                ],
-                "responses": {}
-            }
-        },
-        "/api/git/{id}": {
-            "delete": {
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Git"
-                ],
-                "summary": "Unbind repo",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Repo ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "boolean"
-                            }
-                        }
                     },
                     "500": {
                         "description": "Internal Server Error",
@@ -1480,27 +1293,28 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/session": {
-            "get": {
+        "/api/git/diff": {
+            "post": {
+                "description": "Get diff between working tree and HEAD for a file",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Session"
+                    "Git"
                 ],
-                "summary": "List all sessions",
+                "summary": "Get file diff",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Page number (default 1)",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Page size (default 20)",
-                        "name": "page_size",
-                        "in": "query"
+                        "description": "Diff request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.GitDiffRequest"
+                        }
                     }
                 ],
                 "responses": {
@@ -1511,44 +1325,13 @@ const docTemplate = `{
                             "additionalProperties": true
                         }
                     },
-                    "500": {
-                        "description": "Internal Server Error",
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
                                 "type": "string"
                             }
-                        }
-                    }
-                }
-            },
-            "post": {
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Session"
-                ],
-                "summary": "Create new session",
-                "parameters": [
-                    {
-                        "description": "New session request",
-                        "name": "request",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/handler.NewSessionRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
                         }
                     },
                     "500": {
@@ -1563,43 +1346,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/session/{id}": {
-            "get": {
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Session"
-                ],
-                "summary": "Load session by ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Session ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handler.Session"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            },
-            "put": {
+        "/api/git/init": {
+            "post": {
+                "description": "Initialize a new git repository",
                 "consumes": [
                     "application/json"
                 ],
@@ -1607,24 +1356,17 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Session"
+                    "Git"
                 ],
-                "summary": "Save session",
+                "summary": "Initialize git repository",
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "Session ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Save session request",
+                        "description": "Init request",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handler.SaveSessionRequest"
+                            "$ref": "#/definitions/handler.GitInitRequest"
                         }
                     }
                 ],
@@ -1635,6 +1377,178 @@ const docTemplate = `{
                             "type": "object",
                             "additionalProperties": {
                                 "type": "boolean"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/git/log": {
+            "post": {
+                "description": "Get commit history",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Git"
+                ],
+                "summary": "Get git log",
+                "parameters": [
+                    {
+                        "description": "Log request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.GitLogRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/git/reset": {
+            "post": {
+                "description": "Reset files from staging area",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Git"
+                ],
+                "summary": "Unstage files",
+                "parameters": [
+                    {
+                        "description": "Reset request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.GitResetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "boolean"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/git/show": {
+            "post": {
+                "description": "Get file content at a specific ref",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Git"
+                ],
+                "summary": "Show file at ref",
+                "parameters": [
+                    {
+                        "description": "Show request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.GitShowRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
                             }
                         }
                     },
@@ -1657,22 +1571,83 @@ const docTemplate = `{
                         }
                     }
                 }
-            },
-            "delete": {
+            }
+        },
+        "/api/git/status": {
+            "post": {
+                "description": "Get the status of files in the repository",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Session"
+                    "Git"
                 ],
-                "summary": "Remove session",
+                "summary": "Get git status",
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "Session ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
+                        "description": "Path request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.GitPathRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/git/undo": {
+            "post": {
+                "description": "Soft reset to parent commit",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Git"
+                ],
+                "summary": "Undo last commit",
+                "parameters": [
+                    {
+                        "description": "Path request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.GitPathRequest"
+                        }
                     }
                 ],
                 "responses": {
@@ -1685,8 +1660,8 @@ const docTemplate = `{
                             }
                         }
                     },
-                    "404": {
-                        "description": "Not Found",
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1708,6 +1683,7 @@ const docTemplate = `{
         },
         "/api/settings/get": {
             "get": {
+                "description": "Get a user setting value by key",
                 "produces": [
                     "application/json"
                 ],
@@ -1757,6 +1733,7 @@ const docTemplate = `{
         },
         "/api/settings/list": {
             "get": {
+                "description": "Get all user settings as key-value pairs",
                 "produces": [
                     "application/json"
                 ],
@@ -1788,6 +1765,7 @@ const docTemplate = `{
         },
         "/api/settings/reset": {
             "post": {
+                "description": "Clear all user settings",
                 "produces": [
                     "application/json"
                 ],
@@ -1819,6 +1797,7 @@ const docTemplate = `{
         },
         "/api/settings/set": {
             "post": {
+                "description": "Set a user setting by key",
                 "consumes": [
                     "application/json"
                 ],
@@ -2066,35 +2045,6 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "handler.BindRepoRequest": {
-            "type": "object",
-            "required": [
-                "path"
-            ],
-            "properties": {
-                "path": {
-                    "type": "string"
-                },
-                "remotes": {
-                    "type": "string"
-                }
-            }
-        },
-        "handler.CloneRepoRequest": {
-            "type": "object",
-            "required": [
-                "path",
-                "url"
-            ],
-            "properties": {
-                "path": {
-                    "type": "string"
-                },
-                "url": {
-                    "type": "string"
-                }
-            }
-        },
         "handler.CloseTerminalRequest": {
             "type": "object",
             "required": [
@@ -2557,10 +2507,26 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.GitActionRequest": {
+        "handler.GitCloneRequest": {
             "type": "object",
             "required": [
-                "id"
+                "path",
+                "url"
+            ],
+            "properties": {
+                "path": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.GitCommitRequest": {
+            "type": "object",
+            "required": [
+                "message",
+                "path"
             ],
             "properties": {
                 "author": {
@@ -2569,21 +2535,48 @@ const docTemplate = `{
                 "email": {
                     "type": "string"
                 },
+                "message": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.GitDiffRequest": {
+            "type": "object",
+            "required": [
+                "filePath",
+                "path"
+            ],
+            "properties": {
+                "filePath": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.GitFilesRequest": {
+            "type": "object",
+            "required": [
+                "files",
+                "path"
+            ],
+            "properties": {
                 "files": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
                 },
-                "id": {
-                    "type": "string"
-                },
-                "message": {
+                "path": {
                     "type": "string"
                 }
             }
         },
-        "handler.NewRepoRequest": {
+        "handler.GitInitRequest": {
             "type": "object",
             "required": [
                 "path"
@@ -2594,10 +2587,93 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.NewSessionRequest": {
+        "handler.GitLogRequest": {
+            "type": "object",
+            "required": [
+                "path"
+            ],
+            "properties": {
+                "limit": {
+                    "type": "integer"
+                },
+                "path": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.GitPathRequest": {
+            "type": "object",
+            "required": [
+                "path"
+            ],
+            "properties": {
+                "path": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.GitResetRequest": {
+            "type": "object",
+            "required": [
+                "path"
+            ],
+            "properties": {
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "path": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.GitShowRequest": {
+            "type": "object",
+            "required": [
+                "filePath",
+                "path"
+            ],
+            "properties": {
+                "filePath": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "ref": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.LoginRequest": {
             "type": "object",
             "properties": {
-                "name": {
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.LoginResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "ok": {
+                    "type": "boolean"
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                },
+                "username": {
                     "type": "string"
                 }
             }
@@ -2619,37 +2695,6 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.SaveSessionRequest": {
-            "type": "object",
-            "properties": {
-                "messages": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "handler.Session": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "messages": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "integer"
-                }
-            }
-        },
         "handler.SetRequest": {
             "type": "object",
             "required": [
@@ -2661,6 +2706,23 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.StatusResponse": {
+            "type": "object",
+            "properties": {
+                "need_login": {
+                    "type": "boolean"
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                },
+                "username": {
                     "type": "string"
                 }
             }
