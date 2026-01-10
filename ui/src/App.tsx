@@ -1,14 +1,11 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import {
-  Menu, Files, GitGraph, Terminal, Plus, RefreshCw,
-  X, FileText, FolderOpen, Box, FileDiff, Cpu, Wifi
-} from 'lucide-react';
-import {
-  useAppStore, useEditorStore, useTerminalStore, usePreviewStore,
-  useFileManagerStore,
-  AppView, type GitFileNode, type FileItem
+  useAppStore, useTerminalStore, usePreviewStore,
+  useFileManagerStore, useFrameStore,
+  type GitFileNode, type FileItem
 } from '@/stores';
 
+import { AppFrame, NewGroupMenu } from '@/components/frame';
 import FileManager from '@/components/FileManager';
 import GitView from '@/components/GitView';
 import TerminalView from '@/components/TerminalView';
@@ -41,15 +38,22 @@ const MOCK_TERMINALS = [
 ];
 
 const App: React.FC = () => {
-  const { theme, locale, currentView, isMenuOpen, toggleTheme, toggleLocale, setCurrentView, setMenuOpen } = useAppStore();
-  const { tabs, activeTabId, openFileTab, closeTab, setActiveTabId } = useEditorStore();
-  const { terminals, activeTerminalId, setTerminals, setActiveTerminalId, addTerminal } = useTerminalStore();
-  const previewFile = usePreviewStore((s) => s.file);
+  const { theme, locale, isMenuOpen, toggleTheme, toggleLocale, setMenuOpen } = useAppStore();
+  const { terminals, activeTerminalId, setTerminals, addTerminal } = useTerminalStore();
   const resetPreview = usePreviewStore((s) => s.reset);
-  const { rootPath, goToPath } = useFileManagerStore();
+  const { rootPath, goToPath, currentPath } = useFileManagerStore();
 
-  const filesButtonRef = useRef<HTMLButtonElement>(null);
-  const lastFilesClickTime = useRef<number>(0);
+  const activeGroup = useFrameStore((s) => s.getActiveGroup());
+  const currentView = useFrameStore((s) => s.getCurrentView());
+  const activeTabId = useFrameStore((s) => s.getCurrentActiveTabId());
+  const tabs = useFrameStore((s) => s.getCurrentTabs());
+  const addCurrentTab = useFrameStore((s) => s.addCurrentTab);
+  const removeCurrentTab = useFrameStore((s) => s.removeCurrentTab);
+  const addWorkspaceGroup = useFrameStore((s) => s.addWorkspaceGroup);
+  const addTerminalGroup = useFrameStore((s) => s.addTerminalGroup);
+  const addPluginGroup = useFrameStore((s) => s.addPluginGroup);
+
+  const [isNewGroupMenuOpen, setNewGroupMenuOpen] = useState(false);
 
   useEffect(() => {
     if (terminals.length === 0) setTerminals(MOCK_TERMINALS);
@@ -74,254 +78,152 @@ const App: React.FC = () => {
     }
   }, [theme]);
 
-  const handleGitFileClick = (gitFile: GitFileNode) => {
-    openFileTab(gitFile.id, gitFile.name, 'diff', {
-      original: gitFile.originalContent,
-      modified: gitFile.modifiedContent
+  const handleGitFileClick = useCallback((gitFile: GitFileNode) => {
+    addCurrentTab({
+      id: `diff-${gitFile.id}`,
+      title: `${gitFile.name} [DIFF]`,
+      data: {
+        type: 'diff',
+        original: gitFile.originalContent,
+        modified: gitFile.modifiedContent
+      }
     });
-  };
-
-  const handleCloseTab = (e: React.MouseEvent, tabId: string) => {
-    e.stopPropagation();
-    closeTab(tabId);
-  };
+  }, [addCurrentTab]);
 
   const handleFileOpen = useCallback((file: FileItem) => {
-    openFileTab(file.path, file.name, 'code');
-  }, [openFileTab]);
+    addCurrentTab({
+      id: `tab-${file.path}`,
+      title: file.name,
+      data: { type: 'code', path: file.path }
+    });
+  }, [addCurrentTab]);
 
-  const handleBackToExplorer = useCallback(() => {
-    setActiveTabId(null);
+  const handleBackToList = useCallback(() => {
     resetPreview();
-  }, [setActiveTabId, resetPreview]);
-
-  const handleFilesButtonClick = useCallback(() => {
-    const now = Date.now();
-    if (now - lastFilesClickTime.current < 300) {
-      resetPreview();
-      setActiveTabId(null);
+    if (currentView === 'files') {
       goToPath(rootPath);
     }
-    lastFilesClickTime.current = now;
-    setCurrentView(AppView.FILES);
-  }, [setCurrentView, resetPreview, setActiveTabId, goToPath, rootPath]);
+  }, [resetPreview, currentView, goToPath, rootPath]);
 
-  const handleTopBarAction = useCallback(async () => {
-    switch (currentView) {
-      case AppView.FILES:
-        const newPath = prompt('New file name:');
-        if (newPath) {
-          const { currentPath } = useFileManagerStore.getState();
-          await fileApi.create({ path: `${currentPath}/${newPath}`, isDir: false });
-        }
-        break;
-      case AppView.TERMINAL:
-        addTerminal({ id: `term-${Date.now()}`, name: `shell-${terminals.length + 1}`, history: [] });
-        break;
-      case AppView.GIT:
-        break;
+  const handleTabAction = useCallback(async () => {
+    if (!activeGroup) return;
+
+    if (activeGroup.type === 'workspace') {
+      switch (currentView) {
+        case 'files':
+          const newPath = prompt('New file name:');
+          if (newPath) {
+            await fileApi.create({ path: `${currentPath}/${newPath}`, isDir: false });
+          }
+          break;
+        case 'terminal':
+          addTerminal({ id: `term-${Date.now()}`, name: `shell-${terminals.length + 1}`, history: [] });
+          break;
+        case 'git':
+          break;
+      }
+    } else if (activeGroup.type === 'terminal') {
+      addCurrentTab({
+        id: `term-${Date.now()}`,
+        title: `Terminal ${tabs.length + 1}`,
+        data: { type: 'terminal' }
+      });
+    } else if (activeGroup.type === 'plugin') {
+      addCurrentTab({
+        id: `plugin-tab-${Date.now()}`,
+        title: `${activeGroup.name} ${tabs.length + 1}`,
+        data: { type: 'plugin', pluginId: activeGroup.pluginId }
+      });
     }
-  }, [currentView, terminals.length, addTerminal]);
+  }, [activeGroup, currentView, currentPath, terminals.length, addTerminal, addCurrentTab, tabs.length]);
+
+  const handleOpenDirectory = useCallback(() => {
+    const path = prompt('Enter directory path:');
+    if (path) {
+      addWorkspaceGroup(path);
+    }
+  }, [addWorkspaceGroup]);
+
+  const handleNewTerminal = useCallback(() => {
+    addTerminalGroup();
+  }, [addTerminalGroup]);
+
+  const handleNewPlugin = useCallback((pluginId: string) => {
+    addPluginGroup(pluginId, pluginId);
+  }, [addPluginGroup]);
 
   const activeTab = tabs.find(t => t.id === activeTabId);
 
-  const renderTopBar = () => (
-    <div className="h-12 bg-ide-bg border-b border-ide-border flex items-center overflow-x-auto no-scrollbar px-2 gap-2 shrink-0 transition-colors duration-300">
-      {currentView === AppView.FILES && (
-        <>
-          <button
-            onClick={handleBackToExplorer}
-            className={`shrink-0 h-8 w-8 flex items-center justify-center rounded-md border transition-all ${
-              activeTabId === null && !previewFile
-                ? 'bg-ide-accent text-ide-bg border-ide-accent shadow-glow'
-                : 'bg-transparent text-ide-mute border-transparent hover:bg-ide-panel hover:text-ide-text'
-            }`}
-            title="Back to Explorer"
-          >
-            <FolderOpen size={18} />
-          </button>
-          <div className="w-px h-5 bg-ide-border mx-1 shrink-0" />
-          {tabs.filter(tab => tab.type === 'code').map(tab => (
-            <div
-              key={tab.id}
-              onClick={() => setActiveTabId(tab.id)}
-              className={`shrink-0 px-3 h-8 rounded-md flex items-center gap-2 text-xs border transition-all cursor-pointer ${
-                activeTabId === tab.id
-                  ? 'bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm'
-                  : 'bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text'
-              }`}
-            >
-              <FileText size={14} />
-              <span className="max-w-[100px] truncate font-medium">{tab.title}</span>
-              <button onClick={(e) => handleCloseTab(e, tab.id)} className="hover:text-red-500 rounded-full p-0.5 hover:bg-ide-bg">
-                <X size={12} />
-              </button>
-            </div>
-          ))}
-        </>
-      )}
-
-      {currentView === AppView.GIT && (
-        <>
-          <button
-            onClick={() => setActiveTabId(null)}
-            className={`shrink-0 h-8 w-8 flex items-center justify-center rounded-md border transition-all ${
-              activeTabId === null
-                ? 'bg-ide-accent text-ide-bg border-ide-accent shadow-glow'
-                : 'bg-transparent text-ide-mute border-transparent hover:bg-ide-panel hover:text-ide-text'
-            }`}
-            title="Git Status"
-          >
-            <GitGraph size={18} />
-          </button>
-          <div className="w-px h-5 bg-ide-border mx-1 shrink-0" />
-          {tabs.filter(tab => tab.type === 'diff').map(tab => (
-            <div
-              key={tab.id}
-              onClick={() => setActiveTabId(tab.id)}
-              className={`shrink-0 px-3 h-8 rounded-md flex items-center gap-2 text-xs border transition-all cursor-pointer ${
-                activeTabId === tab.id
-                  ? 'bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm'
-                  : 'bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text'
-              }`}
-            >
-              <FileDiff size={14} />
-              <span className="max-w-[100px] truncate font-medium">{tab.title}</span>
-              <button onClick={(e) => handleCloseTab(e, tab.id)} className="hover:text-red-500 rounded-full p-0.5 hover:bg-ide-bg">
-                <X size={12} />
-              </button>
-            </div>
-          ))}
-        </>
-      )}
-
-      {currentView === AppView.TERMINAL && (
-        <>
-          {terminals.map(term => (
-            <button
-              key={term.id}
-              onClick={() => setActiveTerminalId(term.id)}
-              className={`shrink-0 px-4 h-8 rounded-md flex items-center gap-2 text-xs font-mono border ${
-                activeTerminalId === term.id
-                  ? 'bg-ide-panel border-ide-accent text-ide-accent shadow-glow'
-                  : 'bg-transparent border-transparent text-ide-mute'
-              }`}
-            >
-              <Box size={14} />
-              {term.name}
-            </button>
-          ))}
-        </>
-      )}
-
-      <button
-        onClick={handleTopBarAction}
-        className="shrink-0 w-8 h-8 rounded-md ml-auto text-ide-accent hover:bg-ide-accent hover:text-ide-bg flex items-center justify-center border border-ide-border transition-colors"
-        title={currentView === AppView.GIT ? 'Refresh' : 'New'}
-      >
-        {currentView === AppView.GIT ? <RefreshCw size={18} /> : <Plus size={18} />}
-      </button>
-    </div>
-  );
-
   const renderContent = () => {
-    if (currentView === AppView.GIT) {
-      if (activeTabId === null) {
-        return <GitView files={MOCK_GIT_FILES} onFileClick={handleGitFileClick} locale={locale} />;
-      }
-      if (activeTab?.type === 'diff' && activeTab.data) {
-        return <DiffView original={activeTab.data.original || ''} modified={activeTab.data.modified || ''} />;
-      }
-    }
+    if (!activeGroup) return null;
 
-    if (currentView === AppView.TERMINAL) {
+    if (activeGroup.type === 'terminal') {
       return <TerminalView activeTerminalId={activeTerminalId || ''} terminals={terminals} />;
     }
 
-    if (currentView === AppView.FILES) {
-      if (activeTabId !== null && activeTab) {
-        return (
-          <FilePreview
-            file={{
-              path: activeTab.fileId,
-              name: activeTab.title,
-              size: 0,
-              isDir: false,
-              isSymlink: false,
-              isHidden: false,
-              mode: '',
-              modTime: '',
-              extension: activeTab.title.includes('.') ? '.' + activeTab.title.split('.').pop() : '',
-            }}
-            onClose={() => closeTab(activeTabId)}
-          />
-        );
-      }
+    if (activeGroup.type === 'plugin') {
       return (
-        <FileManager
-          initialPath="."
-          onFileOpen={handleFileOpen}
-        />
+        <div className="h-full flex items-center justify-center text-ide-mute">
+          Plugin: {activeGroup.pluginId}
+        </div>
       );
     }
 
-    return (
-      <div className="h-full flex flex-col items-center justify-center text-ide-mute gap-4 border-2 border-dashed border-ide-border m-4 rounded-xl bg-ide-panel/30">
-        <FolderOpen size={48} className="text-ide-accent opacity-50" />
-        <p className="text-sm font-bold tracking-widest text-ide-accent">WAITING_FOR_INPUT...</p>
-      </div>
-    );
+    if (activeGroup.type === 'workspace') {
+      if (currentView === 'git') {
+        if (activeTabId === null) {
+          return <GitView files={MOCK_GIT_FILES} onFileClick={handleGitFileClick} locale={locale} />;
+        }
+        if (activeTab?.data?.type === 'diff') {
+          return <DiffView original={(activeTab.data.original as string) || ''} modified={(activeTab.data.modified as string) || ''} />;
+        }
+      }
+
+      if (currentView === 'terminal') {
+        return <TerminalView activeTerminalId={activeTerminalId || ''} terminals={terminals} />;
+      }
+
+      if (currentView === 'files') {
+        if (activeTabId !== null && activeTab) {
+          return (
+            <FilePreview
+              file={{
+                path: (activeTab.data?.path as string) || activeTab.id,
+                name: activeTab.title,
+                size: 0,
+                isDir: false,
+                isSymlink: false,
+                isHidden: false,
+                mode: '',
+                modTime: '',
+                extension: activeTab.title.includes('.') ? '.' + activeTab.title.split('.').pop() : '',
+              }}
+              onClose={() => removeCurrentTab(activeTabId)}
+            />
+          );
+        }
+        return (
+          <FileManager
+            initialPath={activeGroup.path}
+            onFileOpen={handleFileOpen}
+          />
+        );
+      }
+    }
+
+    return null;
   };
 
   return (
-    <div className="h-screen flex flex-col bg-ide-bg text-ide-text overflow-hidden font-mono transition-colors duration-300">
-      {renderTopBar()}
-      <main className="flex-1 overflow-hidden relative border-b border-ide-border">
+    <>
+      <AppFrame
+        onMenuOpen={() => setMenuOpen(true)}
+        onTabAction={handleTabAction}
+        onAddGroup={() => setNewGroupMenuOpen(true)}
+        onBackToList={handleBackToList}
+      >
         {renderContent()}
-      </main>
-      <footer className="h-14 bg-ide-panel border-t border-ide-border flex items-center justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.1)]">
-        <button
-          onClick={() => setMenuOpen(true)}
-          className="h-full px-4 flex items-center gap-3 hover:bg-ide-bg transition-colors border-r border-ide-border group"
-        >
-          <div className="p-1.5 rounded-md border border-ide-border group-hover:border-ide-accent group-hover:text-ide-accent transition-colors">
-            <Menu size={18} />
-          </div>
-          <span className="font-bold tracking-wider text-xs hidden sm:inline">MENU</span>
-        </button>
-        <div className="flex h-10 bg-ide-bg rounded-lg p-1 border border-ide-border gap-1">
-          <button
-            ref={filesButtonRef}
-            onClick={handleFilesButtonClick}
-            className={`px-3 h-full rounded flex items-center gap-2 transition-all ${currentView === AppView.FILES ? 'bg-ide-panel text-ide-accent shadow-sm' : 'text-ide-mute hover:text-ide-text'}`}
-            title="Double-click to go to root"
-          >
-            <Files size={16} />
-          </button>
-          <button
-            onClick={() => { setCurrentView(AppView.GIT); setActiveTabId(null); }}
-            className={`px-3 h-full rounded flex items-center gap-2 transition-all ${currentView === AppView.GIT ? 'bg-ide-panel text-ide-accent shadow-sm' : 'text-ide-mute hover:text-ide-text'}`}
-          >
-            <GitGraph size={16} />
-          </button>
-          <button
-            onClick={() => setCurrentView(AppView.TERMINAL)}
-            className={`px-3 h-full rounded flex items-center gap-2 transition-all ${currentView === AppView.TERMINAL ? 'bg-ide-panel text-ide-accent shadow-sm' : 'text-ide-mute hover:text-ide-text'}`}
-          >
-            <Terminal size={16} />
-          </button>
-        </div>
-        <div className="flex items-center gap-3 px-4 text-ide-mute text-[10px] font-bold">
-          <div className="hidden sm:flex items-center gap-1">
-            <Cpu size={14} />
-            <span>12%</span>
-          </div>
-          <div className="flex items-center gap-1 text-ide-accent animate-pulse">
-            <Wifi size={14} />
-            <span className="hidden sm:inline">ONLINE</span>
-          </div>
-        </div>
-      </footer>
+      </AppFrame>
       <ProjectMenu
         isOpen={isMenuOpen}
         onClose={() => setMenuOpen(false)}
@@ -330,7 +232,18 @@ const App: React.FC = () => {
         locale={locale}
         toggleLocale={toggleLocale}
       />
-    </div>
+      <NewGroupMenu
+        isOpen={isNewGroupMenuOpen}
+        onClose={() => setNewGroupMenuOpen(false)}
+        onOpenDirectory={handleOpenDirectory}
+        onNewTerminal={handleNewTerminal}
+        onNewPlugin={handleNewPlugin}
+        availablePlugins={[
+          { id: 'claude-code', name: 'Claude Code' },
+          { id: 'gemini-cli', name: 'Gemini CLI' },
+        ]}
+      />
+    </>
   );
 };
 

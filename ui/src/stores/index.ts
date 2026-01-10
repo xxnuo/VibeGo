@@ -5,3 +5,13 @@ export { useEditorStore, type EditorTab } from './editorStore';
 export { useAppStore, AppView, type Theme, type Locale } from './appStore';
 export { useFileManagerStore, type FileItem, type SortField, type SortOrder, type ViewMode } from './fileManagerStore';
 export { usePreviewStore, getPreviewType, getLanguageFromExtension, type PreviewType } from './previewStore';
+export {
+  useFrameStore,
+  type TabItem,
+  type PageGroup,
+  type WorkspaceGroup,
+  type TerminalGroup,
+  type PluginGroup,
+  type GroupType,
+  type ViewType,
+} from './frameStore';
