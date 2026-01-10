@@ -3,7 +3,8 @@ import { AppView } from './types';
 import type { FileNode, TerminalSession, EditorTab, Theme, Locale, GitFileNode } from './types';
 import { 
   Menu, Files, GitGraph, Terminal, Plus, 
-  X, FileText, LayoutTemplate, Box, FileDiff, Cpu, Wifi
+  X, FileText, LayoutTemplate, Box, FileDiff, Cpu,
+  Eye, Edit3
 } from 'lucide-react';
 import { useTranslation } from './utils/i18n';
 
@@ -36,12 +37,18 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.FILES);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
+  // Editor State
+  const [editorTabs, setEditorTabs] = useState<EditorTab[]>([]);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+
+  // Terminal State
+  const [terminals, setTerminals] = useState<TerminalSession[]>([]);
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
 
+  // Data State
   const [fileSystem, setFileSystem] = useState<FileNode[]>([]);
   const [gitFiles, setGitFiles] = useState<GitFileNode[]>([]);
-  const [terminals, setTerminals] = useState<TerminalSession[]>([]);
 
   const t = useTranslation(locale);
 
@@ -49,26 +56,14 @@ const App: React.FC = () => {
   useEffect(() => {
     const root = document.documentElement;
     const body = document.body;
-    
-    // Reset classes
     root.className = '';
     body.classList.remove('scanlines');
 
-    // Apply classes based on theme
     switch (theme) {
-        case 'light':
-            // Default, no class needed on root
-            break;
-        case 'dark':
-            root.classList.add('dark');
-            break;
-        case 'hacker':
-            root.classList.add('dark', 'hacker');
-            break;
-        case 'terminal':
-            root.classList.add('dark', 'terminal');
-            body.classList.add('scanlines');
-            break;
+        case 'light': break;
+        case 'dark': root.classList.add('dark'); break;
+        case 'hacker': root.classList.add('dark', 'hacker'); break;
+        case 'terminal': root.classList.add('dark', 'terminal'); body.classList.add('scanlines'); break;
     }
   }, [theme]);
 
@@ -109,8 +104,6 @@ const App: React.FC = () => {
       }
   };
 
-  const [openTabs, setOpenTabs] = useState<EditorTab[]>([]);
-  
   // --- Handlers ---
   const toggleTheme = () => {
     const order: Theme[] = ['light', 'dark', 'hacker', 'terminal'];
@@ -122,37 +115,34 @@ const App: React.FC = () => {
 
   const handleFileClick = async (node: FileNode) => {
     if (node.type === 'file') {
-      const existingTab = openTabs.find(t => t.fileId === node.id);
+      const existingTab = editorTabs.find(t => t.fileId === node.id);
       if (!existingTab) {
-        // Fetch content if needed
-        // We use node.id as path (from api.ts)
         let content = node.content;
         if (content === undefined) {
              try {
                  content = await api.readFile(node.id);
-                 // optimize: update fileSystem cache?
              } catch (e) {
                  content = "// Error loading file";
              }
         }
 
-        setOpenTabs([...openTabs, { 
+        setEditorTabs([...editorTabs, { 
             id: `tab-${node.id}`, 
             fileId: node.id, 
             title: node.name, 
             isDirty: false,
             type: 'code',
-            data: content // Cache content in tab
+            data: content 
         }]);
       }
       setActiveFileId(node.id);
-      setCurrentView(AppView.FILES);
+      setCurrentView(AppView.FILES); // Switch to files view context
     }
   };
 
   const handleGitFileClick = async (gitFile: GitFileNode) => {
      const tabId = `diff-${gitFile.id}`;
-     const existingTab = openTabs.find(t => t.id === tabId);
+     const existingTab = editorTabs.find(t => t.id === tabId);
      
      if (!existingTab) {
         let diffData = { old: '', new: '' };
@@ -163,7 +153,7 @@ const App: React.FC = () => {
             toast.error("Failed to fetch diff");
         }
 
-        setOpenTabs([...openTabs, {
+        setEditorTabs([...editorTabs, {
             id: tabId,
             fileId: gitFile.id,
             title: `${gitFile.name} [DIFF]`,
@@ -175,29 +165,16 @@ const App: React.FC = () => {
             }
         }]);
      }
-     
      setActiveFileId(gitFile.id);
   };
 
   const closeTab = (e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
-    const newTabs = openTabs.filter(t => t.id !== tabId);
-    setOpenTabs(newTabs);
+    const newTabs = editorTabs.filter(t => t.id !== tabId);
+    setEditorTabs(newTabs);
     
     // Check if we closed the active tab
-    // const activeTab = openTabs.find(t =>
-    //     (t.type === 'code' && t.fileId === activeFileId) || 
-    //     (t.type === 'diff' && t.fileId === activeFileId) ||
-    //     (t.id === tabId && t.fileId === activeFileId) // safety check
-    // );
-
-    // If the active tab was closed (or we can't find it anymore in the new list logic needs care)
-    // Simpler: if the currently active file ID corresponds to the closed tab
-    // We need to switch to another tab
-    
-    // Using tab ID is safer.
-    // Ensure we are comparing correctly.
-    const isClosingActive = openTabs.find(t => t.id === tabId)?.fileId === activeFileId;
+    const isClosingActive = editorTabs.find(t => t.id === tabId)?.fileId === activeFileId;
 
     if (isClosingActive) {
        if (newTabs.length > 0) {
@@ -210,10 +187,8 @@ const App: React.FC = () => {
   };
 
   const handleEditorChange = (newContent: string) => {
-      // Find active tab and update dirty state
       if (!activeFileId) return;
-
-      setOpenTabs(prev => prev.map(tab => {
+      setEditorTabs(prev => prev.map(tab => {
           if (tab.fileId === activeFileId && tab.type === 'code') {
               return { ...tab, isDirty: true, data: newContent };
           }
@@ -222,18 +197,18 @@ const App: React.FC = () => {
   };
 
   const saveFile = async () => {
-      const tab = openTabs.find(t => t.fileId === activeFileId);
+      const tab = editorTabs.find(t => t.fileId === activeFileId);
       if (!tab || tab.type !== 'code' || !activeFileId) return;
 
       try {
-          // activeFileId is the path (from node.id)
           await api.writeFile(activeFileId, tab.data);
-          setOpenTabs(prev => prev.map(t => {
+          setEditorTabs(prev => prev.map(t => {
               if (t.id === tab.id) return { ...t, isDirty: false };
               return t;
           }));
           toast.success("File saved");
-          setTimeout(() => loadGitStatus(), 500); // Delay to ensure FS sync
+          // Trigger git refresh immediately
+          loadGitStatus();
       } catch (e) {
           console.error("Failed to save", e);
           toast.error("Failed to save file");
@@ -250,82 +225,97 @@ const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeFileId, openTabs]);
+  }, [activeFileId, editorTabs]);
 
   // --- Render Helpers ---
-  const activeTab = openTabs.find(t => t.fileId === activeFileId);
+  const activeTab = editorTabs.find(t => t.fileId === activeFileId);
 
   const renderTopBar = () => {
     return (
-      <div className="h-12 bg-ide-bg border-b border-ide-border flex items-center overflow-x-auto no-scrollbar px-2 gap-2 flex-shrink-0 transition-colors duration-300">
+      <div className="h-10 bg-ide-bg border-b border-ide-border flex items-center overflow-x-auto no-scrollbar px-2 gap-2 flex-shrink-0 transition-colors duration-300">
         
-        {/* System ID / Icon */}
-        <div className="px-2 flex items-center justify-center text-ide-accent font-bold text-xs border-r border-ide-border mr-1 h-8">
+        {/* Connection Status */}
+        <div className="px-2 flex items-center justify-center text-ide-accent font-bold text-[10px] border-r border-ide-border mr-1 h-6">
             <span className="animate-pulse mr-1">●</span> ONLINE
         </div>
 
-        {(currentView === AppView.FILES || currentView === AppView.GIT) && (
-          <>
-            <button 
-                onClick={() => setActiveFileId(null)}
-                className={`flex-shrink-0 h-8 w-8 flex items-center justify-center rounded-md border transition-all ${activeFileId === null ? 'bg-ide-accent text-ide-bg border-ide-accent shadow-glow' : 'bg-transparent text-ide-mute border-transparent hover:bg-ide-panel hover:text-ide-text'}`}
-                aria-label={t('explorer')}
-            >
-                <LayoutTemplate size={18} />
-            </button>
-            <div className="w-px h-5 bg-ide-border mx-1 flex-shrink-0" />
-            {openTabs.map(tab => (
-              <div 
-                key={tab.id}
-                onClick={() => setActiveFileId(tab.fileId)}
-                className={`flex-shrink-0 px-3 h-8 rounded-md flex items-center gap-2 text-xs border transition-all cursor-pointer ${
-                    activeFileId === tab.fileId 
-                    ? 'bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm' 
-                    : 'bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text'
-                }`}
-              >
-                {tab.type === 'diff' ? <FileDiff size={14} /> : <FileText size={14} />}
-                <span className="max-w-[100px] truncate font-medium">{tab.title}</span>
-                <button onClick={(e) => closeTab(e, tab.id)} className="hover:text-red-500 rounded-full p-0.5 hover:bg-ide-bg">
-                  <X size={12} />
-                </button>
-              </div>
-            ))}
-          </>
-        )}
-
-        {currentView === AppView.TERMINAL && (
-          <>
+        {/* Tab Lists based on View */}
+        {currentView === AppView.TERMINAL ? (
+           // Terminal Tabs
+           <>
              {terminals.map(term => (
                <button
                   key={term.id}
                   onClick={() => setActiveTerminalId(term.id)}
-                  className={`flex-shrink-0 px-4 h-8 rounded-md flex items-center gap-2 text-xs font-mono border ${
+                  className={`flex-shrink-0 px-3 h-7 rounded-md flex items-center gap-2 text-xs font-mono border ${
                     activeTerminalId === term.id
                     ? 'bg-ide-panel border-ide-accent text-ide-accent shadow-glow' 
-                    : 'bg-transparent border-transparent text-ide-mute'
+                    : 'bg-transparent border-transparent text-ide-mute hover:text-ide-text'
                   }`}
                >
-                 <Box size={14} />
+                 <Box size={12} />
                  {term.name}
+                 <span 
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        // Close terminal logic
+                        api.closeTerminal(term.id).then(loadTerminals);
+                    }}
+                    className="ml-1 hover:text-red-500 rounded p-0.5"
+                 >
+                    <X size={10} />
+                 </span>
                </button>
              ))}
-          </>
-        )}
-
-         <button 
-            className="flex-shrink-0 w-8 h-8 rounded-md ml-auto text-ide-accent hover:bg-ide-accent hover:text-ide-bg flex items-center justify-center border border-ide-border transition-colors"
-            onClick={async () => {
-                if (currentView === AppView.TERMINAL) {
+             <button 
+                className="flex-shrink-0 w-7 h-7 rounded-md text-ide-mute hover:bg-ide-panel hover:text-ide-accent flex items-center justify-center border border-transparent transition-colors"
+                onClick={async () => {
                     await api.createTerminal();
                     loadTerminals();
-                } else {
-                    // Create new file?
-                }
-            }}
-         >
-            <Plus size={18} />
-         </button>
+                }}
+             >
+                <Plus size={14} />
+             </button>
+           </>
+        ) : (
+           // Editor Tabs (Shared for Files & Git Views)
+           <>
+             {editorTabs.map(tab => (
+               <div 
+                 key={tab.id}
+                 onClick={() => setActiveFileId(tab.fileId)}
+                 className={`flex-shrink-0 px-3 h-7 rounded-sm flex items-center gap-2 text-xs border-t-2 border-transparent cursor-pointer transition-all ${
+                     activeFileId === tab.fileId 
+                     ? 'bg-ide-panel border-t-ide-accent text-ide-text shadow-sm' 
+                     : 'bg-transparent text-ide-mute hover:bg-ide-panel/50 hover:text-ide-text'
+                 }`}
+               >
+                 {tab.type === 'diff' ? <FileDiff size={12} className="text-yellow-500" /> : <FileText size={12} className="text-blue-400" />}
+                 <span className={`max-w-[120px] truncate font-medium ${tab.isDirty ? 'italic' : ''}`}>
+                    {tab.title}
+                    {tab.isDirty && '*'}
+                 </span>
+                 <button onClick={(e) => closeTab(e, tab.id)} className="ml-1 opacity-0 group-hover:opacity-100 hover:text-red-500 rounded-full p-0.5">
+                   <X size={10} />
+                 </button>
+               </div>
+             ))}
+           </>
+        )}
+
+        {/* Global Actions (Right aligned) */}
+        <div className="ml-auto flex items-center gap-2">
+            {/* Editor Mode Toggle */}
+            {(currentView === AppView.FILES || currentView === AppView.GIT) && activeTab && (
+                <button 
+                    onClick={() => setIsEditMode(!isEditMode)}
+                    className={`flex items-center gap-1 px-2 h-7 rounded text-[10px] font-bold border ${isEditMode ? 'bg-ide-accent text-ide-bg border-ide-accent' : 'bg-transparent text-ide-mute border-ide-border'}`}
+                >
+                    {isEditMode ? <Edit3 size={12} /> : <Eye size={12} />}
+                    {isEditMode ? 'EDIT' : 'READ'}
+                </button>
+            )}
+        </div>
       </div>
     );
   };
@@ -348,6 +338,48 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
+    // 1. Files View with Empty State
+    if (currentView === AppView.FILES && activeFileId === null) {
+        return (
+            <div className="h-full overflow-y-auto bg-ide-bg/50 p-2 transition-colors duration-300">
+                <div className="flex items-center justify-between mb-2 px-2">
+                    <h3 className="text-[10px] font-bold text-ide-mute uppercase tracking-widest">{t('projectRoot')}</h3>
+                    <div className="flex gap-1">
+                        <button onClick={loadFileSystem} className="p-1 hover:bg-ide-panel rounded text-ide-mute"><Files size={12}/></button>
+                    </div>
+                </div>
+                <FileTree nodes={fileSystem} onFileClick={handleFileClick} activeFileId={activeFileId || undefined} />
+                
+                {/* Empty State / Welcome */}
+                <div className="mt-10 flex flex-col items-center opacity-30 text-ide-mute select-none">
+                     <LayoutTemplate size={48} className="mb-2" />
+                     <p className="text-xs uppercase font-bold tracking-widest">Select a file to open</p>
+                </div>
+            </div>
+        );
+    }
+
+    // 2. Terminal View
+    if (currentView === AppView.TERMINAL) {
+        return activeTerminalId ? (
+            <TerminalView activeTerminalId={activeTerminalId} terminals={terminals} />
+        ) : (
+            <div className="h-full flex flex-col items-center justify-center text-ide-mute">
+                <p className="mb-2">No active terminals</p>
+                <button 
+                  onClick={async () => { await api.createTerminal(); loadTerminals(); }}
+                  className="px-4 py-2 bg-ide-panel border border-ide-border rounded hover:border-ide-accent transition-colors"
+                >
+                    Create New Terminal
+                </button>
+            </div>
+        );
+    }
+
+    // 3. Git View (Panel 1: List) handled by sidebar logic usually, but here main content if no file active?
+    // User requested "Three main columns... not sharing tabs". 
+    // If Git view is active, we usually show the list of changed files or the Diff Editor.
+    // If no git file active, show GitView component (List).
     if (currentView === AppView.GIT && activeFileId === null) {
         return (
             <GitView 
@@ -360,27 +392,7 @@ const App: React.FC = () => {
         );
     }
 
-    if (currentView === AppView.TERMINAL) {
-        return activeTerminalId ? (
-            <TerminalView activeTerminalId={activeTerminalId} terminals={terminals} />
-        ) : <div className="p-4 text-ide-mute">No terminals</div>;
-    }
-
-    if (currentView === AppView.FILES && activeFileId === null) {
-        return (
-            <div className="h-full overflow-y-auto bg-ide-bg p-2 transition-colors duration-300">
-                <div className="border border-ide-border rounded-lg p-3 mb-4 bg-ide-panel/50 shadow-sm">
-                    <p className="text-[10px] text-ide-accent mb-2 font-bold tracking-wider">SYSTEM_STATUS</p>
-                    <div className="h-1.5 w-full bg-ide-border rounded-full overflow-hidden">
-                        <div className="h-full bg-ide-accent w-3/4 shadow-glow"></div>
-                    </div>
-                </div>
-                <h3 className="text-[10px] font-bold text-ide-mute uppercase mb-2 px-2 tracking-widest">{t('projectRoot')}</h3>
-                <FileTree nodes={fileSystem} onFileClick={handleFileClick} activeFileId={activeFileId || undefined} />
-            </div>
-        );
-    }
-
+    // 4. Active Editor (File or Diff)
     if (activeTab) {
         if (activeTab.type === 'diff' && activeTab.data) {
             return <DiffView original={activeTab.data.original} modified={activeTab.data.modified} />;
@@ -389,81 +401,80 @@ const App: React.FC = () => {
             <CodeEditor 
                 key={activeTab.id}
                 content={activeTab.data || ''} 
-                language="typescript" // Detect from tab.title?
+                language="typescript" // Should detect from ext
                 theme={theme}
                 onChange={handleEditorChange} 
+                readOnly={!isEditMode}
             />
         );
     }
     
-    return (
-        <div className="h-full flex flex-col items-center justify-center text-ide-mute gap-4 border-2 border-dashed border-ide-border m-4 rounded-xl bg-ide-panel/30">
-             <LayoutTemplate size={48} className="text-ide-accent opacity-50" />
-             <p className="text-sm font-bold tracking-widest text-ide-accent">WAITING_FOR_INPUT...</p>
-        </div>
-    );
+    // Fallback
+    return null;
   };
 
   return (
     <div className="h-screen flex flex-col bg-ide-bg text-ide-text overflow-hidden font-mono transition-colors duration-300">
       <Toaster position="bottom-right" theme={theme === 'light' ? 'light' : 'dark'} />
       
-      {/* 1. Top Bar */}
+      {/* Top Bar (Tabs) */}
       {renderTopBar()}
 
-      {/* 2. Main Workspace */}
+      {/* Main Workspace */}
       <main className="flex-1 overflow-hidden relative border-b border-ide-border">
         {renderContent()}
       </main>
 
-      {/* 3. Footer / Nav */}
-      <footer className="h-14 bg-ide-panel border-t border-ide-border flex items-center justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.1)]">
+      {/* Footer / Nav */}
+      <footer className="h-12 bg-ide-panel border-t border-ide-border flex items-center justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.1)]">
         
-        {/* Left: Project Menu Trigger */}
+        {/* Left: Project Menu */}
         <button 
           onClick={() => setIsMenuOpen(true)}
-          className="h-full px-4 flex items-center gap-3 hover:bg-ide-bg transition-colors border-r border-ide-border group"
+          className="h-full px-4 flex items-center gap-2 hover:bg-ide-bg transition-colors border-r border-ide-border group"
         >
-          <div className="p-1.5 rounded-md border border-ide-border group-hover:border-ide-accent group-hover:text-ide-accent transition-colors">
-            <Menu size={18} />
-          </div>
-          <span className="font-bold tracking-wider text-xs hidden sm:inline">MENU</span>
+          <Menu size={16} className="text-ide-mute group-hover:text-ide-text" />
+          <span className="font-bold tracking-wider text-[10px] text-ide-mute group-hover:text-ide-text hidden sm:inline">MENU</span>
         </button>
 
-        {/* Center: Mode Toggles */}
-        <div className="flex h-10 bg-ide-bg rounded-lg p-1 border border-ide-border gap-1">
+        {/* Center: View Switcher */}
+        <div className="flex h-8 bg-ide-bg/50 rounded-lg p-0.5 border border-ide-border gap-1">
           <button 
             onClick={() => setCurrentView(AppView.FILES)}
             className={`px-3 h-full rounded flex items-center gap-2 transition-all ${currentView === AppView.FILES ? 'bg-ide-panel text-ide-accent shadow-sm' : 'text-ide-mute hover:text-ide-text'}`}
+            title="Files"
           >
-            <Files size={16} />
+            <Files size={14} />
           </button>
           <button 
             onClick={() => {
                 setCurrentView(AppView.GIT);
-                setActiveFileId(null);
+                setActiveFileId(null); // Reset to show list
             }}
             className={`px-3 h-full rounded flex items-center gap-2 transition-all ${currentView === AppView.GIT ? 'bg-ide-panel text-ide-accent shadow-sm' : 'text-ide-mute hover:text-ide-text'}`}
+            title="Git"
           >
-            <GitGraph size={16} />
+            <GitGraph size={14} />
           </button>
           <button 
             onClick={() => setCurrentView(AppView.TERMINAL)}
             className={`px-3 h-full rounded flex items-center gap-2 transition-all ${currentView === AppView.TERMINAL ? 'bg-ide-panel text-ide-accent shadow-sm' : 'text-ide-mute hover:text-ide-text'}`}
+            title="Terminal"
           >
-            <Terminal size={16} />
+            <Terminal size={14} />
           </button>
         </div>
 
-        {/* Right: Stats */}
+        {/* Right: Workspace & Stats */}
         <div className="flex items-center gap-3 px-4 text-ide-mute text-[10px] font-bold">
-           <div className="hidden sm:flex items-center gap-1">
-             <Cpu size={14} />
+           {/* Multi-workspace Placeholder */}
+           <button className="h-6 w-6 rounded hover:bg-ide-bg flex items-center justify-center border border-transparent hover:border-ide-accent group">
+             <Plus size={14} className="group-hover:text-ide-accent" />
+           </button>
+           
+           <div className="hidden sm:flex items-center gap-1 pl-2 border-l border-ide-border/50">
+             <Cpu size={12} />
              <span>12%</span>
-           </div>
-           <div className="flex items-center gap-1 text-ide-accent animate-pulse">
-             <Wifi size={14} />
-             <span className="hidden sm:inline">ONLINE</span>
            </div>
         </div>
       </footer>

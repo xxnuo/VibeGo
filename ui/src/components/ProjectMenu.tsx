@@ -1,5 +1,5 @@
 import React from 'react';
-import { FolderOpen, Settings, Save, Download, Home, X, Sun, Moon, Globe, Terminal, Monitor } from 'lucide-react';
+import { FolderOpen, Settings, Home, X, Sun, Moon, Globe, Terminal, Monitor } from 'lucide-react';
 import type { Locale, Theme } from '../types';
 import { useTranslation } from '../utils/i18n';
 
@@ -79,15 +79,30 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
         </div>
 
         <div className="grid grid-cols-4 gap-4">
-          <MenuItem icon={<Save size={20} />} label={t('saveAll')} />
-          <MenuItem icon={<FolderOpen size={20} />} label={t('open')} />
-          <MenuItem icon={<Download size={20} />} label={t('export')} />
-          <MenuItem icon={<Settings size={20} />} label={t('settings')} />
-          <MenuItem icon={<Home size={20} />} label={t('home')} />
+          <MenuItem 
+            icon={<FolderOpen size={20} />} 
+            label={t('open')} 
+            onClick={() => alert('Open Project not yet implemented')} 
+          />
+          <MenuItem 
+            icon={<Settings size={20} />} 
+            label={t('settings')} 
+            onClick={() => alert('Settings not yet implemented')} 
+          />
+          <MenuItem 
+            icon={<Monitor size={20} />} 
+            label="RELOAD" 
+            onClick={() => window.location.reload()} 
+          />
+          <MenuItem 
+            icon={<Home size={20} />} 
+            label={t('home')} 
+             onClick={() => window.location.href = '/'}
+          />
         </div>
         
         <div className="mt-6 pt-4 border-t border-ide-border flex justify-between text-[10px] text-ide-mute">
-           <span>MobIDE v0.9.0</span>
+           <span>VibeGo v1.0.0</span>
            <span>CONNECTED</span>
         </div>
       </div>
@@ -95,8 +110,11 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
   );
 };
 
-const MenuItem: React.FC<{ icon: React.ReactNode; label: string }> = ({ icon, label }) => (
-  <button className="flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-ide-bg hover:text-ide-accent transition-all text-ide-text group">
+const MenuItem: React.FC<{ icon: React.ReactNode; label: string; onClick?: () => void }> = ({ icon, label, onClick }) => (
+  <button 
+    onClick={onClick}
+    className="flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-ide-bg hover:text-ide-accent transition-all text-ide-text group"
+  >
     <div className="p-3 bg-ide-bg rounded-xl border border-ide-border group-hover:border-ide-accent group-hover:shadow-glow transition-all">
       {icon}
     </div>

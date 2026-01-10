@@ -8,9 +8,10 @@ interface CodeEditorProps {
   language: string;
   theme: Theme;
   onChange: (newContent: string) => void;
+  readOnly?: boolean;
 }
 
-const CodeEditor: React.FC<CodeEditorProps> = ({ content, language, theme, onChange }) => {
+const CodeEditor: React.FC<CodeEditorProps> = ({ content, language, theme, onChange, readOnly = false }) => {
   const editorRef = useRef<any>(null);
 
   const handleEditorDidMount: OnMount = (editor, _monaco) => {
@@ -18,10 +19,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ content, language, theme, onCha
   };
 
   const handleInsert = (text: string) => {
-    if (editorRef.current) {
+    if (editorRef.current && !readOnly) {
         const editor = editorRef.current;
         const selection = editor.getSelection();
-        // const id = { major: 1, minor: 1 };
         const op = { range: selection, text: text, forceMoveMarkers: true };
         editor.executeEdits("my-source", [op]);
         editor.focus();
@@ -50,6 +50,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ content, language, theme, onCha
             onChange={(value) => onChange(value || '')}
             onMount={handleEditorDidMount}
             options={{
+                readOnly: readOnly,
                 minimap: { enabled: true },
                 fontSize: 14,
                 fontFamily: 'Menlo, Monaco, "Courier New", monospace',
@@ -60,8 +61,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ content, language, theme, onCha
         />
       </div>
       
-      {/* Mobile Sticky Toolbar */}
-      <MobileToolbar onInsert={handleInsert} />
+      {/* Mobile Sticky Toolbar - only show in Edit mode */}
+      {!readOnly && <MobileToolbar onInsert={handleInsert} />}
     </div>
   );
 };

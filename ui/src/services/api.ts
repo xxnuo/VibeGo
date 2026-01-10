@@ -13,27 +13,41 @@ interface BackendFile {
     mod_time?: number;
 }
 
+// --- Filters ---
+const IGNORED_FILES = new Set(['.DS_Store', '.git', '__MACOSX', 'node_modules', 'dist', '.idea', '.vscode']);
+
+const isIgnored = (name: string) => {
+    return IGNORED_FILES.has(name) || name.startsWith('._');
+};
+
 export const getFileTree = async (path: string = '.'): Promise<FileNode[]> => {
     const res = await fetch(`${API_BASE}/file/tree?path=${encodeURIComponent(path)}`);
     if (!res.ok) throw new Error('Failed to fetch file tree');
     const root: BackendFile = await res.json();
 
-    const transform = (node: BackendFile): FileNode => {
+    const transform = (node: BackendFile): FileNode | null => {
+        if (isIgnored(node.name)) return null;
+
+        const children = node.children
+            ? node.children.map(transform).filter((n): n is FileNode => n !== null)
+            : undefined;
+
         return {
             id: node.path,
             name: node.name,
             type: node.is_dir ? 'folder' : 'file',
-            children: node.children ? node.children.map(transform) : undefined,
+            children,
             language: node.is_dir ? undefined : guessLanguage(node.name)
         };
     };
 
     // Flatten root: if request is for '.', return children directly
     if (path === '.' && root.children) {
-        return root.children.map(transform);
+        return root.children.map(transform).filter((n): n is FileNode => n !== null);
     }
 
-    return [transform(root)];
+    const transformedRoot = transform(root);
+    return transformedRoot ? [transformedRoot] : [];
 };
 
 export const readFile = async (path: string): Promise<string> => {
@@ -106,13 +120,15 @@ export const getGitStatus = async (): Promise<GitFileNode[]> => {
     if (!statusRes.ok) return [];
     const statusData: GitStatusResponse = await statusRes.json();
 
-    return statusData.files.map((f, idx) => ({
-        id: `git-${idx}`,
-        name: f.path.split('/').pop() || f.path,
-        path: f.path,
-        status: mapGitStatus(f.status),
-        staged: f.staged
-    }));
+    return statusData.files
+        .filter(f => !isIgnored(f.path.split('/').pop() || ''))
+        .map((f, idx) => ({
+            id: `git-${idx}`,
+            name: f.path.split('/').pop() || f.path,
+            path: f.path,
+            status: mapGitStatus(f.status),
+            staged: f.staged
+        }));
 };
 
 export const getGitDiff = async (path: string): Promise<{ old: string, new: string }> => {
