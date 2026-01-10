@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from // MonacoCheck3 'react';
+import React, { useState, useEffect } from 'react';
 import { AppView, FileNode, TerminalSession, EditorTab, Theme, Locale, GitFileNode } from './types';
 import { 
   Menu, Files, GitGraph, Terminal, Plus, 
