@@ -6,7 +6,10 @@
     "saveAll": "保存所有",
     "open": "打开...",
     "export": "导出",
-    "home": "首页"
+    "home": "首页",
+    "newGroup": "新建组",
+    "openFolder": "打开文件夹",
+    "newTerminal": "终端"
   },
   "sidebar": {
     "project": "项目",
@@ -28,5 +31,40 @@
   },
   "fileTree": {
     "projectRoot": "项目根目录"
+  },
+  "settings": {
+    "category": {
+      "appearance": "外观",
+      "fileManager": "文件管理器",
+      "editor": "编辑器"
+    },
+    "theme": {
+      "label": "主题",
+      "description": "选择颜色主题"
+    },
+    "locale": {
+      "label": "语言",
+      "description": "选择显示语言"
+    },
+    "showHiddenFiles": {
+      "label": "显示隐藏文件",
+      "description": "在文件管理器中显示隐藏文件"
+    },
+    "defaultViewMode": {
+      "label": "默认视图",
+      "description": "文件管理器默认视图模式"
+    },
+    "editorFontSize": {
+      "label": "字体大小",
+      "description": "编辑器字体大小（像素）"
+    },
+    "editorTabSize": {
+      "label": "Tab 宽度",
+      "description": "每个 Tab 的空格数"
+    },
+    "editorWordWrap": {
+      "label": "自动换行",
+      "description": "在编辑器中启用自动换行"
+    }
   }
 }

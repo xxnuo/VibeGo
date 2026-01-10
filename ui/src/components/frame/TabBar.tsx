@@ -65,7 +65,9 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
     return <FolderOpen size={18} />;
   };
 
+  const isFilesView = activeGroup?.type === 'workspace' && currentView === 'files' && activeTabId === null;
   const isGitView = activeGroup?.type === 'workspace' && currentView === 'git';
+  const showRefreshButton = isFilesView || isGitView;
   const showBackButton = activeGroup?.type === 'workspace' || tabs.length > 0;
 
   return (
@@ -115,9 +117,9 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
       <button
         onClick={onAction}
         className="shrink-0 w-8 h-8 rounded-md ml-auto text-ide-accent hover:bg-ide-accent hover:text-ide-bg flex items-center justify-center border border-ide-border transition-colors"
-        title={isGitView ? 'Refresh' : 'New'}
+        title={showRefreshButton ? 'Refresh' : 'New'}
       >
-        {isGitView ? <RefreshCw size={18} /> : <Plus size={18} />}
+        {showRefreshButton ? <RefreshCw size={18} /> : <Plus size={18} />}
       </button>
     </div>
   );

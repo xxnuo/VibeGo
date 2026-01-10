@@ -12,6 +12,7 @@ export {
   type WorkspaceGroup,
   type TerminalGroup,
   type PluginGroup,
+  type SettingsGroup,
   type GroupType,
   type ViewType,
 } from './frameStore';

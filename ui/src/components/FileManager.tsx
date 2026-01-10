@@ -307,8 +307,14 @@ const FileManager: React.FC<FileManagerProps> = ({ initialPath = '.', onFileOpen
       />
 
       {(showNewDialog || renameFile) && (
-        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50">
-          <div className="w-full max-w-md bg-ide-panel rounded-t-xl p-4">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-end justify-center z-50 backdrop-blur-sm"
+          onClick={() => { setShowNewDialog(null); setRenameFile(null); setNewName(''); }}
+        >
+          <div
+            className="w-full max-w-md bg-ide-panel rounded-t-xl p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-sm font-medium text-ide-text mb-3">
               {renameFile ? 'Rename' : showNewDialog === 'file' ? 'New File' : 'New Folder'}
             </h3>

@@ -1,10 +1,9 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { Menu, Files, GitGraph, Terminal, Plus, Cpu, Wifi, FolderOpen, Box } from 'lucide-react';
+import { Menu, Files, GitGraph, Terminal, Cpu, Wifi, FolderOpen, Box, Settings } from 'lucide-react';
 import { useFrameStore, type PageGroup, type ViewType } from '@/stores/frameStore';
 
 interface BottomBarProps {
   onMenuClick?: () => void;
-  onAddGroup?: () => void;
 }
 
 const VIEW_ICONS: Record<ViewType, React.ReactNode> = {
@@ -17,6 +16,7 @@ const GROUP_TYPE_ICONS = {
   workspace: <FolderOpen size={16} />,
   terminal: <Terminal size={16} />,
   plugin: <Box size={16} />,
+  settings: <Settings size={16} />,
 };
 
 interface GroupButtonProps {
@@ -75,12 +75,12 @@ const GroupButton: React.FC<GroupButtonProps> = ({
       }`}
       title={group.name}
     >
-      {group.type === 'terminal' ? GROUP_TYPE_ICONS.terminal : GROUP_TYPE_ICONS.plugin}
+      {GROUP_TYPE_ICONS[group.type] || GROUP_TYPE_ICONS.plugin}
     </button>
   );
 };
 
-const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick, onAddGroup }) => {
+const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick }) => {
   const groups = useFrameStore((s) => s.groups);
   const activeGroupId = useFrameStore((s) => s.activeGroupId);
   const setActiveGroup = useFrameStore((s) => s.setActiveGroup);
@@ -143,14 +143,7 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick, onAddGroup }) => {
       </div>
 
       <div className="flex items-center gap-2 px-4">
-        <button
-          onClick={onAddGroup}
-          className="w-8 h-8 rounded-md flex items-center justify-center text-ide-mute hover:text-ide-accent hover:bg-ide-bg transition-all border border-ide-border"
-          title="New group"
-        >
-          <Plus size={16} />
-        </button>
-        <div className="hidden sm:flex items-center gap-3 text-ide-mute text-[10px] font-bold ml-2">
+        <div className="hidden sm:flex items-center gap-3 text-ide-mute text-[10px] font-bold">
           <div className="flex items-center gap-1">
             <Cpu size={14} />
             <span>12%</span>

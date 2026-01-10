@@ -12,7 +12,9 @@ import TerminalView from '@/components/TerminalView';
 import ProjectMenu from '@/components/ProjectMenu';
 import DiffView from '@/components/DiffView';
 import { FilePreview } from '@/components/preview';
+import SettingsPage from '@/components/SettingsPage';
 import { fileApi } from '@/api/file';
+import { useSettingsStore } from '@/lib/settings';
 
 const MOCK_GIT_FILES: GitFileNode[] = [
   {
@@ -42,6 +44,7 @@ const App: React.FC = () => {
   const { terminals, activeTerminalId, setTerminals, addTerminal } = useTerminalStore();
   const resetPreview = usePreviewStore((s) => s.reset);
   const { rootPath, goToPath, currentPath } = useFileManagerStore();
+  const initSettings = useSettingsStore((s) => s.init);
 
   const activeGroup = useFrameStore((s) => s.getActiveGroup());
   const currentView = useFrameStore((s) => s.getCurrentView());
@@ -53,8 +56,13 @@ const App: React.FC = () => {
   const addWorkspaceGroup = useFrameStore((s) => s.addWorkspaceGroup);
   const addTerminalGroup = useFrameStore((s) => s.addTerminalGroup);
   const addPluginGroup = useFrameStore((s) => s.addPluginGroup);
+  const addSettingsGroup = useFrameStore((s) => s.addSettingsGroup);
 
   const [isNewGroupMenuOpen, setNewGroupMenuOpen] = useState(false);
+
+  useEffect(() => {
+    initSettings();
+  }, [initSettings]);
 
   useEffect(() => {
     if (terminals.length === 0) setTerminals(MOCK_TERMINALS);
@@ -112,9 +120,32 @@ const App: React.FC = () => {
     if (activeGroup.type === 'workspace') {
       switch (currentView) {
         case 'files':
-          const newPath = prompt('New file name:');
-          if (newPath) {
-            await fileApi.create({ path: `${currentPath}/${newPath}`, isDir: false });
+          if (activeTabId === null) {
+            useFileManagerStore.getState().setLoading(true);
+            const path = useFileManagerStore.getState().currentPath;
+            try {
+              const res = await fileApi.list(path);
+              const files = res.files.map((f) => ({
+                path: f.path,
+                name: f.name,
+                size: f.size,
+                isDir: f.isDir,
+                isSymlink: f.isSymlink,
+                isHidden: f.isHidden,
+                mode: f.mode,
+                mimeType: f.mimeType,
+                modTime: f.modTime,
+                extension: f.extension,
+              }));
+              useFileManagerStore.getState().setFiles(files);
+            } finally {
+              useFileManagerStore.getState().setLoading(false);
+            }
+          } else {
+            const newPath = prompt('New file name:');
+            if (newPath) {
+              await fileApi.create({ path: `${currentPath}/${newPath}`, isDir: false });
+            }
           }
           break;
         case 'terminal':
@@ -136,7 +167,7 @@ const App: React.FC = () => {
         data: { type: 'plugin', pluginId: activeGroup.pluginId }
       });
     }
-  }, [activeGroup, currentView, currentPath, terminals.length, addTerminal, addCurrentTab, tabs.length]);
+  }, [activeGroup, currentView, currentPath, terminals.length, addTerminal, addCurrentTab, tabs.length, activeTabId]);
 
   const handleOpenDirectory = useCallback(() => {
     const path = prompt('Enter directory path:');
@@ -157,6 +188,10 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     if (!activeGroup) return null;
+
+    if (activeGroup.type === 'settings') {
+      return <SettingsPage />;
+    }
 
     if (activeGroup.type === 'terminal') {
       return <TerminalView activeTerminalId={activeTerminalId || ''} terminals={terminals} />;
@@ -220,7 +255,6 @@ const App: React.FC = () => {
       <AppFrame
         onMenuOpen={() => setMenuOpen(true)}
         onTabAction={handleTabAction}
-        onAddGroup={() => setNewGroupMenuOpen(true)}
         onBackToList={handleBackToList}
       >
         {renderContent()}
@@ -232,6 +266,9 @@ const App: React.FC = () => {
         toggleTheme={toggleTheme}
         locale={locale}
         toggleLocale={toggleLocale}
+        onOpenSettings={addSettingsGroup}
+        onOpenDirectory={handleOpenDirectory}
+        onNewTerminal={handleNewTerminal}
       />
       <NewGroupMenu
         isOpen={isNewGroupMenuOpen}

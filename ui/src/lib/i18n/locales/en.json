@@ -6,7 +6,10 @@
     "saveAll": "Save All",
     "open": "Open...",
     "export": "Export",
-    "home": "Home"
+    "home": "Home",
+    "newGroup": "New Group",
+    "openFolder": "Open Folder",
+    "newTerminal": "Terminal"
   },
   "sidebar": {
     "project": "Project",
@@ -28,5 +31,40 @@
   },
   "fileTree": {
     "projectRoot": "Project Root"
+  },
+  "settings": {
+    "category": {
+      "appearance": "Appearance",
+      "fileManager": "File Manager",
+      "editor": "Editor"
+    },
+    "theme": {
+      "label": "Theme",
+      "description": "Select color theme"
+    },
+    "locale": {
+      "label": "Language",
+      "description": "Select display language"
+    },
+    "showHiddenFiles": {
+      "label": "Show Hidden Files",
+      "description": "Display hidden files in file manager"
+    },
+    "defaultViewMode": {
+      "label": "Default View",
+      "description": "File manager default view mode"
+    },
+    "editorFontSize": {
+      "label": "Font Size",
+      "description": "Editor font size in pixels"
+    },
+    "editorTabSize": {
+      "label": "Tab Size",
+      "description": "Number of spaces per tab"
+    },
+    "editorWordWrap": {
+      "label": "Word Wrap",
+      "description": "Enable word wrapping in editor"
+    }
   }
 }

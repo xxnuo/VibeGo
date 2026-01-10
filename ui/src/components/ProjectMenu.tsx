@@ -10,10 +10,14 @@ interface ProjectMenuProps {
   toggleTheme: () => void;
   locale: Locale;
   toggleLocale: () => void;
+  onOpenSettings: () => void;
+  onOpenDirectory: () => void;
+  onNewTerminal: () => void;
 }
 
 const ProjectMenu: React.FC<ProjectMenuProps> = ({
-  isOpen, onClose, theme, toggleTheme, locale, toggleLocale
+  isOpen, onClose, theme, toggleTheme, locale, toggleLocale,
+  onOpenSettings, onOpenDirectory, onNewTerminal,
 }) => {
   const t = useTranslation(locale);
 
@@ -35,6 +39,21 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
       case 'hacker': return 'Hacker';
       case 'terminal': return 'Terminal';
     }
+  };
+
+  const handleSettings = () => {
+    onOpenSettings();
+    onClose();
+  };
+
+  const handleOpenDirectory = () => {
+    onOpenDirectory();
+    onClose();
+  };
+
+  const handleNewTerminal = () => {
+    onNewTerminal();
+    onClose();
   };
 
   return (
@@ -78,11 +97,30 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
           </button>
         </div>
 
+        <div className="mb-4 pb-4 border-b border-ide-border">
+          <div className="text-[10px] text-ide-mute uppercase font-bold mb-3">{t('common.newGroup')}</div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleOpenDirectory}
+              className="flex-1 flex items-center gap-2 p-3 border border-ide-border rounded-lg hover:border-ide-accent hover:bg-ide-bg transition-all text-ide-text"
+            >
+              <FolderOpen size={18} className="text-ide-accent" />
+              <span className="text-xs font-medium">{t('common.openFolder')}</span>
+            </button>
+            <button
+              onClick={handleNewTerminal}
+              className="flex-1 flex items-center gap-2 p-3 border border-ide-border rounded-lg hover:border-ide-accent hover:bg-ide-bg transition-all text-ide-text"
+            >
+              <Terminal size={18} className="text-ide-accent" />
+              <span className="text-xs font-medium">{t('common.newTerminal')}</span>
+            </button>
+          </div>
+        </div>
+
         <div className="grid grid-cols-4 gap-4">
           <MenuItem icon={<Save size={20} />} label={t('common.saveAll')} />
-          <MenuItem icon={<FolderOpen size={20} />} label={t('common.open')} />
           <MenuItem icon={<Download size={20} />} label={t('common.export')} />
-          <MenuItem icon={<Settings size={20} />} label={t('common.settings')} />
+          <MenuItem icon={<Settings size={20} />} label={t('common.settings')} onClick={handleSettings} />
           <MenuItem icon={<Home size={20} />} label={t('common.home')} />
         </div>
 
@@ -95,8 +133,8 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
   );
 };
 
-const MenuItem: React.FC<{ icon: React.ReactNode; label: string }> = ({ icon, label }) => (
-  <button className="flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-ide-bg hover:text-ide-accent transition-all text-ide-text group">
+const MenuItem: React.FC<{ icon: React.ReactNode; label: string; onClick?: () => void }> = ({ icon, label, onClick }) => (
+  <button onClick={onClick} className="flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-ide-bg hover:text-ide-accent transition-all text-ide-text group">
     <div className="p-3 bg-ide-bg rounded-xl border border-ide-border group-hover:border-ide-accent group-hover:shadow-glow transition-all">
       {icon}
     </div>
