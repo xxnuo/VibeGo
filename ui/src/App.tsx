@@ -2,7 +2,7 @@ import React, { useEffect, useCallback, useState } from 'react';
 import {
   useAppStore, useTerminalStore, usePreviewStore,
   useFileManagerStore, useFrameStore,
-  type GitFileNode, type FileItem
+  type GitFileNode, type FileItem, type Theme, type Locale
 } from '@/stores';
 
 import { AppFrame, NewGroupMenu } from '@/components/frame';
@@ -40,11 +40,13 @@ const MOCK_TERMINALS = [
 ];
 
 const App: React.FC = () => {
-  const { theme, locale, isMenuOpen, setMenuOpen } = useAppStore();
+  const { theme, locale, isMenuOpen, setMenuOpen, setTheme, setLocale } = useAppStore();
   const { terminals, activeTerminalId, setTerminals, addTerminal } = useTerminalStore();
   const resetPreview = usePreviewStore((s) => s.reset);
   const { rootPath, goToPath, currentPath } = useFileManagerStore();
   const initSettings = useSettingsStore((s) => s.init);
+  const themeSetting = useSettingsStore((s) => s.settings.theme);
+  const localeSetting = useSettingsStore((s) => s.settings.locale);
 
   const activeGroup = useFrameStore((s) => s.getActiveGroup());
   const currentView = useFrameStore((s) => s.getCurrentView());
@@ -62,6 +64,14 @@ const App: React.FC = () => {
   useEffect(() => {
     initSettings();
   }, [initSettings]);
+
+  useEffect(() => {
+    if (themeSetting) setTheme(themeSetting as Theme);
+  }, [themeSetting, setTheme]);
+
+  useEffect(() => {
+    if (localeSetting) setLocale(localeSetting as Locale);
+  }, [localeSetting, setLocale]);
 
   useEffect(() => {
     if (terminals.length === 0) setTerminals(MOCK_TERMINALS);

@@ -1,6 +1,7 @@
 import React from 'react';
 import { FolderOpen, Settings, Save, Download, Home, X, Terminal } from 'lucide-react';
 import { useTranslation, type Locale } from '@/lib/i18n';
+import { useSettingsStore, getSettingSchema } from '@/lib/settings';
 
 interface ProjectMenuProps {
   isOpen: boolean;
@@ -16,6 +17,12 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
   onOpenSettings, onOpenDirectory, onNewTerminal,
 }) => {
   const t = useTranslation(locale);
+  const settings = useSettingsStore((s) => s.settings);
+  const setSetting = useSettingsStore((s) => s.set);
+  const themeSchema = getSettingSchema('theme');
+  const localeSchema = getSettingSchema('locale');
+  const themeValue = settings.theme || themeSchema?.defaultValue || 'light';
+  const localeValue = settings.locale || localeSchema?.defaultValue || 'zh';
 
   if (!isOpen) return null;
 
@@ -69,6 +76,44 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
               <Terminal size={18} className="text-ide-accent" />
               <span className="text-xs font-medium">{t('common.newTerminal')}</span>
             </button>
+          </div>
+        </div>
+
+        <div className="mb-4 pb-4 border-b border-ide-border">
+          <div className="text-[10px] text-ide-mute uppercase font-bold mb-3">{t('common.theme')}</div>
+          <div className="flex flex-wrap gap-2">
+            {themeSchema?.options?.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setSetting('theme', opt.value)}
+                className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded-md border transition-all ${
+                  themeValue === opt.value
+                    ? 'bg-ide-accent text-ide-bg border-ide-accent'
+                    : 'bg-ide-bg text-ide-text border-ide-border hover:border-ide-accent'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-4 pb-4 border-b border-ide-border">
+          <div className="text-[10px] text-ide-mute uppercase font-bold mb-3">{t('common.language')}</div>
+          <div className="flex flex-wrap gap-2">
+            {localeSchema?.options?.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setSetting('locale', opt.value)}
+                className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded-md border transition-all ${
+                  localeValue === opt.value
+                    ? 'bg-ide-accent text-ide-bg border-ide-accent'
+                    : 'bg-ide-bg text-ide-text border-ide-border hover:border-ide-accent'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
         </div>
 

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Settings, Sun, Moon, Monitor, Terminal, Globe, Eye, EyeOff, List, Grid, AlignLeft, WrapText, X } from 'lucide-react';
+import { Settings, Eye, EyeOff, List, Grid, AlignLeft, WrapText, X } from 'lucide-react';
 import { useSettingsStore, SETTING_CATEGORIES, getSettingsByCategory, type SettingSchema } from '@/lib/settings';
 import { useTranslation, type Locale } from '@/lib/i18n';
 import { useFrameStore } from '@/stores/frameStore';
@@ -12,13 +12,6 @@ const SettingItem: React.FC<{
 }> = ({ schema, value, onChange, t }) => {
   const getIcon = () => {
     switch (schema.key) {
-      case 'theme':
-        if (value === 'light') return <Sun size={18} className="text-orange-500" />;
-        if (value === 'dark') return <Moon size={18} className="text-blue-400" />;
-        if (value === 'hacker') return <Monitor size={18} className="text-green-500" />;
-        return <Terminal size={18} className="text-green-400" />;
-      case 'locale':
-        return <Globe size={18} className="text-ide-accent" />;
       case 'showHiddenFiles':
         return value === 'true' ? <Eye size={18} /> : <EyeOff size={18} />;
       case 'defaultViewMode':
@@ -122,6 +115,7 @@ const SettingsPage: React.FC = () => {
   const t = useTranslation(locale);
   const setTopBarConfig = useFrameStore((s) => s.setTopBarConfig);
   const removeGroup = useFrameStore((s) => s.removeGroup);
+  const hiddenKeys = new Set(['theme', 'locale']);
 
   useEffect(() => {
     init();
@@ -154,7 +148,7 @@ const SettingsPage: React.FC = () => {
     <div className="h-full overflow-y-auto bg-ide-bg">
       <div className="max-w-2xl mx-auto p-4">
         {SETTING_CATEGORIES.map((category) => {
-          const categorySettings = getSettingsByCategory(category.key);
+          const categorySettings = getSettingsByCategory(category.key).filter((schema) => !hiddenKeys.has(schema.key));
           if (categorySettings.length === 0) return null;
 
           return (
