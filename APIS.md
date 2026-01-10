@@ -628,8 +628,8 @@ Connect to this endpoint via WebSocket to interact with the terminal.
 
 ## Legend
 
-- 🆕 New endpoint
-- 🔄 Modified endpoint (breaking change)
+- New endpoint
+- Modified endpoint (breaking change)
 
 ## Rate Limiting
 

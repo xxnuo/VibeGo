@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VibeGo File Manager</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        h1 { text-align: center; margin-bottom: 20px; color: #00d9ff; }
+        .toolbar { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; align-items: center; }
+        .toolbar input[type="text"] { flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid #333; border-radius: 4px; background: #16213e; color: #eee; }
+        .toolbar button, .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; background: #0f3460; color: #eee; transition: background 0.2s; }
+        .toolbar button:hover, .btn:hover { background: #00d9ff; color: #1a1a2e; }
+        .btn-danger { background: #e94560; }
+        .btn-danger:hover { background: #ff6b6b; }
+        .breadcrumb { display: flex; gap: 5px; margin-bottom: 15px; flex-wrap: wrap; align-items: center; }
+        .breadcrumb span { color: #666; }
+        .breadcrumb a { color: #00d9ff; text-decoration: none; cursor: pointer; }
+        .breadcrumb a:hover { text-decoration: underline; }
+        .file-list { background: #16213e; border-radius: 8px; overflow: hidden; }
+        .file-item { display: flex; align-items: center; padding: 12px 15px; border-bottom: 1px solid #1a1a2e; cursor: pointer; transition: background 0.2s; }
+        .file-item:hover { background: #0f3460; }
+        .file-item.selected { background: #0f3460; border-left: 3px solid #00d9ff; }
+        .file-icon { width: 24px; margin-right: 12px; font-size: 18px; }
+        .file-name { flex: 1; word-break: break-all; }
+        .file-size { width: 100px; text-align: right; color: #888; font-size: 13px; }
+        .file-time { width: 150px; text-align: right; color: #888; font-size: 13px; }
+        .file-actions { width: 120px; text-align: right; }
+        .file-actions button { padding: 4px 8px; margin-left: 5px; font-size: 12px; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000; }
+        .modal.active { display: flex; }
+        .modal-content { background: #16213e; padding: 25px; border-radius: 8px; width: 90%; max-width: 600px; max-height: 80vh; overflow: auto; }
+        .modal-content h3 { margin-bottom: 15px; color: #00d9ff; }
+        .modal-content input, .modal-content textarea { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #333; border-radius: 4px; background: #1a1a2e; color: #eee; }
+        .modal-content textarea { min-height: 300px; font-family: monospace; resize: vertical; }
+        .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+        .context-menu { position: fixed; background: #16213e; border: 1px solid #333; border-radius: 4px; padding: 5px 0; z-index: 1001; min-width: 150px; }
+        .context-menu div { padding: 8px 15px; cursor: pointer; }
+        .context-menu div:hover { background: #0f3460; }
+        .upload-area { border: 2px dashed #333; border-radius: 8px; padding: 40px; text-align: center; margin-bottom: 15px; }
+        .upload-area.dragover { border-color: #00d9ff; background: rgba(0,217,255,0.1); }
+        .status { padding: 10px; margin-top: 10px; border-radius: 4px; display: none; }
+        .status.success { display: block; background: rgba(0,255,0,0.1); color: #0f0; }
+        .status.error { display: block; background: rgba(255,0,0,0.1); color: #f00; }
+        .empty { text-align: center; padding: 40px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>VibeGo File Manager</h1>
+        <div class="toolbar">
+            <input type="text" id="pathInput" placeholder="Path..." value=".">
+            <button onclick="loadPath()">Go</button>
+            <button onclick="goUp()">Up</button>
+            <button onclick="refresh()">Refresh</button>
+            <button onclick="showNewFileModal()">New File</button>
+            <button onclick="showNewFolderModal()">New Folder</button>
+            <button onclick="showUploadModal()">Upload</button>
+        </div>
+        <div class="breadcrumb" id="breadcrumb"></div>
+        <div class="file-list" id="fileList"></div>
+        <div class="status" id="status"></div>
+    </div>
+
+    <div class="modal" id="newFileModal">
+        <div class="modal-content">
+            <h3>New File</h3>
+            <input type="text" id="newFileName" placeholder="File name">
+            <textarea id="newFileContent" placeholder="Content (optional)"></textarea>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal('newFileModal')">Cancel</button>
+                <button class="btn" onclick="createFile()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="newFolderModal">
+        <div class="modal-content">
+            <h3>New Folder</h3>
+            <input type="text" id="newFolderName" placeholder="Folder name">
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal('newFolderModal')">Cancel</button>
+                <button class="btn" onclick="createFolder()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <h3>Edit: <span id="editFileName"></span></h3>
+            <textarea id="editContent"></textarea>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal('editModal')">Cancel</button>
+                <button class="btn" onclick="saveFile()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="renameModal">
+        <div class="modal-content">
+            <h3>Rename</h3>
+            <input type="text" id="renameInput" placeholder="New name">
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal('renameModal')">Cancel</button>
+                <button class="btn" onclick="doRename()">Rename</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="uploadModal">
+        <div class="modal-content">
+            <h3>Upload Files</h3>
+            <div class="upload-area" id="uploadArea">
+                <p>Drag files here or click to select</p>
+                <input type="file" id="fileInput" multiple style="display:none">
+            </div>
+            <div id="uploadList"></div>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal('uploadModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="context-menu" id="contextMenu" style="display:none">
+        <div onclick="contextAction('open')">Open</div>
+        <div onclick="contextAction('edit')">Edit</div>
+        <div onclick="contextAction('rename')">Rename</div>
+        <div onclick="contextAction('copy')">Copy</div>
+        <div onclick="contextAction('cut')">Cut</div>
+        <div onclick="contextAction('download')">Download</div>
+        <div onclick="contextAction('delete')">Delete</div>
+    </div>
+
+    <script>
+        let currentPath = '.';
+        let files = [];
+        let selectedFile = null;
+        let clipboard = null;
+        let clipboardAction = null;
+        let editingPath = '';
+
+        async function api(url, method = 'GET', body = null) {
+            const opts = { method, headers: {} };
+            if (body) {
+                opts.headers['Content-Type'] = 'application/json';
+                opts.body = JSON.stringify(body);
+            }
+            const res = await fetch(url, opts);
+            return res.json();
+        }
+
+        async function loadPath(path) {
+            if (path) currentPath = path;
+            else currentPath = document.getElementById('pathInput').value || '.';
+            document.getElementById('pathInput').value = currentPath;
+            try {
+                const data = await api(`/api/file/list?path=${encodeURIComponent(currentPath)}`);
+                if (data.error) throw new Error(data.error);
+                currentPath = data.path;
+                document.getElementById('pathInput').value = currentPath;
+                files = data.files || [];
+                renderBreadcrumb();
+                renderFiles();
+                showStatus('', '');
+            } catch (e) {
+                showStatus('Error: ' + e.message, 'error');
+            }
+        }
+
+        function renderBreadcrumb() {
+            const parts = currentPath.split('/').filter(p => p);
+            let html = '<a onclick="loadPath(\'/\')">Root</a>';
+            let path = '';
+            for (const part of parts) {
+                path += '/' + part;
+                html += `<span>/</span><a onclick="loadPath('${path}')">${part}</a>`;
+            }
+            document.getElementById('breadcrumb').innerHTML = html;
+        }
+
+        function renderFiles() {
+            if (!files.length) {
+                document.getElementById('fileList').innerHTML = '<div class="empty">Empty folder</div>';
+                return;
+            }
+            const sorted = [...files].sort((a, b) => {
+                if (a.isDir !== b.isDir) return b.isDir - a.isDir;
+                return a.name.localeCompare(b.name);
+            });
+            let html = '';
+            for (const f of sorted) {
+                const icon = f.isDir ? '📁' : '📄';
+                const size = f.isDir ? '-' : formatSize(f.size);
+                const time = new Date(f.modTime * 1000).toLocaleString();
+                html += `<div class="file-item" data-path="${f.path}" data-isdir="${f.isDir}" 
+                    onclick="selectFile(this)" ondblclick="openFile('${f.path}', ${f.isDir})" 
+                    oncontextmenu="showContext(event, '${f.path}', ${f.isDir})">
+                    <span class="file-icon">${icon}</span>
+                    <span class="file-name">${f.name}</span>
+                    <span class="file-size">${size}</span>
+                    <span class="file-time">${time}</span>
+                </div>`;
+            }
+            document.getElementById('fileList').innerHTML = html;
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+            return (bytes / 1024 / 1024 / 1024).toFixed(1) + ' GB';
+        }
+
+        function selectFile(el) {
+            document.querySelectorAll('.file-item').forEach(e => e.classList.remove('selected'));
+            el.classList.add('selected');
+            selectedFile = { path: el.dataset.path, isDir: el.dataset.isdir === 'true' };
+        }
+
+        function openFile(path, isDir) {
+            if (isDir) loadPath(path);
+            else editFile(path);
+        }
+
+        function goUp() {
+            const parts = currentPath.split('/').filter(p => p);
+            parts.pop();
+            loadPath('/' + parts.join('/') || '/');
+        }
+
+        function refresh() { loadPath(currentPath); }
+
+        function showNewFileModal() {
+            document.getElementById('newFileName').value = '';
+            document.getElementById('newFileContent').value = '';
+            document.getElementById('newFileModal').classList.add('active');
+        }
+
+        function showNewFolderModal() {
+            document.getElementById('newFolderName').value = '';
+            document.getElementById('newFolderModal').classList.add('active');
+        }
+
+        function showUploadModal() {
+            document.getElementById('uploadList').innerHTML = '';
+            document.getElementById('uploadModal').classList.add('active');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        async function createFile() {
+            const name = document.getElementById('newFileName').value.trim();
+            if (!name) return alert('Name required');
+            const content = document.getElementById('newFileContent').value;
+            const path = currentPath + '/' + name;
+            const res = await api('/api/file/new', 'POST', { path, content, isDir: false });
+            if (res.error) return showStatus('Error: ' + res.error, 'error');
+            closeModal('newFileModal');
+            refresh();
+            showStatus('File created', 'success');
+        }
+
+        async function createFolder() {
+            const name = document.getElementById('newFolderName').value.trim();
+            if (!name) return alert('Name required');
+            const path = currentPath + '/' + name;
+            const res = await api('/api/file/mkdir', 'POST', { path });
+            if (res.error) return showStatus('Error: ' + res.error, 'error');
+            closeModal('newFolderModal');
+            refresh();
+            showStatus('Folder created', 'success');
+        }
+
+        async function editFile(path) {
+            editingPath = path;
+            const res = await api('/api/file/content', 'POST', { path });
+            if (res.error) return showStatus('Error: ' + res.error, 'error');
+            document.getElementById('editFileName').textContent = path.split('/').pop();
+            document.getElementById('editContent').value = res.content;
+            document.getElementById('editModal').classList.add('active');
+        }
+
+        async function saveFile() {
+            const content = document.getElementById('editContent').value;
+            const res = await api('/api/file/save', 'POST', { path: editingPath, content });
+            if (res.error) return showStatus('Error: ' + res.error, 'error');
+            closeModal('editModal');
+            showStatus('File saved', 'success');
+        }
+
+        function showContext(e, path, isDir) {
+            e.preventDefault();
+            selectedFile = { path, isDir };
+            const menu = document.getElementById('contextMenu');
+            menu.style.display = 'block';
+            menu.style.left = e.pageX + 'px';
+            menu.style.top = e.pageY + 'px';
+        }
+
+        document.addEventListener('click', () => {
+            document.getElementById('contextMenu').style.display = 'none';
+        });
+
+        async function contextAction(action) {
+            if (!selectedFile) return;
+            const { path, isDir } = selectedFile;
+            switch (action) {
+                case 'open': openFile(path, isDir); break;
+                case 'edit': if (!isDir) editFile(path); break;
+                case 'rename':
+                    document.getElementById('renameInput').value = path.split('/').pop();
+                    document.getElementById('renameModal').classList.add('active');
+                    break;
+                case 'copy': clipboard = path; clipboardAction = 'copy'; showStatus('Copied to clipboard', 'success'); break;
+                case 'cut': clipboard = path; clipboardAction = 'cut'; showStatus('Cut to clipboard', 'success'); break;
+                case 'download': window.open('/api/file/download?path=' + encodeURIComponent(path)); break;
+                case 'delete':
+                    if (confirm('Delete ' + path + '?')) {
+                        const res = await api('/api/file/del', 'POST', { path });
+                        if (res.error) showStatus('Error: ' + res.error, 'error');
+                        else { refresh(); showStatus('Deleted', 'success'); }
+                    }
+                    break;
+            }
+        }
+
+        async function doRename() {
+            const newName = document.getElementById('renameInput').value.trim();
+            if (!newName || !selectedFile) return;
+            const dir = selectedFile.path.substring(0, selectedFile.path.lastIndexOf('/'));
+            const newPath = dir + '/' + newName;
+            const res = await api('/api/file/rename', 'POST', { oldName: selectedFile.path, newName: newPath });
+            if (res.error) return showStatus('Error: ' + res.error, 'error');
+            closeModal('renameModal');
+            refresh();
+            showStatus('Renamed', 'success');
+        }
+
+        async function paste() {
+            if (!clipboard) return;
+            const name = clipboard.split('/').pop();
+            const dst = currentPath + '/' + name;
+            const endpoint = clipboardAction === 'copy' ? '/api/file/copy' : '/api/file/move';
+            const res = await api(endpoint, 'POST', { src: clipboard, dst });
+            if (res.error) return showStatus('Error: ' + res.error, 'error');
+            if (clipboardAction === 'cut') clipboard = null;
+            refresh();
+            showStatus('Pasted', 'success');
+        }
+
+        document.addEventListener('keydown', e => {
+            if (e.ctrlKey && e.key === 'v') paste();
+        });
+
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        uploadArea.onclick = () => fileInput.click();
+        uploadArea.ondragover = e => { e.preventDefault(); uploadArea.classList.add('dragover'); };
+        uploadArea.ondragleave = () => uploadArea.classList.remove('dragover');
+        uploadArea.ondrop = e => { e.preventDefault(); uploadArea.classList.remove('dragover'); uploadFiles(e.dataTransfer.files); };
+        fileInput.onchange = () => uploadFiles(fileInput.files);
+
+        async function uploadFiles(fileList) {
+            const form = new FormData();
+            form.append('path', currentPath);
+            for (const f of fileList) form.append('file', f);
+            const res = await fetch('/api/file/upload', { method: 'POST', body: form });
+            const data = await res.json();
+            if (data.error) showStatus('Error: ' + data.error, 'error');
+            else { refresh(); showStatus('Uploaded', 'success'); }
+            closeModal('uploadModal');
+        }
+
+        function showStatus(msg, type) {
+            const el = document.getElementById('status');
+            el.textContent = msg;
+            el.className = 'status ' + type;
+        }
+
+        loadPath('.');
+    </script>
+</body>
+</html>

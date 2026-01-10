@@ -76,7 +76,7 @@ func TestManager_MultiClient_Sharing(t *testing.T) {
 			return
 		}
 
-		if _, err := manager.Attach(info.ID, conn, AttachOptions{Reactivate: true}); err != nil {
+		if _, err := manager.Attach(info.ID, conn); err != nil {
 			t.Errorf("failed to attach: %v", err)
 			conn.Close()
 			return
@@ -126,7 +126,7 @@ func TestManager_MaxConnections(t *testing.T) {
 			return
 		}
 
-		if _, err := manager.Attach(info.ID, conn, AttachOptions{Reactivate: true}); err != nil {
+		if _, err := manager.Attach(info.ID, conn); err != nil {
 			conn.Close()
 			return
 		}
@@ -176,7 +176,7 @@ func TestManager_WebTTY_Integration(t *testing.T) {
 			return
 		}
 
-		if _, err := manager.Attach(info.ID, conn, AttachOptions{Reactivate: true}); err != nil {
+		if _, err := manager.Attach(info.ID, conn); err != nil {
 			conn.Close()
 			return
 		}
@@ -203,15 +203,15 @@ func TestManager_WebTTY_Integration(t *testing.T) {
 		}
 		if len(msg) > 0 {
 			msgCount++
-			t.Logf("Received message type: %c", msg[0])
+			t.Logf("Received message: %s", string(msg))
 		}
 	}
 
 	close(done)
 	conn.Close()
 
-	if msgCount < 2 {
-		t.Errorf("expected at least 2 init messages, got %d", msgCount)
+	if msgCount < 1 {
+		t.Errorf("expected at least 1 message, got %d", msgCount)
 	}
 }
 

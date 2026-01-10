@@ -26,18 +26,304 @@ definitions:
     required:
     - id
     type: object
-  handler.FileInfo:
+  handler.DirSizeReq:
     properties:
-      is_dir:
+      path:
+        type: string
+    required:
+    - path
+    type: object
+  handler.ExistFileInfo:
+    properties:
+      isDir:
         type: boolean
-      mod_time:
-        type: integer
+      modTime:
+        type: string
       name:
         type: string
       path:
         type: string
       size:
         type: integer
+    type: object
+  handler.FileBatchDelete:
+    properties:
+      paths:
+        items:
+          type: string
+        type: array
+    required:
+    - paths
+    type: object
+  handler.FileCompress:
+    properties:
+      dst:
+        type: string
+      files:
+        items:
+          type: string
+        type: array
+      name:
+        type: string
+      replace:
+        type: boolean
+      type:
+        type: string
+    required:
+    - dst
+    - files
+    - name
+    - type
+    type: object
+  handler.FileContentReq:
+    properties:
+      path:
+        type: string
+    required:
+    - path
+    type: object
+  handler.FileCopy:
+    properties:
+      cover:
+        type: boolean
+      dstPath:
+        type: string
+      srcPaths:
+        items:
+          type: string
+        type: array
+    required:
+    - dstPath
+    - srcPaths
+    type: object
+  handler.FileCreate:
+    properties:
+      content:
+        type: string
+      isDir:
+        type: boolean
+      isLink:
+        type: boolean
+      isSymlink:
+        type: boolean
+      linkPath:
+        type: string
+      mode:
+        type: integer
+      path:
+        type: string
+    required:
+    - path
+    type: object
+  handler.FileDecompress:
+    properties:
+      dst:
+        type: string
+      path:
+        type: string
+      type:
+        type: string
+    required:
+    - dst
+    - path
+    - type
+    type: object
+  handler.FileDelete:
+    properties:
+      forceDelete:
+        type: boolean
+      isDir:
+        type: boolean
+      path:
+        type: string
+    required:
+    - path
+    type: object
+  handler.FileEdit:
+    properties:
+      content:
+        type: string
+      path:
+        type: string
+    required:
+    - path
+    type: object
+  handler.FileInfo:
+    properties:
+      content:
+        type: string
+      extension:
+        type: string
+      gid:
+        type: string
+      group:
+        type: string
+      isDir:
+        type: boolean
+      isHidden:
+        type: boolean
+      isSymlink:
+        type: boolean
+      itemTotal:
+        type: integer
+      items:
+        items:
+          $ref: '#/definitions/handler.FileInfo'
+        type: array
+      linkPath:
+        type: string
+      mimeType:
+        type: string
+      modTime:
+        type: string
+      mode:
+        type: string
+      name:
+        type: string
+      path:
+        type: string
+      size:
+        type: integer
+      type:
+        type: string
+      uid:
+        type: string
+      user:
+        type: string
+    type: object
+  handler.FileModeUpdate:
+    properties:
+      mode:
+        type: string
+      path:
+        type: string
+      sub:
+        type: boolean
+    required:
+    - mode
+    - path
+    type: object
+  handler.FileMove:
+    properties:
+      cover:
+        type: boolean
+      name:
+        type: string
+      newPath:
+        type: string
+      oldPaths:
+        items:
+          type: string
+        type: array
+      type:
+        type: string
+    required:
+    - newPath
+    - oldPaths
+    - type
+    type: object
+  handler.FileOption:
+    properties:
+      containSub:
+        type: boolean
+      dir:
+        type: boolean
+      expand:
+        type: boolean
+      page:
+        type: integer
+      pageSize:
+        type: integer
+      path:
+        type: string
+      search:
+        type: string
+      showHidden:
+        type: boolean
+      sortBy:
+        type: string
+      sortOrder:
+        type: string
+    required:
+    - path
+    type: object
+  handler.FilePathCheck:
+    properties:
+      path:
+        type: string
+    required:
+    - path
+    type: object
+  handler.FilePathsCheck:
+    properties:
+      paths:
+        items:
+          type: string
+        type: array
+    required:
+    - paths
+    type: object
+  handler.FileRename:
+    properties:
+      newName:
+        type: string
+      oldName:
+        type: string
+    required:
+    - newName
+    - oldName
+    type: object
+  handler.FileRoleReq:
+    properties:
+      group:
+        type: string
+      mode:
+        type: string
+      paths:
+        items:
+          type: string
+        type: array
+      sub:
+        type: boolean
+      user:
+        type: string
+    required:
+    - group
+    - mode
+    - paths
+    - user
+    type: object
+  handler.FileRoleUpdate:
+    properties:
+      group:
+        type: string
+      path:
+        type: string
+      sub:
+        type: boolean
+      user:
+        type: string
+    required:
+    - group
+    - path
+    - user
+    type: object
+  handler.FileTree:
+    properties:
+      children:
+        items:
+          $ref: '#/definitions/handler.FileTree'
+        type: array
+      extension:
+        type: string
+      id:
+        type: string
+      isDir:
+        type: boolean
+      name:
+        type: string
+      path:
+        type: string
     type: object
   handler.GitActionRequest:
     properties:
@@ -55,33 +341,6 @@ definitions:
         type: string
     required:
     - id
-    type: object
-  handler.GrepMatch:
-    properties:
-      content:
-        type: string
-      line:
-        type: integer
-      path:
-        type: string
-    type: object
-  handler.MkdirRequest:
-    properties:
-      path:
-        type: string
-    required:
-    - path
-    type: object
-  handler.NewFileRequest:
-    properties:
-      content:
-        type: string
-      is_dir:
-        type: boolean
-      path:
-        type: string
-    required:
-    - path
     type: object
   handler.NewRepoRequest:
     properties:
@@ -105,16 +364,6 @@ definitions:
         type: string
       rows:
         type: integer
-    type: object
-  handler.RenameRequest:
-    properties:
-      new_path:
-        type: string
-      old_path:
-        type: string
-    required:
-    - new_path
-    - old_path
     type: object
   handler.SaveSessionRequest:
     properties:
@@ -173,29 +422,6 @@ definitions:
       updated_at:
         type: integer
     type: object
-  handler.TreeNode:
-    properties:
-      children:
-        items:
-          $ref: '#/definitions/handler.TreeNode'
-        type: array
-      is_dir:
-        type: boolean
-      name:
-        type: string
-      path:
-        type: string
-    type: object
-  handler.WriteFileRequest:
-    properties:
-      content:
-        type: string
-      path:
-        type: string
-    required:
-    - content
-    - path
-    type: object
 host: localhost:1984
 info:
   contact: {}
@@ -241,26 +467,7 @@ paths:
         "200":
           description: OK
           schema:
-            additionalProperties:
-              type: boolean
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
+            additionalProperties: true
             type: object
       summary: Remove file or directory
       tags:
@@ -279,37 +486,240 @@ paths:
         "200":
           description: OK
           schema:
-            additionalProperties:
-              type: string
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
+            additionalProperties: true
             type: object
       summary: Get absolute path
+      tags:
+      - File
+  /api/file/batch/check:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Check request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.FilePathsCheck'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.ExistFileInfo'
+            type: array
+      summary: Batch check files exist
+      tags:
+      - File
+  /api/file/batch/del:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Batch delete request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.FileBatchDelete'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Batch delete files
+      tags:
+      - File
+  /api/file/batch/role:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Batch role request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.FileRoleReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Batch change mode and owner
+      tags:
+      - File
+  /api/file/check:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Check request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.FilePathCheck'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Check file exists
+      tags:
+      - File
+  /api/file/compress:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Compress request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.FileCompress'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Compress files
+      tags:
+      - File
+  /api/file/content:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Content request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.FileContentReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.FileInfo'
+      summary: Get file content
+      tags:
+      - File
+  /api/file/copy:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Copy request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.FileCopy'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Copy files
+      tags:
+      - File
+  /api/file/decompress:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Decompress request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.FileDecompress'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Decompress archive
+      tags:
+      - File
+  /api/file/del:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: File delete request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.FileDelete'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete file or directory
+      tags:
+      - File
+  /api/file/download:
+    get:
+      parameters:
+      - description: File path
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      summary: Download file
       tags:
       - File
   /api/file/grep:
     get:
       parameters:
-      - description: Search path
-        in: query
-        name: path
-        type: string
-      - description: Regex pattern
+      - description: Search pattern
         in: query
         name: pattern
         required: true
         type: string
-      - description: Max results (default 100)
+      - description: Search path
+        in: query
+        name: path
+        type: string
+      - description: Max results
         in: query
         name: limit
         type: integer
@@ -319,24 +729,27 @@ paths:
         "200":
           description: OK
           schema:
-            additionalProperties:
-              items:
-                $ref: '#/definitions/handler.GrepMatch'
-              type: array
+            additionalProperties: true
             type: object
-        "400":
-          description: Bad Request
+      summary: Grep files
+      tags:
+      - File
+  /api/file/info:
+    get:
+      parameters:
+      - description: File path
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
           schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Search file contents (grep)
+            $ref: '#/definitions/handler.FileInfo'
+      summary: Get file info
       tags:
       - File
   /api/file/list:
@@ -354,25 +767,7 @@ paths:
           schema:
             additionalProperties: true
             type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: List directory contents
+      summary: List directory (GET)
       tags:
       - File
   /api/file/mkdir:
@@ -385,7 +780,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/handler.MkdirRequest'
+          $ref: '#/definitions/handler.FileCreate'
       produces:
       - application/json
       responses:
@@ -394,25 +789,51 @@ paths:
           schema:
             additionalProperties: true
             type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: Conflict
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
       summary: Create directory
+      tags:
+      - File
+  /api/file/mode:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Mode update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.FileModeUpdate'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Change file mode
+      tags:
+      - File
+  /api/file/move:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Move request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.FileMove'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Move files
       tags:
       - File
   /api/file/new:
@@ -420,12 +841,12 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: New file request
+      - description: File create request
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/handler.NewFileRequest'
+          $ref: '#/definitions/handler.FileCreate'
       produces:
       - application/json
       responses:
@@ -434,25 +855,29 @@ paths:
           schema:
             additionalProperties: true
             type: object
-        "400":
-          description: Bad Request
+      summary: Create file or directory
+      tags:
+      - File
+  /api/file/owner:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Owner update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.FileRoleUpdate'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
           schema:
-            additionalProperties:
-              type: string
+            additionalProperties: true
             type: object
-        "409":
-          description: Conflict
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Create new file or directory
+      summary: Change file owner
       tags:
       - File
   /api/file/read:
@@ -471,25 +896,7 @@ paths:
           schema:
             additionalProperties: true
             type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Read file content
+      summary: Read file content (GET)
       tags:
       - File
   /api/file/rename:
@@ -502,7 +909,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/handler.RenameRequest'
+          $ref: '#/definitions/handler.FileRename'
       produces:
       - application/json
       responses:
@@ -511,108 +918,125 @@ paths:
           schema:
             additionalProperties: true
             type: object
-        "400":
-          description: Bad Request
+      summary: Rename file
+      tags:
+      - File
+  /api/file/save:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Edit request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.FileEdit'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
           schema:
-            additionalProperties:
-              type: string
+            additionalProperties: true
             type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: Conflict
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Rename file or directory
+      summary: Save file content
       tags:
       - File
   /api/file/search:
-    get:
+    post:
+      consumes:
+      - application/json
       parameters:
-      - description: Search path
-        in: query
-        name: path
-        type: string
-      - description: Search pattern
-        in: query
-        name: pattern
+      - description: File option
+        in: body
+        name: request
         required: true
-        type: string
-      - description: Max results (default 100)
-        in: query
-        name: limit
-        type: integer
+        schema:
+          $ref: '#/definitions/handler.FileOption'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            additionalProperties:
-              items:
-                $ref: '#/definitions/handler.FileInfo'
-              type: array
-            type: object
-        "400":
-          description: Bad Request
+            $ref: '#/definitions/handler.FileInfo'
+      summary: List files with pagination and sorting
+      tags:
+      - File
+  /api/file/size:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Size request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.DirSizeReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
           schema:
-            additionalProperties:
-              type: string
+            additionalProperties: true
             type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Search files by pattern
+      summary: Get directory size
       tags:
       - File
   /api/file/tree:
-    get:
+    post:
+      consumes:
+      - application/json
       parameters:
-      - description: Directory path
-        in: query
-        name: path
-        type: string
+      - description: File option
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.FileOption'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handler.TreeNode'
-        "400":
-          description: Bad Request
+            items:
+              $ref: '#/definitions/handler.FileTree'
+            type: array
+      summary: Get file tree
+      tags:
+      - File
+  /api/file/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: File
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: Destination path
+        in: formData
+        name: path
+        required: true
+        type: string
+      - description: Overwrite
+        in: formData
+        name: overwrite
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
           schema:
-            additionalProperties:
-              type: string
+            additionalProperties: true
             type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Get directory tree
+      summary: Upload file
       tags:
       - File
   /api/file/write:
@@ -620,12 +1044,12 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: Write file request
+      - description: Write request
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/handler.WriteFileRequest'
+          $ref: '#/definitions/handler.FileEdit'
       produces:
       - application/json
       responses:
@@ -633,18 +1057,6 @@ paths:
           description: OK
           schema:
             additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
             type: object
       summary: Write file content
       tags:

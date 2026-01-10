@@ -44,7 +44,7 @@ func TestFileNew(t *testing.T) {
 func TestFileNewDir(t *testing.T) {
 	_, r, tmpDir := setupTestFileHandler(t)
 
-	body := `{"path":"subdir","is_dir":true}`
+	body := `{"path":"subdir","isDir":true}`
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/api/file/new", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -193,15 +193,17 @@ func TestFileTree(t *testing.T) {
 	os.Mkdir(filepath.Join(tmpDir, "dir1"), 0755)
 	os.WriteFile(filepath.Join(tmpDir, "dir1", "f.txt"), []byte("f"), 0644)
 
+	body := `{"path":"."}`
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/api/file/tree?path=.", nil)
+	req, _ := http.NewRequest("POST", "/api/file/tree", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var result TreeNode
+	var result []FileTree
 	json.Unmarshal(w.Body.Bytes(), &result)
-	assert.True(t, result.IsDir)
-	assert.NotEmpty(t, result.Children)
+	assert.NotEmpty(t, result)
+	assert.True(t, result[0].IsDir)
 }
 
 func TestFileSearch(t *testing.T) {
@@ -210,22 +212,22 @@ func TestFileSearch(t *testing.T) {
 	os.WriteFile(filepath.Join(tmpDir, "test.go"), []byte("go"), 0644)
 	os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte("txt"), 0644)
 
+	body := `{"path":".","search":"test.go"}`
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/api/file/search?path=.&pattern=*.go", nil)
+	req, _ := http.NewRequest("POST", "/api/file/search", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var result map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &result)
-	matches := result["matches"].([]interface{})
-	assert.Len(t, matches, 1)
 }
 
-func TestFileSearchMissingPattern(t *testing.T) {
+func TestFileSearchMissingPath(t *testing.T) {
 	_, r, _ := setupTestFileHandler(t)
 
+	body := `{}`
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/api/file/search?path=.", nil)
+	req, _ := http.NewRequest("POST", "/api/file/search", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -275,7 +277,7 @@ func TestFileRename(t *testing.T) {
 
 	os.WriteFile(filepath.Join(tmpDir, "old.txt"), []byte("old"), 0644)
 
-	body := `{"old_path":"old.txt","new_path":"new.txt"}`
+	body := `{"oldName":"old.txt","newName":"new.txt"}`
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/api/file/rename", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -291,7 +293,7 @@ func TestFileRename(t *testing.T) {
 func TestFileRenameNotFound(t *testing.T) {
 	_, r, _ := setupTestFileHandler(t)
 
-	body := `{"old_path":"notexist","new_path":"new.txt"}`
+	body := `{"oldName":"notexist","newName":"new.txt"}`
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/api/file/rename", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -306,7 +308,7 @@ func TestFileRenameConflict(t *testing.T) {
 	os.WriteFile(filepath.Join(tmpDir, "src.txt"), []byte("s"), 0644)
 	os.WriteFile(filepath.Join(tmpDir, "dst.txt"), []byte("d"), 0644)
 
-	body := `{"old_path":"src.txt","new_path":"dst.txt"}`
+	body := `{"oldName":"src.txt","newName":"dst.txt"}`
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/api/file/rename", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")

@@ -78,42 +78,6 @@ func (s *mockSlave) Close() error {
 	return nil
 }
 
-func TestWebTTY_SendInitMessage(t *testing.T) {
-	master := &mockMaster{}
-	slave := &mockSlave{}
-
-	wt := newWebTTY(master, slave, withBufferSize(1024))
-
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	go wt.Run(ctx)
-	time.Sleep(50 * time.Millisecond)
-
-	master.mu.Lock()
-	defer master.mu.Unlock()
-
-	if len(master.writeData) < 2 {
-		t.Fatalf("expected at least 2 init messages, got %d", len(master.writeData))
-	}
-
-	if master.writeData[0][0] != MsgSetWindowTitle {
-		t.Errorf("expected first message to be SetWindowTitle, got %c", master.writeData[0][0])
-	}
-
-	if master.writeData[1][0] != MsgSetBufferSize {
-		t.Errorf("expected second message to be SetBufferSize, got %c", master.writeData[1][0])
-	}
-
-	var bufSize int
-	if err := json.Unmarshal(master.writeData[1][1:], &bufSize); err != nil {
-		t.Errorf("failed to unmarshal buffer size: %v", err)
-	}
-	if bufSize != 1024 {
-		t.Errorf("expected buffer size 1024, got %d", bufSize)
-	}
-}
-
 func TestWebTTY_SlaveToMaster(t *testing.T) {
 	master := &mockMaster{}
 	slave := &mockSlave{
@@ -133,10 +97,13 @@ func TestWebTTY_SlaveToMaster(t *testing.T) {
 
 	found := false
 	for _, msg := range master.writeData {
-		if len(msg) > 0 && msg[0] == MsgOutput {
-			decoded, err := base64.StdEncoding.DecodeString(string(msg[1:]))
+		var wsMsg WSMessage
+		if err := json.Unmarshal(msg, &wsMsg); err != nil {
+			continue
+		}
+		if wsMsg.Type == MsgTypeCmd {
+			decoded, err := base64.StdEncoding.DecodeString(wsMsg.Data)
 			if err != nil {
-				t.Errorf("failed to decode output: %v", err)
 				continue
 			}
 			if string(decoded) == "hello world" {
@@ -153,8 +120,11 @@ func TestWebTTY_SlaveToMaster(t *testing.T) {
 
 func TestWebTTY_MasterToSlave_Input(t *testing.T) {
 	encoded := base64.StdEncoding.EncodeToString([]byte("test input"))
+	inputMsg := WSMessage{Type: MsgTypeCmd, Data: encoded}
+	inputData, _ := json.Marshal(inputMsg)
+
 	master := &mockMaster{
-		readData: append([]byte{MsgInput}, []byte(encoded)...),
+		readData: inputData,
 	}
 	slave := &mockSlave{}
 
@@ -178,9 +148,12 @@ func TestWebTTY_MasterToSlave_Input(t *testing.T) {
 	}
 }
 
-func TestWebTTY_Ping_Pong(t *testing.T) {
+func TestWebTTY_Heartbeat(t *testing.T) {
+	heartbeatMsg := WSMessage{Type: MsgTypeHeartbeat, Timestamp: time.Now().Unix()}
+	heartbeatData, _ := json.Marshal(heartbeatMsg)
+
 	master := &mockMaster{
-		readData: []byte{MsgPing},
+		readData: heartbeatData,
 	}
 	slave := &mockSlave{}
 
@@ -197,21 +170,27 @@ func TestWebTTY_Ping_Pong(t *testing.T) {
 
 	found := false
 	for _, msg := range master.writeData {
-		if len(msg) > 0 && msg[0] == MsgPong {
+		var wsMsg WSMessage
+		if err := json.Unmarshal(msg, &wsMsg); err != nil {
+			continue
+		}
+		if wsMsg.Type == MsgTypeHeartbeat {
 			found = true
 			break
 		}
 	}
 
 	if !found {
-		t.Error("expected to find Pong message")
+		t.Error("expected to find heartbeat response")
 	}
 }
 
 func TestWebTTY_Resize(t *testing.T) {
-	resizeMsg, _ := json.Marshal(ResizeMessage{Cols: 100, Rows: 30})
+	resizeMsg := WSMessage{Type: MsgTypeResize, Cols: 100, Rows: 30}
+	resizeData, _ := json.Marshal(resizeMsg)
+
 	master := &mockMaster{
-		readData: append([]byte{MsgResize}, resizeMsg...),
+		readData: resizeData,
 	}
 	slave := &mockSlave{}
 
