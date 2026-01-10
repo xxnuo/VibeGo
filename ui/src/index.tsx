@@ -25,9 +25,8 @@ const isCancelError = (error: unknown): boolean => {
 window.addEventListener('error', (e) => {
   const msg = e.message || '';
   const filename = e.filename || '';
-  if (
-    (msg.includes('Canceled') || msg.includes('canceled')) &&
-    (filename.includes('monaco') || filename.includes('editor'))
+  if ((isCancelError(e.error) || msg.includes('Canceled') || msg.includes('canceled')) &&
+    (filename.includes('monaco') || filename.includes('editor') || filename.includes('installHook'))
   ) {
     e.preventDefault();
     return true;
