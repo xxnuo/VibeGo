@@ -12,6 +12,8 @@ export interface TabItem {
   closable?: boolean;
 }
 
+const EMPTY_TABS: TabItem[] = [];
+
 export interface WorkspaceGroup {
   type: 'workspace';
   id: string;
@@ -245,7 +247,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
 
   getCurrentTabs: () => {
     const group = get().getActiveGroup();
-    if (!group) return [];
+    if (!group) return EMPTY_TABS;
     return getGroupTabs(group);
   },
 

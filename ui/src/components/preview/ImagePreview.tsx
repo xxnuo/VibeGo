@@ -1,10 +1,10 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
+import type { FileItem } from '@/stores/fileManagerStore';
 import { ZoomIn, ZoomOut, RotateCcw, ExternalLink, Download } from 'lucide-react';
 import { fileApi } from '@/api/file';
 import { usePreviewStore } from '@/stores/previewStore';
 
-const ImagePreview: React.FC = () => {
-  const { file } = usePreviewStore();
+const ImagePreviewContent: React.FC<{ file: FileItem }> = ({ file }) => {
   const [scale, setScale] = useState(1);
   const [initialScale, setInitialScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -14,7 +14,7 @@ const ImagePreview: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
-  const imageUrl = file ? fileApi.downloadUrl(file.path) : '';
+  const imageUrl = fileApi.downloadUrl(file.path);
 
   const handleZoomIn = () => setScale((s) => Math.min(s * 1.25, 5));
   const handleZoomOut = () => setScale((s) => Math.max(s / 1.25, 0.1));
@@ -62,14 +62,9 @@ const ImagePreview: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    setImageLoaded(false);
-    setScale(1);
-    setInitialScale(1);
-    setPosition({ x: 0, y: 0 });
-  }, [file?.path]);
 
-  if (!file) return null;
+
+
 
   return (
     <div className="h-full w-full flex flex-col bg-ide-bg">
@@ -117,6 +112,14 @@ const ImagePreview: React.FC = () => {
       </div>
     </div>
   );
+};
+
+
+
+const ImagePreview: React.FC = () => {
+  const { file } = usePreviewStore();
+  if (!file) return null;
+  return <ImagePreviewContent file={file} key={file.path} />;
 };
 
 export default ImagePreview;
