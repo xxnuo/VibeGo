@@ -7,7 +7,7 @@ interface CodeEditorProps {
   onChange: (newContent: string) => void;
 }
 
-const CodeEditor: React.FC<CodeEditorProps> = ({ content, language, onChange }) => {
+const CodeEditor: React.FC<CodeEditorProps> = ({ content, onChange }) => {
   // Simple syntax highlighting simulation (just coloring for demo)
   const [value, setValue] = useState(content);
 

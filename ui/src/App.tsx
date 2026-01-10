@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { FileNode, TerminalSession, EditorTab, Theme, Locale, GitFileNode } from '@/types';
+import type { FileNode, EditorTab, Theme, Locale, GitFileNode } from '@/types';
 import { AppView } from '@/types';
 import {
   Menu, Files, GitGraph, Terminal, Plus,
@@ -99,7 +99,7 @@ const App: React.FC = () => {
     { id: 'tab-1', fileId: 'app', title: 'boot.sys', isDirty: false, type: 'code' }
   ]);
 
-  const [terminals, setTerminals] = useState<TerminalSession[]>([
+  const [terminals] = useState([
     { id: 'term-1', name: 'root@proxynode', history: ['> connecting to 192.168.0.1...', '> secure handshake... OK'] },
     { id: 'term-2', name: 'net_watch', history: ['scanning ports...'] }
   ]);

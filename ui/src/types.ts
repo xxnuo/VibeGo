@@ -1,7 +1,8 @@
 export enum AppView {
   FILES = 'FILES',
   GIT = 'GIT',
-  TERMINAL = 'TERMINAL'
+  TERMINAL = 'TERMINAL',
+  PLUGIN = 'PLUGIN',
 }
 
 export interface FileNode {

@@ -1,7 +1,6 @@
 import React from 'react';
-import { GitBranch, GitCommit, GitPullRequest, RotateCw, Play } from 'lucide-react';
+import { GitBranch, RotateCw, Play } from 'lucide-react';
 import type { GitFileNode, Locale } from '@/types';
-import { useTranslation } from '@/utils/i18n';
 
 interface GitViewProps {
   files: GitFileNode[];
@@ -9,8 +8,7 @@ interface GitViewProps {
   locale: Locale;
 }
 
-const GitView: React.FC<GitViewProps> = ({ files, onFileClick, locale }) => {
-  const t = useTranslation(locale);
+const GitView: React.FC<GitViewProps> = ({ files, onFileClick }) => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
