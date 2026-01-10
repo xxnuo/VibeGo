@@ -19,8 +19,19 @@ import * as api from './services/api';
 
 const App: React.FC = () => {
   // --- State ---
-  const [theme, setTheme] = useState<Theme>('terminal');
-  const [locale, setLocale] = useState<Locale>('en'); 
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        return 'dark';
+    }
+    return 'light';
+  });
+  
+  const [locale, setLocale] = useState<Locale>(() => {
+      if (typeof navigator !== 'undefined' && navigator.language.startsWith('zh')) {
+          return 'zh';
+      }
+      return 'en';
+  });
   
   const [currentView, setCurrentView] = useState<AppView>(AppView.FILES);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -222,6 +233,7 @@ const App: React.FC = () => {
               return t;
           }));
           toast.success("File saved");
+          setTimeout(() => loadGitStatus(), 500); // Delay to ensure FS sync
       } catch (e) {
           console.error("Failed to save", e);
           toast.error("Failed to save file");
@@ -378,6 +390,7 @@ const App: React.FC = () => {
                 key={activeTab.id}
                 content={activeTab.data || ''} 
                 language="typescript" // Detect from tab.title?
+                theme={theme}
                 onChange={handleEditorChange} 
             />
         );

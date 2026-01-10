@@ -28,7 +28,11 @@ export const getFileTree = async (path: string = '.'): Promise<FileNode[]> => {
         };
     };
 
-    // Return as array of roots
+    // Flatten root: if request is for '.', return children directly
+    if (path === '.' && root.children) {
+        return root.children.map(transform);
+    }
+
     return [transform(root)];
 };
 
@@ -66,12 +70,30 @@ const getRepoId = async (): Promise<string | null> => {
         const res = await fetch(`${API_BASE}/git/list`);
         if (!res.ok) return null;
         const data = await res.json();
+
         if (data.repos && data.repos.length > 0) {
             cachedRepoId = data.repos[0].id;
             return cachedRepoId;
         }
+
+        // Auto-bind if no repos
+        console.log("No git repos found, attempting to auto-bind '.'");
+        const bindRes = await fetch(`${API_BASE}/git/bind`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: '.' }) // Backend resolves . to baseDir
+        });
+
+        if (bindRes.ok) {
+            const bindData = await bindRes.json();
+            cachedRepoId = bindData.id;
+            return cachedRepoId;
+        } else {
+            console.warn("Failed to auto-bind git repo");
+        }
+
     } catch (e) {
-        console.error("Failed to list repos", e);
+        console.error("Failed to list/bind repos", e);
     }
     return null;
 }
@@ -80,7 +102,7 @@ export const getGitStatus = async (): Promise<GitFileNode[]> => {
     const repoId = await getRepoId();
     if (!repoId) return [];
 
-    const statusRes = await fetch(`${API_BASE}/git/status?id=${repoId}`);
+    const statusRes = await fetch(`${API_BASE}/git/status?id=${repoId}`, { cache: 'no-store' });
     if (!statusRes.ok) return [];
     const statusData: GitStatusResponse = await statusRes.json();
 
