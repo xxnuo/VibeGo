@@ -1,1 +1,0 @@
-export { useTranslation, getTranslation, locales, type Locale } from '@/lib/i18n';
