@@ -23,6 +23,8 @@ func (h *SessionHandler) Register(r *gin.RouterGroup) {
 	g := r.Group("/session")
 	g.GET("", h.List)
 	g.POST("", h.Create)
+	g.GET("/current", h.GetCurrent)
+	g.PUT("/current/state", h.SaveCurrentState)
 	g.GET("/:id", h.Get)
 	g.PUT("/:id/state", h.SaveState)
 	g.DELETE("/:id", h.Delete)
@@ -161,5 +163,85 @@ func (h *SessionHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 		return
 	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (h *SessionHandler) GetCurrent(c *gin.Context) {
+	deviceID := c.GetHeader("X-Device-ID")
+	if deviceID == "" {
+		deviceID = "default"
+	}
+
+	var session model.UserSession
+	result := h.db.First(&session, "device_id = ?", deviceID)
+
+	if result.Error == gorm.ErrRecordNotFound {
+		now := time.Now().Unix()
+		session = model.UserSession{
+			ID:         uuid.New().String(),
+			UserID:     "",
+			DeviceID:   deviceID,
+			DeviceName: c.GetHeader("X-Device-Name"),
+			State:      "{}",
+			CreatedAt:  now,
+			UpdatedAt:  now,
+			ExpiresAt:  now + 30*24*60*60,
+		}
+		if err := h.db.Create(&session).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	} else if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, session)
+}
+
+func (h *SessionHandler) SaveCurrentState(c *gin.Context) {
+	deviceID := c.GetHeader("X-Device-ID")
+	if deviceID == "" {
+		deviceID = "default"
+	}
+
+	var session model.UserSession
+	result := h.db.First(&session, "device_id = ?", deviceID)
+
+	if result.Error == gorm.ErrRecordNotFound {
+		now := time.Now().Unix()
+		session = model.UserSession{
+			ID:         uuid.New().String(),
+			UserID:     "",
+			DeviceID:   deviceID,
+			DeviceName: c.GetHeader("X-Device-Name"),
+			State:      "{}",
+			CreatedAt:  now,
+			UpdatedAt:  now,
+			ExpiresAt:  now + 30*24*60*60,
+		}
+		if err := h.db.Create(&session).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	} else if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		return
+	}
+
+	var req SaveStateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.db.Model(&session).Updates(map[string]any{
+		"state":      req.State,
+		"updated_at": time.Now().Unix(),
+	}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

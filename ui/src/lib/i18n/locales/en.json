@@ -13,7 +13,13 @@
     "close": "Close",
     "cancel": "Cancel",
     "create": "Create",
-    "rename": "Rename"
+    "rename": "Rename",
+    "select": "Select",
+    "browse": "Browse",
+    "loading": "Loading...",
+    "remove": "Remove",
+    "pin": "Pin",
+    "unpin": "Unpin"
   },
   "sidebar": {
     "project": "Project",
@@ -89,5 +95,20 @@
   },
   "contextMenu": {
     "closeGroup": "Close Group"
+  },
+  "home": {
+    "welcome": "Select a workspace to get started",
+    "openDirectory": "Open Directory",
+    "enterPath": "Enter server path...",
+    "recentWorkspaces": "Recent Workspaces",
+    "noRecentWorkspaces": "No recent workspaces",
+    "pinned": "Pinned",
+    "recent": "Recent",
+    "removeConfirm": "Remove \"{name}\" from recent workspaces?"
+  },
+  "directoryPicker": {
+    "title": "Select Directory",
+    "enterPath": "Enter path...",
+    "noSubdirectories": "No subdirectories"
   }
 }

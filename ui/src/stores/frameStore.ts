@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { ReactNode } from "react";
 
-export type GroupType = "workspace" | "terminal" | "plugin" | "settings";
+export type GroupType = "home" | "workspace" | "terminal" | "plugin" | "settings";
 
 export type ViewType = "files" | "git" | "terminal";
 
@@ -90,7 +90,14 @@ export interface SettingsGroup {
   name: string;
 }
 
+export interface HomeGroup {
+  type: "home";
+  id: string;
+  name: string;
+}
+
 export type PageGroup =
+  | HomeGroup
   | WorkspaceGroup
   | TerminalGroup
   | PluginGroup
@@ -105,7 +112,8 @@ interface FrameState {
   setTopBarConfig: (config: TopBarConfig) => void;
   setBottomBarConfig: (config: BottomBarConfig) => void;
   initDefaultGroups: () => void;
-  addWorkspaceGroup: (path: string, name?: string) => void;
+  showHomePage: () => void;
+  addWorkspaceGroup: (path: string, name?: string, id?: string) => string;
   addTerminalGroup: (name?: string) => void;
   addPluginGroup: (pluginId: string, name?: string) => void;
   addSettingsGroup: () => void;
@@ -174,12 +182,18 @@ const createSettingsGroup = (): SettingsGroup => ({
   name: "Settings",
 });
 
+const createHomeGroup = (): HomeGroup => ({
+  type: "home",
+  id: "home",
+  name: "Home",
+});
+
 const getGroupTabs = (group: PageGroup, view?: ViewType): TabItem[] => {
   if (group.type === "workspace") {
     const v = view || group.activeView;
     return group.views[v].tabs;
   }
-  if (group.type === "settings") {
+  if (group.type === "settings" || group.type === "home") {
     return EMPTY_TABS;
   }
   return group.tabs;
@@ -193,7 +207,7 @@ const getGroupActiveTabId = (
     const v = view || group.activeView;
     return group.views[v].activeTabId;
   }
-  if (group.type === "settings") {
+  if (group.type === "settings" || group.type === "home") {
     return null;
   }
   return group.activeTabId;
@@ -209,17 +223,35 @@ export const useFrameStore = create<FrameState>((set, get) => ({
   setBottomBarConfig: (config) => set({ bottomBarConfig: config }),
 
   initDefaultGroups: () => {
+    const homeGroup = createHomeGroup();
+    set({ groups: [homeGroup], activeGroupId: homeGroup.id });
+  },
+
+  showHomePage: () => {
     const { groups } = get();
-    if (groups.length === 0) {
-      const defaultWorkspace = createDefaultWorkspace(".", "Project");
-      defaultWorkspace.id = "default-workspace";
-      set({ groups: [defaultWorkspace], activeGroupId: "default-workspace" });
+    const homeGroup = groups.find((g) => g.type === "home");
+    if (homeGroup) {
+      set({ activeGroupId: homeGroup.id });
+    } else {
+      const newHomeGroup = createHomeGroup();
+      set((s) => ({
+        groups: [newHomeGroup, ...s.groups],
+        activeGroupId: newHomeGroup.id,
+      }));
     }
   },
 
-  addWorkspaceGroup: (path, name) => {
+  addWorkspaceGroup: (path, name, id) => {
     const group = createDefaultWorkspace(path, name);
-    set((s) => ({ groups: [...s.groups, group], activeGroupId: group.id }));
+    if (id) group.id = id;
+    set((s) => {
+      const groupsWithoutHome = s.groups.filter((g) => g.type !== "home");
+      return {
+        groups: [...groupsWithoutHome, group],
+        activeGroupId: group.id,
+      };
+    });
+    return group.id;
   },
 
   addTerminalGroup: (name) => {
@@ -245,13 +277,20 @@ export const useFrameStore = create<FrameState>((set, get) => ({
 
   removeGroup: (id) =>
     set((s) => {
+      if (id === "home") return s;
       const groups = s.groups.filter((g) => g.id !== id);
-      const activeGroupId =
-        s.activeGroupId === id
-          ? groups.length > 0
-            ? groups[0].id
-            : null
-          : s.activeGroupId;
+      let activeGroupId = s.activeGroupId;
+      if (s.activeGroupId === id) {
+        if (groups.length > 0) {
+          activeGroupId = groups[0].id;
+        } else {
+          const homeGroup = createHomeGroup();
+          return {
+            groups: [homeGroup],
+            activeGroupId: homeGroup.id,
+          };
+        }
+      }
       return { groups, activeGroupId };
     }),
 
@@ -309,7 +348,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
             },
           };
         }
-        if (g.type === "settings") return g;
+        if (g.type === "settings" || g.type === "home") return g;
         const exists = g.tabs.find((t: TabItem) => t.id === tab.id);
         if (exists) return { ...g, activeTabId: tab.id };
         return { ...g, tabs: [...g.tabs, tab], activeTabId: tab.id };
@@ -332,7 +371,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
               : viewData.activeTabId;
           return { ...g, views: { ...g.views, [v]: { tabs, activeTabId } } };
         }
-        if (g.type === "settings") return g;
+        if (g.type === "settings" || g.type === "home") return g;
         const tabs = g.tabs.filter((t: TabItem) => t.id !== tabId);
         const activeTabId =
           g.activeTabId === tabId
@@ -355,7 +394,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
             views: { ...g.views, [v]: { ...g.views[v], activeTabId: tabId } },
           };
         }
-        if (g.type === "settings") return g;
+        if (g.type === "settings" || g.type === "home") return g;
         return { ...g, activeTabId: tabId };
       }),
     })),
@@ -407,7 +446,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
             },
           };
         }
-        if (g.type === "settings") return g;
+        if (g.type === "settings" || g.type === "home") return g;
         return {
           ...g,
           tabs: g.tabs.map((t: TabItem) =>
@@ -450,7 +489,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
           };
         }
 
-        if (g.type === "settings") return g;
+        if (g.type === "settings" || g.type === "home") return g;
 
         const existingTab = g.tabs.find((t: TabItem) => t.id === tab.id);
         if (existingTab) {

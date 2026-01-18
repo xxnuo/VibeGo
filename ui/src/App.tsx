@@ -5,6 +5,8 @@ import {
   usePreviewStore,
   useFileManagerStore,
   useFrameStore,
+  useWorkspaceStore,
+  useSessionStore,
   type GitFileNode,
   type FileItem,
   type Theme,
@@ -19,6 +21,8 @@ import ProjectMenu from "@/components/ProjectMenu";
 import DiffView from "@/components/DiffView";
 import { FilePreview } from "@/components/preview";
 import SettingsPage from "@/components/SettingsPage";
+import HomePage from "@/components/HomePage";
+import DirectoryPicker from "@/components/DirectoryPicker";
 import { fileApi } from "@/api/file";
 import { useSettingsStore } from "@/lib/settings";
 
@@ -79,12 +83,32 @@ const App: React.FC = () => {
   const addTerminalGroup = useFrameStore((s) => s.addTerminalGroup);
   const addPluginGroup = useFrameStore((s) => s.addPluginGroup);
   const addSettingsGroup = useFrameStore((s) => s.addSettingsGroup);
+  const initDefaultGroups = useFrameStore((s) => s.initDefaultGroups);
+  const showHomePage = useFrameStore((s) => s.showHomePage);
+
+  const openWorkspace = useWorkspaceStore((s) => s.openWorkspace);
+  const fetchCurrentSession = useSessionStore((s) => s.fetchCurrentSession);
+  const saveSessionState = useSessionStore((s) => s.saveSessionState);
 
   const [isNewGroupMenuOpen, setNewGroupMenuOpen] = useState(false);
+  const [isDirectoryPickerOpen, setDirectoryPickerOpen] = useState(false);
 
   useEffect(() => {
     initSettings();
   }, [initSettings]);
+
+  useEffect(() => {
+    initDefaultGroups();
+    fetchCurrentSession();
+  }, [initDefaultGroups, fetchCurrentSession]);
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      saveSessionState();
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [saveSessionState]);
 
   useEffect(() => {
     if (themeSetting) setTheme(themeSetting as Theme);
@@ -222,11 +246,33 @@ const App: React.FC = () => {
   ]);
 
   const handleOpenDirectory = useCallback(() => {
-    const path = prompt("Enter directory path:");
-    if (path) {
-      addWorkspaceGroup(path);
-    }
-  }, [addWorkspaceGroup]);
+    setDirectoryPickerOpen(true);
+  }, []);
+
+  const handleDirectorySelect = useCallback(
+    async (path: string) => {
+      try {
+        const workspace = await openWorkspace(path);
+        addWorkspaceGroup(workspace.path, workspace.name, workspace.id);
+      } catch (e) {
+        console.error("Failed to open workspace:", e);
+      }
+      setDirectoryPickerOpen(false);
+    },
+    [openWorkspace, addWorkspaceGroup]
+  );
+
+  const handleOpenWorkspace = useCallback(
+    async (path: string) => {
+      try {
+        const workspace = await openWorkspace(path);
+        addWorkspaceGroup(workspace.path, workspace.name, workspace.id);
+      } catch (e) {
+        console.error("Failed to open workspace:", e);
+      }
+    },
+    [openWorkspace, addWorkspaceGroup]
+  );
 
   const handleNewTerminal = useCallback(() => {
     addTerminalGroup();
@@ -243,6 +289,10 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     if (!activeGroup) return null;
+
+    if (activeGroup.type === "home") {
+      return <HomePage onOpenWorkspace={handleOpenWorkspace} locale={locale} />;
+    }
 
     if (activeGroup.type === "settings") {
       return <SettingsPage />;
@@ -346,6 +396,7 @@ const App: React.FC = () => {
         onOpenSettings={addSettingsGroup}
         onOpenDirectory={handleOpenDirectory}
         onNewTerminal={handleNewTerminal}
+        onShowHomePage={showHomePage}
       />
       <NewGroupMenu
         isOpen={isNewGroupMenuOpen}
@@ -357,6 +408,13 @@ const App: React.FC = () => {
           { id: "claude-code", name: "Claude Code" },
           { id: "gemini-cli", name: "Gemini CLI" },
         ]}
+      />
+      <DirectoryPicker
+        isOpen={isDirectoryPickerOpen}
+        onClose={() => setDirectoryPickerOpen(false)}
+        onSelect={handleDirectorySelect}
+        initialPath="."
+        locale={locale}
       />
     </>
   );

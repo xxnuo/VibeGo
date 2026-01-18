@@ -11,6 +11,7 @@ import {
   Settings,
   Maximize,
   Minimize,
+  Home,
 } from "lucide-react";
 import {
   useFrameStore,
@@ -30,6 +31,7 @@ const VIEW_ICONS: Record<ViewType, React.ReactNode> = {
 };
 
 const GROUP_TYPE_ICONS = {
+  home: <Home size={16} />,
   workspace: <FolderOpen size={16} />,
   terminal: <Terminal size={16} />,
   plugin: <Box size={16} />,
@@ -193,6 +195,7 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick }) => {
   const useCustomItems =
     bottomBarConfig.customItems && bottomBarConfig.customItems.length > 0;
   const hasMultipleGroups = groups.length > 1;
+  const showGroupBar = groups.length > 0 && !useCustomItems;
 
   return (
     <>
@@ -206,42 +209,51 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick }) => {
           </div>
         </button>
 
-        <div
-          ref={containerRef}
-          className="flex h-10 bg-ide-bg rounded-lg p-1 border border-ide-border gap-1 overflow-x-auto no-scrollbar max-w-[70vw]"
-        >
-          {useCustomItems
-            ? bottomBarConfig.customItems!.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={item.onClick}
-                  className={`px-3 h-full rounded flex items-center gap-2 transition-all relative ${
-                    bottomBarConfig.activeItemId === item.id
-                      ? "bg-ide-panel text-ide-accent shadow-sm"
-                      : "text-ide-mute hover:text-ide-text"
-                  }`}
-                  title={item.label}
-                >
-                  {item.icon}
-                  {item.badge && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full px-1 min-w-[16px] h-4 flex items-center justify-center">
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              ))
-            : groups.map((group) => (
-                <GroupButton
-                  key={group.id}
-                  group={group}
-                  isActive={activeGroupId === group.id}
-                  isExpanded={shouldExpand(group)}
-                  hasMultipleGroups={hasMultipleGroups}
-                  onGroupClick={handleGroupClick}
-                  onViewClick={handleViewClick}
-                />
-              ))}
-        </div>
+        {showGroupBar ? (
+          <div
+            ref={containerRef}
+            className="flex h-10 bg-ide-bg rounded-lg p-1 border border-ide-border gap-1 overflow-x-auto no-scrollbar max-w-[70vw]"
+          >
+            {groups.map((group) => (
+              <GroupButton
+                key={group.id}
+                group={group}
+                isActive={activeGroupId === group.id}
+                isExpanded={shouldExpand(group)}
+                hasMultipleGroups={hasMultipleGroups}
+                onGroupClick={handleGroupClick}
+                onViewClick={handleViewClick}
+              />
+            ))}
+          </div>
+        ) : useCustomItems ? (
+          <div
+            ref={containerRef}
+            className="flex h-10 bg-ide-bg rounded-lg p-1 border border-ide-border gap-1 overflow-x-auto no-scrollbar max-w-[70vw]"
+          >
+            {bottomBarConfig.customItems!.map((item) => (
+              <button
+                key={item.id}
+                onClick={item.onClick}
+                className={`px-3 h-full rounded flex items-center gap-2 transition-all relative ${
+                  bottomBarConfig.activeItemId === item.id
+                    ? "bg-ide-panel text-ide-accent shadow-sm"
+                    : "text-ide-mute hover:text-ide-text"
+                }`}
+                title={item.label}
+              >
+                {item.icon}
+                {item.badge && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full px-1 min-w-[16px] h-4 flex items-center justify-center">
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="flex-1" />
+        )}
 
         <div className="flex items-center gap-2 px-4">
           <div className="flex items-center gap-2">

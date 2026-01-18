@@ -20,6 +20,7 @@ export {
   useFrameStore,
   type TabItem,
   type PageGroup,
+  type HomeGroup,
   type WorkspaceGroup,
   type TerminalGroup,
   type PluginGroup,
@@ -27,3 +28,5 @@ export {
   type GroupType,
   type ViewType,
 } from "./frameStore";
+export { useWorkspaceStore } from "./workspaceStore";
+export { useSessionStore } from "./sessionStore";

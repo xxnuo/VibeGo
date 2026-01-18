@@ -78,6 +78,7 @@ func main() {
 		&model.UserSetting{},
 		&model.TerminalSession{},
 		&model.TerminalHistory{},
+		&model.Workspace{},
 	)
 
 	api := r.Group("/api")
@@ -89,6 +90,7 @@ func main() {
 
 	handler.NewSettingsHandler(db).Register(api)
 	handler.NewSessionHandler(db).Register(api)
+	handler.NewWorkspaceHandler(db).Register(api)
 	handler.NewFileHandler().Register(api)
 	handler.NewTerminalHandler(db, cfg.DefaultShell).Register(api)
 	handler.NewGitHandler().Register(api)

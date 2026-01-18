@@ -21,6 +21,7 @@ interface ProjectMenuProps {
   onOpenSettings: () => void;
   onOpenDirectory: () => void;
   onNewTerminal: () => void;
+  onShowHomePage: () => void;
 }
 
 const ProjectMenu: React.FC<ProjectMenuProps> = ({
@@ -30,6 +31,7 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
   onOpenSettings,
   onOpenDirectory,
   onNewTerminal,
+  onShowHomePage,
 }) => {
   const t = useTranslation(locale);
   const settings = useSettingsStore((s) => s.settings);
@@ -48,8 +50,6 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     "zh",
     "en",
   ];
-  const groups = useFrameStore((s) => s.groups);
-  const setActiveGroup = useFrameStore((s) => s.setActiveGroup);
   const bottomBarConfig = useFrameStore((s) => s.bottomBarConfig);
 
   if (!isOpen) return null;
@@ -70,11 +70,7 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
   };
 
   const handleHome = () => {
-    const workspaceGroup = groups.find((group) => group.type === "workspace");
-    const targetGroup = workspaceGroup || groups[0];
-    if (targetGroup) {
-      setActiveGroup(targetGroup.id);
-    }
+    onShowHomePage();
     onClose();
   };
 
@@ -169,6 +165,7 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     label: item.label,
     onClick: item.onClick,
     badge: item.badge,
+    title: undefined as string | undefined,
   }));
   const sections = [
     { id: "builtIn", title: t("menu.builtIn"), items: builtInItems },
