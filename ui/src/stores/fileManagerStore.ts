@@ -64,6 +64,7 @@ interface FileManagerState {
   setDetailFile: (file: FileItem | null) => void;
   getFilteredFiles: () => FileItem[];
   getSortedFiles: () => FileItem[];
+  reset: () => void;
 }
 
 export const useFileManagerStore = create<FileManagerState>((set, get) => ({
@@ -239,4 +240,21 @@ export const useFileManagerStore = create<FileManagerState>((set, get) => ({
       return sortOrder === "asc" ? cmp : -cmp;
     });
   },
+
+  reset: () =>
+    set({
+      currentPath: ".",
+      rootPath: ".",
+      initialized: false,
+      pathHistory: ["."],
+      historyIndex: 0,
+      files: [],
+      selectedFiles: new Set(),
+      focusIndex: 0,
+      searchQuery: "",
+      searchActive: false,
+      loading: false,
+      error: null,
+      detailFile: null,
+    }),
 }));

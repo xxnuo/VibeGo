@@ -117,8 +117,11 @@
     "rename": "重命名",
     "delete": "删除",
     "deleteConfirm": "确定要删除会话 \"{name}\" 吗？",
+    "clearAll": "清空所有",
+    "clearAllConfirm": "确定要清空所有会话吗？",
     "current": "当前",
     "noSessions": "暂无会话",
+    "openFolderHint": "打开文件夹以创建会话",
     "createFirst": "创建第一个会话",
     "namePlaceholder": "输入会话名称..."
   },

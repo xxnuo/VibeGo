@@ -3,31 +3,35 @@ import { FolderOpen, Terminal } from "lucide-react";
 import RecentSessionList from "./RecentSessionList";
 import DirectoryPicker from "./DirectoryPicker";
 import { useTranslation, type Locale } from "@/lib/i18n";
+import { useSessionStore } from "@/stores/sessionStore";
 
 interface HomePageProps {
   onOpenFolder: (path: string) => void;
   locale: Locale;
 }
 
-const HomePage: React.FC<HomePageProps> = ({ onOpenFolder, locale }) => {
+const HomePage: React.FC<HomePageProps> = ({ locale }) => {
   const t = useTranslation(locale);
   const [isPickerOpen, setPickerOpen] = useState(false);
   const [pathInput, setPathInput] = useState("");
+  const createSessionFromFolder = useSessionStore(
+    (s) => s.createSessionFromFolder,
+  );
 
   const handleSwitchSession = useCallback(() => {}, []);
 
   const handlePickerSelect = useCallback(
-    (path: string) => {
-      onOpenFolder(path);
+    async (path: string) => {
+      await createSessionFromFolder(path);
       setPickerOpen(false);
     },
-    [onOpenFolder],
+    [createSessionFromFolder],
   );
 
-  const handlePathSubmit = (e: React.FormEvent) => {
+  const handlePathSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (pathInput.trim()) {
-      onOpenFolder(pathInput.trim());
+      await createSessionFromFolder(pathInput.trim());
       setPathInput("");
     }
   };

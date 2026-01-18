@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { sessionApi, type SessionInfo } from "../api/session";
 import { useFrameStore, type FolderGroup, type PluginGroup } from "./frameStore";
+import { useFileManagerStore } from "./fileManagerStore";
 
 const CURRENT_SESSION_KEY = "current_session_id";
 
@@ -26,10 +27,13 @@ interface SessionStoreState {
   error: string | null;
 
   loadSessions: () => Promise<void>;
+  initSession: () => Promise<boolean>;
   createSession: (name: string) => Promise<string>;
+  createSessionFromFolder: (folderPath: string) => Promise<string>;
   switchSession: (id: string) => Promise<void>;
   saveCurrentSession: () => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
+  clearAllSessions: () => Promise<void>;
   renameSession: (id: string, name: string) => Promise<void>;
   getCurrentSessionId: () => string | null;
   setCurrentSessionId: (id: string | null) => void;
@@ -74,11 +78,15 @@ function buildSessionState(): SessionState {
 
 function restoreSessionState(state: SessionState): void {
   const frameStore = useFrameStore.getState();
+  const fileManagerStore = useFileManagerStore.getState();
 
   frameStore.initDefaultGroups();
+  fileManagerStore.reset();
+
+  let lastAddedGroupId: string | null = null;
 
   state.openFolders.forEach((folder) => {
-    frameStore.addFolderGroup(folder.path, folder.name, folder.id);
+    lastAddedGroupId = frameStore.addFolderGroup(folder.path, folder.name, folder.id);
   });
 
   state.openPlugins.forEach((plugin) => {
@@ -87,6 +95,8 @@ function restoreSessionState(state: SessionState): void {
 
   if (state.activeGroupId) {
     frameStore.setActiveGroup(state.activeGroupId);
+  } else if (lastAddedGroupId) {
+    frameStore.setActiveGroup(lastAddedGroupId);
   }
 }
 
@@ -106,10 +116,59 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }
   },
 
+  initSession: async () => {
+    await get().loadSessions();
+    const { currentSessionId, sessions, switchSession } = get();
+    if (currentSessionId && sessions.some((s) => s.id === currentSessionId)) {
+      await switchSession(currentSessionId);
+      return true;
+    }
+    return false;
+  },
+
   createSession: async (name: string) => {
     try {
       const res = await sessionApi.create(name);
       await get().loadSessions();
+      set({ currentSessionId: res.id });
+      setStoredSessionId(res.id);
+      return res.id;
+    } catch (e) {
+      set({ error: (e as Error).message });
+      throw e;
+    }
+  },
+
+  createSessionFromFolder: async (folderPath: string) => {
+    const folderName = folderPath.split("/").pop() || folderPath;
+    const frameStore = useFrameStore.getState();
+    const fileManagerStore = useFileManagerStore.getState();
+
+    try {
+      const res = await sessionApi.create(folderName);
+      await get().loadSessions();
+
+      frameStore.initDefaultGroups();
+      fileManagerStore.reset();
+      const groupId = frameStore.addFolderGroup(folderPath, folderName);
+
+      const state: SessionState = {
+        openFolders: [{
+          id: groupId,
+          path: folderPath,
+          name: folderName,
+          views: {
+            files: { tabs: [], activeTabId: null },
+            git: { tabs: [], activeTabId: null },
+            terminal: { tabs: [], activeTabId: null },
+          },
+        }],
+        openPlugins: [],
+        activeGroupId: groupId,
+      };
+
+      await sessionApi.update(res.id, { state: JSON.stringify(state) });
+
       set({ currentSessionId: res.id });
       setStoredSessionId(res.id);
       return res.id;
@@ -175,6 +234,20 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         }
       }
       await get().loadSessions();
+    } catch (e) {
+      set({ error: (e as Error).message });
+    }
+  },
+
+  clearAllSessions: async () => {
+    const { sessions } = get();
+    try {
+      for (const session of sessions) {
+        await sessionApi.delete(session.id);
+      }
+      set({ currentSessionId: null, sessions: [] });
+      setStoredSessionId(null);
+      useFrameStore.getState().initDefaultGroups();
     } catch (e) {
       set({ error: (e as Error).message });
     }

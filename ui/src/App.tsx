@@ -80,13 +80,11 @@ const App: React.FC = () => {
   const tabs = useFrameStore((s) => s.getCurrentTabs());
   const addCurrentTab = useFrameStore((s) => s.addCurrentTab);
   const openPreviewTab = useFrameStore((s) => s.openPreviewTab);
-  const addFolderGroup = useFrameStore((s) => s.addFolderGroup);
   const addPluginGroup = useFrameStore((s) => s.addPluginGroup);
   const addSettingsGroup = useFrameStore((s) => s.addSettingsGroup);
   const initDefaultGroups = useFrameStore((s) => s.initDefaultGroups);
   const showHomePage = useFrameStore((s) => s.showHomePage);
 
-  const loadSessions = useSessionStore((s) => s.loadSessions);
   const saveCurrentSession = useSessionStore((s) => s.saveCurrentSession);
 
   const [isNewGroupMenuOpen, setNewGroupMenuOpen] = useState(false);
@@ -97,10 +95,17 @@ const App: React.FC = () => {
     initSettings();
   }, [initSettings]);
 
+  const initSession = useSessionStore((s) => s.initSession);
+
   useEffect(() => {
-    initDefaultGroups();
-    loadSessions();
-  }, [initDefaultGroups, loadSessions]);
+    const init = async () => {
+      const hasSession = await initSession();
+      if (!hasSession) {
+        initDefaultGroups();
+      }
+    };
+    init();
+  }, [initSession, initDefaultGroups]);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -249,21 +254,23 @@ const App: React.FC = () => {
     setDirectoryPickerOpen(true);
   }, []);
 
+  const createSessionFromFolder = useSessionStore(
+    (s) => s.createSessionFromFolder,
+  );
+
   const handleDirectorySelect = useCallback(
-    (path: string) => {
-      const name = path.split("/").pop() || path;
-      addFolderGroup(path, name);
+    async (path: string) => {
+      await createSessionFromFolder(path);
       setDirectoryPickerOpen(false);
     },
-    [addFolderGroup],
+    [createSessionFromFolder],
   );
 
   const handleOpenFolder = useCallback(
-    (path: string) => {
-      const name = path.split("/").pop() || path;
-      addFolderGroup(path, name);
+    async (path: string) => {
+      await createSessionFromFolder(path);
     },
-    [addFolderGroup],
+    [createSessionFromFolder],
   );
 
   const handleNewPlugin = useCallback(

@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import {
   Clock,
   Trash2,
   ChevronRight,
-  Plus,
   Check,
   X,
   Edit2,
@@ -26,29 +25,17 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({
   const currentSessionId = useSessionStore((s) => s.currentSessionId);
   const loading = useSessionStore((s) => s.loading);
   const loadSessions = useSessionStore((s) => s.loadSessions);
-  const createSession = useSessionStore((s) => s.createSession);
   const deleteSession = useSessionStore((s) => s.deleteSession);
+  const clearAllSessions = useSessionStore((s) => s.clearAllSessions);
   const renameSession = useSessionStore((s) => s.renameSession);
   const switchSession = useSessionStore((s) => s.switchSession);
 
-  const [isCreating, setIsCreating] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const [editName, setEditName] = React.useState("");
 
-  useEffect(() => {
+  React.useEffect(() => {
     loadSessions();
   }, [loadSessions]);
-
-  const handleCreate = async () => {
-    if (!newName.trim()) return;
-    try {
-      const id = await createSession(newName.trim());
-      setNewName("");
-      setIsCreating(false);
-      onSwitchSession(id);
-    } catch {}
-  };
 
   const handleDelete = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
@@ -60,6 +47,11 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({
     )
       return;
     await deleteSession(sessionId);
+  };
+
+  const handleClearAll = async () => {
+    if (!confirm(t("session.clearAllConfirm"))) return;
+    await clearAllSessions();
   };
 
   const handleRename = async (sessionId: string) => {
@@ -118,56 +110,23 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({
         <div className="text-xs text-ide-mute uppercase font-bold flex items-center gap-1">
           <Layers size={12} /> {t("session.sessions")}
         </div>
-        {!isCreating && (
+        {sessions.length > 0 && (
           <button
-            onClick={() => setIsCreating(true)}
-            className="text-xs text-ide-accent hover:text-ide-text flex items-center gap-1 transition-colors"
+            onClick={handleClearAll}
+            className="text-xs text-ide-mute hover:text-red-500 flex items-center gap-1 transition-colors"
+            title={t("session.clearAll")}
           >
-            <Plus size={12} />
-            <span>{t("session.create")}</span>
+            <Trash2 size={12} />
+            <span className="hidden sm:inline">{t("session.clearAll")}</span>
           </button>
         )}
       </div>
 
-      {isCreating && (
-        <div className="flex items-center gap-2 p-2 bg-ide-bg rounded-lg border border-ide-accent">
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder={t("session.namePlaceholder")}
-            className="flex-1 px-2 py-1 bg-transparent text-sm text-ide-text outline-none"
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleCreate();
-              if (e.key === "Escape") setIsCreating(false);
-            }}
-          />
-          <button
-            onClick={handleCreate}
-            className="p-1 text-green-500 hover:bg-ide-panel rounded"
-          >
-            <Check size={16} />
-          </button>
-          <button
-            onClick={() => setIsCreating(false)}
-            className="p-1 text-red-500 hover:bg-ide-panel rounded"
-          >
-            <X size={16} />
-          </button>
-        </div>
-      )}
-
-      {sessions.length === 0 && !isCreating ? (
+      {sessions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-10 text-ide-mute">
           <Layers size={40} className="mb-4 opacity-50" />
           <p className="text-sm">{t("session.noSessions")}</p>
-          <button
-            onClick={() => setIsCreating(true)}
-            className="mt-3 text-sm text-ide-accent hover:underline"
-          >
-            {t("session.createFirst")}
-          </button>
+          <p className="mt-2 text-xs">{t("session.openFolderHint")}</p>
         </div>
       ) : (
         <div className="space-y-1">
@@ -245,23 +204,21 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({
                 </div>
 
                 {!isEditing && (
-                  <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1">
                     <button
                       onClick={(e) => startEditing(e, session)}
-                      className="p-1.5 rounded hover:bg-ide-bg-hover text-ide-mute hover:text-ide-accent"
+                      className="p-1.5 rounded hover:bg-ide-bg-hover text-ide-mute hover:text-ide-accent opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block"
                       title={t("session.rename")}
                     >
                       <Edit2 size={14} />
                     </button>
-                    {!isCurrent && (
-                      <button
-                        onClick={(e) => handleDelete(e, session.id)}
-                        className="p-1.5 rounded hover:bg-ide-bg-hover text-ide-mute hover:text-red-500"
-                        title={t("session.delete")}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
+                    <button
+                      onClick={(e) => handleDelete(e, session.id)}
+                      className="p-1.5 rounded hover:bg-ide-bg-hover text-ide-mute hover:text-red-500"
+                      title={t("session.delete")}
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 )}
 

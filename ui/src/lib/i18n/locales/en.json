@@ -117,8 +117,11 @@
     "rename": "Rename",
     "delete": "Delete",
     "deleteConfirm": "Delete session \"{name}\"?",
+    "clearAll": "Clear All",
+    "clearAllConfirm": "Clear all sessions?",
     "current": "Current",
     "noSessions": "No sessions",
+    "openFolderHint": "Open a folder to create a session",
     "createFirst": "Create your first session",
     "namePlaceholder": "Enter session name..."
   },
