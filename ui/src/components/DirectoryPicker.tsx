@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   X,
   Folder,
@@ -37,6 +37,11 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
   const [pathHistory, setPathHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isEditing, setIsEditing] = useState(false);
+  const historyIndexRef = useRef(historyIndex);
+
+  useEffect(() => {
+    historyIndexRef.current = historyIndex;
+  }, [historyIndex]);
 
   const loadDirectories = useCallback(async (path: string, addToHistory = true) => {
     setLoading(true);
@@ -50,7 +55,7 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
       setInputPath(res.path);
       if (addToHistory) {
         setPathHistory((prev) => {
-          const newHistory = prev.slice(0, historyIndex + 1);
+          const newHistory = prev.slice(0, historyIndexRef.current + 1);
           newHistory.push(res.path);
           return newHistory;
         });
@@ -62,7 +67,7 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [historyIndex]);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
