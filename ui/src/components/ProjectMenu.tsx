@@ -9,10 +9,13 @@ import {
   Moon,
   Monitor,
   Globe,
+  Save,
+  FilePlus,
+  XCircle,
 } from "lucide-react";
 import { useTranslation, type Locale } from "@/lib/i18n";
 import { useSettingsStore, getSettingSchema } from "@/lib/settings";
-import { useFrameStore } from "@/stores";
+import { useFrameStore, useWorkspaceStore } from "@/stores";
 
 interface ProjectMenuProps {
   isOpen: boolean;
@@ -51,6 +54,11 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     "en",
   ];
   const bottomBarConfig = useFrameStore((s) => s.bottomBarConfig);
+  const activeGroup = useFrameStore((s) => s.getActiveGroup());
+  const removeGroup = useFrameStore((s) => s.removeGroup);
+  const closeWorkspace = useWorkspaceStore((s) => s.closeWorkspace);
+  const getCurrentActiveTabId = useFrameStore((s) => s.getCurrentActiveTabId);
+  const removeCurrentTab = useFrameStore((s) => s.removeCurrentTab);
 
   if (!isOpen) return null;
 
@@ -88,6 +96,41 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     setSetting("locale", nextValue);
   };
 
+  const handleCloseSession = () => {
+    if (confirm(t("common.closeSession") + "?")) {
+      window.location.reload();
+    }
+    onClose();
+  };
+
+  const handleCloseWorkspace = () => {
+    if (activeGroup?.type === "workspace") {
+      closeWorkspace(activeGroup.id);
+      removeGroup(activeGroup.id);
+    }
+    onClose();
+  };
+
+  const handleClosePage = () => {
+    const activeTabId = getCurrentActiveTabId();
+    if (activeTabId) {
+      removeCurrentTab(activeTabId);
+    }
+    onClose();
+  };
+
+  const handleSave = () => {
+    const event = new CustomEvent("page-save");
+    window.dispatchEvent(event);
+    onClose();
+  };
+
+  const handleSaveAs = () => {
+    const event = new CustomEvent("page-save-as");
+    window.dispatchEvent(event);
+    onClose();
+  };
+
   const themeIcon =
     themeValue === "light" ? (
       <Sun size={18} />
@@ -98,6 +141,14 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     ) : (
       <Terminal size={18} />
     );
+
+  const themeLabel =
+    themeSchema?.options?.find((opt) => opt.value === themeValue)?.label ||
+    themeValue;
+
+  const localeLabel =
+    localeSchema?.options?.find((opt) => opt.value === localeValue)?.label ||
+    localeValue;
 
   const builtInItems: Array<{
     id: string;
@@ -124,18 +175,20 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
       icon: themeIcon,
       label: t("common.theme"),
       onClick: handleThemeToggle,
-      title:
-        themeSchema?.options?.find((opt) => opt.value === themeValue)?.label ||
-        themeValue,
+      title: themeLabel,
     },
     {
       id: "language",
       icon: <Globe size={20} />,
       label: t("common.language"),
       onClick: handleLocaleToggle,
-      title:
-        localeSchema?.options?.find((opt) => opt.value === localeValue)
-          ?.label || localeValue,
+      title: localeLabel,
+    },
+    {
+      id: "close-session",
+      icon: <XCircle size={20} />,
+      label: t("common.closeSession"),
+      onClick: handleCloseSession,
     },
   ];
   const groupItems: Array<{
@@ -159,6 +212,15 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
       onClick: handleNewTerminal,
     },
   ];
+
+  if (activeGroup?.type === "workspace") {
+    groupItems.push({
+      id: "close-workspace",
+      icon: <XCircle size={20} />,
+      label: t("common.closeWorkspace"),
+      onClick: handleCloseWorkspace,
+    });
+  }
   const pageMenuItems = (bottomBarConfig.customItems || []).map((item) => ({
     id: item.id,
     icon: item.icon,
@@ -167,6 +229,37 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     badge: item.badge,
     title: undefined as string | undefined,
   }));
+
+  const activeTabId = getCurrentActiveTabId();
+  if (activeTabId) {
+    pageMenuItems.push({
+      id: "close-page",
+      icon: <XCircle size={20} />,
+      label: t("common.closePage"),
+      onClick: handleClosePage,
+      badge: undefined,
+      title: undefined,
+    });
+
+    if (activeGroup?.type === "workspace") {
+      pageMenuItems.push({
+        id: "save",
+        icon: <Save size={20} />,
+        label: t("common.save"),
+        onClick: handleSave,
+        badge: undefined,
+        title: undefined,
+      });
+      pageMenuItems.push({
+        id: "save-as",
+        icon: <FilePlus size={20} />,
+        label: t("common.saveAs"),
+        onClick: handleSaveAs,
+        badge: undefined,
+        title: undefined,
+      });
+    }
+  }
   const sections = [
     { id: "builtIn", title: t("menu.builtIn"), items: builtInItems },
     { id: "group", title: t("menu.group"), items: groupItems },
@@ -252,9 +345,16 @@ const MenuItem: React.FC<{
         </span>
       )}
     </div>
-    <span className="text-[10px] font-bold uppercase tracking-wide">
-      {label}
-    </span>
+    <div className="flex flex-col items-center gap-0.5">
+      <span className="text-[10px] font-bold uppercase tracking-wide">
+        {label}
+      </span>
+      {title && (
+        <span className="text-[9px] text-ide-mute">
+          {title}
+        </span>
+      )}
+    </div>
   </button>
 );
 

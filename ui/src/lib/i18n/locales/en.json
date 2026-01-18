@@ -19,7 +19,12 @@
     "loading": "Loading...",
     "remove": "Remove",
     "pin": "Pin",
-    "unpin": "Unpin"
+    "unpin": "Unpin",
+    "closeSession": "Close Session",
+    "closeWorkspace": "Close Workspace",
+    "closePage": "Close Page",
+    "save": "Save",
+    "saveAs": "Save As"
   },
   "sidebar": {
     "project": "Project",
