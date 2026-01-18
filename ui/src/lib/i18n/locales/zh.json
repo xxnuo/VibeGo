@@ -89,8 +89,7 @@
   },
   "menu": {
     "builtIn": "内置",
-    "group": "分组",
-    "page": "页面"
+    "context": "操作"
   },
   "fileManager": {
     "newFile": "新建文件",

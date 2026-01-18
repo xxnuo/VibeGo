@@ -43,6 +43,8 @@ export interface BottomBarConfig {
   show?: boolean;
 }
 
+export type { PageFrameConfig, PageMenuConfig, PluginContext } from "@/plugins/registry";
+
 export interface TabItem {
   id: string;
   title: string;
@@ -108,9 +110,11 @@ interface FrameState {
   activeGroupId: string | null;
   topBarConfig: TopBarConfig;
   bottomBarConfig: BottomBarConfig;
+  pageMenuItems: import("@/plugins/registry").PageMenuConfig[];
 
   setTopBarConfig: (config: TopBarConfig) => void;
   setBottomBarConfig: (config: BottomBarConfig) => void;
+  setPageMenuItems: (items: import("@/plugins/registry").PageMenuConfig[]) => void;
   initDefaultGroups: () => void;
   showHomePage: () => void;
   addWorkspaceGroup: (path: string, name?: string, id?: string) => string;
@@ -218,9 +222,11 @@ export const useFrameStore = create<FrameState>((set, get) => ({
   activeGroupId: null,
   topBarConfig: { show: false },
   bottomBarConfig: { show: true },
+  pageMenuItems: [],
 
   setTopBarConfig: (config) => set({ topBarConfig: config }),
   setBottomBarConfig: (config) => set({ bottomBarConfig: config }),
+  setPageMenuItems: (items) => set({ pageMenuItems: items }),
 
   initDefaultGroups: () => {
     const homeGroup = createHomeGroup();

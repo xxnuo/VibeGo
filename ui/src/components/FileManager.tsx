@@ -12,8 +12,11 @@ import {
   FileJson,
   AlertCircle,
   Loader2,
+  FilePlus,
+  FolderPlus,
 } from "lucide-react";
 import { useFileManagerStore, type FileItem } from "@/stores/fileManagerStore";
+import { useFrameStore } from "@/stores/frameStore";
 import { fileApi } from "@/api/file";
 import FileManagerBreadcrumb from "./FileManagerBreadcrumb";
 import FileManagerToolbar from "./FileManagerToolbar";
@@ -122,6 +125,7 @@ const FileManager: React.FC<FileManagerProps> = ({
     viewMode,
   } = useFileManagerStore();
 
+  const setPageMenuItems = useFrameStore((s) => s.setPageMenuItems);
   const locale = (useSettingsStore((s) => s.settings.locale) || "zh") as Locale;
   const t = useTranslation(locale);
 
@@ -131,6 +135,30 @@ const FileManager: React.FC<FileManagerProps> = ({
   const [newName, setNewName] = useState("");
   const [renameFile, setRenameFile] = useState<FileItem | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setPageMenuItems([
+      {
+        id: "new-file",
+        icon: <FilePlus size={20} />,
+        label: t("fileManager.newFile"),
+        onClick: () => {
+          setShowNewDialog("file");
+          setNewName("");
+        },
+      },
+      {
+        id: "new-folder",
+        icon: <FolderPlus size={20} />,
+        label: t("fileManager.newFolder"),
+        onClick: () => {
+          setShowNewDialog("folder");
+          setNewName("");
+        },
+      },
+    ]);
+    return () => setPageMenuItems([]);
+  }, [t, setPageMenuItems]);
 
   const loadFiles = useCallback(
     async (path: string, initialize = false) => {

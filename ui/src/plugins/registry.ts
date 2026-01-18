@@ -1,5 +1,60 @@
 import React from "react";
 import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
+
+export interface TopBarButton {
+  icon: ReactNode;
+  label?: string;
+  onClick?: () => void;
+  active?: boolean;
+  disabled?: boolean;
+}
+
+export interface BottomBarButton {
+  icon: ReactNode;
+  label?: string;
+  onClick?: () => void;
+  active?: boolean;
+  disabled?: boolean;
+}
+
+export interface PageMenuConfig {
+  id: string;
+  icon: ReactNode;
+  label: string;
+  badge?: string | number;
+  onClick?: () => void;
+}
+
+export interface PageFrameConfig {
+  topBar?: {
+    leftButtons?: TopBarButton[];
+    centerContent?: string | ReactNode;
+    rightButtons?: TopBarButton[];
+    show?: boolean;
+  };
+  bottomBar?: {
+    menuItems?: PageMenuConfig[];
+    rightButtons?: BottomBarButton[];
+    show?: boolean;
+  };
+  tabBar?: {
+    enabled?: boolean;
+    actionIcon?: "plus" | "refresh";
+    actionLabel?: string;
+  };
+}
+
+export interface PluginContext {
+  groupId: string;
+  tabId: string | null;
+  isActive: boolean;
+}
+
+export interface PluginViewProps {
+  isActive: boolean;
+  context?: PluginContext;
+}
 
 export interface Plugin {
   id: string;
@@ -7,10 +62,8 @@ export interface Plugin {
   icon: LucideIcon;
   order?: number;
   view: React.ComponentType<PluginViewProps>;
-}
-
-export interface PluginViewProps {
-  isActive: boolean;
+  getFrameConfig?: (context: PluginContext) => PageFrameConfig;
+  getMenuItems?: (context: PluginContext) => PageMenuConfig[];
 }
 
 class PluginRegistry {
