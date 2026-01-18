@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { useTranslation, type Locale } from "@/lib/i18n";
 import { useSettingsStore, getSettingSchema } from "@/lib/settings";
-import { useFrameStore, useWorkspaceStore, usePreviewStore } from "@/stores";
+import { useFrameStore, usePreviewStore } from "@/stores";
 import { fileApi } from "@/api/file";
 
 interface ProjectMenuProps {
@@ -58,7 +58,6 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
   const activeGroup = useFrameStore((s) => s.getActiveGroup());
   const pageMenuItems = useFrameStore((s) => s.pageMenuItems);
   const removeGroup = useFrameStore((s) => s.removeGroup);
-  const closeWorkspace = useWorkspaceStore((s) => s.closeWorkspace);
 
   const editMode = usePreviewStore((s) => s.editMode);
   const isDirty = usePreviewStore((s) => s.isDirty);
@@ -96,9 +95,8 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     setSetting("locale", nextValue);
   };
 
-  const handleCloseWorkspace = () => {
-    if (activeGroup?.type === "workspace") {
-      closeWorkspace(activeGroup.id);
+  const handleCloseFolder = () => {
+    if (activeGroup?.type === "folder") {
       removeGroup(activeGroup.id);
     }
     onClose();
@@ -216,12 +214,12 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     title?: string;
   }> = [];
 
-  if (activeGroup?.type === "workspace") {
+  if (activeGroup?.type === "folder") {
     contextItems.push({
-      id: "close-workspace",
+      id: "close-folder",
       icon: <XCircle size={20} />,
-      label: t("common.closeWorkspace"),
-      onClick: handleCloseWorkspace,
+      label: t("common.closeFolder"),
+      onClick: handleCloseFolder,
     });
   } else if (
     activeGroup &&
@@ -259,7 +257,7 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     title?: string;
   }> = [];
 
-  if (editMode && activeGroup?.type === "workspace") {
+  if (editMode && activeGroup?.type === "folder") {
     editorItems.push(
       {
         id: "save",

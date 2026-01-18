@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { ReactNode } from "react";
 
-export type GroupType = "home" | "workspace" | "terminal" | "plugin" | "settings";
+export type GroupType = "home" | "folder" | "terminal" | "plugin" | "settings";
 
 export type ViewType = "files" | "git" | "terminal";
 
@@ -56,8 +56,8 @@ export interface TabItem {
 
 const EMPTY_TABS: TabItem[] = [];
 
-export interface WorkspaceGroup {
-  type: "workspace";
+export interface FolderGroup {
+  type: "folder";
   id: string;
   name: string;
   path: string;
@@ -100,7 +100,7 @@ export interface HomeGroup {
 
 export type PageGroup =
   | HomeGroup
-  | WorkspaceGroup
+  | FolderGroup
   | TerminalGroup
   | PluginGroup
   | SettingsGroup;
@@ -117,7 +117,7 @@ interface FrameState {
   setPageMenuItems: (items: import("@/plugins/registry").PageMenuConfig[]) => void;
   initDefaultGroups: () => void;
   showHomePage: () => void;
-  addWorkspaceGroup: (path: string, name?: string, id?: string) => string;
+  addFolderGroup: (path: string, name?: string, id?: string) => string;
   addTerminalGroup: (name?: string) => void;
   addPluginGroup: (pluginId: string, name?: string) => void;
   addSettingsGroup: () => void;
@@ -125,7 +125,7 @@ interface FrameState {
   setActiveGroup: (id: string) => void;
   getActiveGroup: () => PageGroup | undefined;
 
-  setWorkspaceView: (groupId: string, view: ViewType) => void;
+  setFolderView: (groupId: string, view: ViewType) => void;
   getCurrentView: () => ViewType | null;
   setCurrentView: (view: ViewType) => void;
 
@@ -147,13 +147,13 @@ interface FrameState {
   openPreviewTab: (tab: TabItem) => void;
 }
 
-const createDefaultWorkspace = (
+const createDefaultFolder = (
   path: string,
   name?: string,
-): WorkspaceGroup => ({
-  type: "workspace",
-  id: `workspace-${Date.now()}`,
-  name: name || path.split("/").pop() || "Workspace",
+): FolderGroup => ({
+  type: "folder",
+  id: `folder-${Date.now()}`,
+  name: name || path.split("/").pop() || "Folder",
   path,
   activeView: "files",
   views: {
@@ -193,7 +193,7 @@ const createHomeGroup = (): HomeGroup => ({
 });
 
 const getGroupTabs = (group: PageGroup, view?: ViewType): TabItem[] => {
-  if (group.type === "workspace") {
+  if (group.type === "folder") {
     const v = view || group.activeView;
     return group.views[v].tabs;
   }
@@ -207,7 +207,7 @@ const getGroupActiveTabId = (
   group: PageGroup,
   view?: ViewType,
 ): string | null => {
-  if (group.type === "workspace") {
+  if (group.type === "folder") {
     const v = view || group.activeView;
     return group.views[v].activeTabId;
   }
@@ -247,8 +247,8 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     }
   },
 
-  addWorkspaceGroup: (path, name, id) => {
-    const group = createDefaultWorkspace(path, name);
+  addFolderGroup: (path, name, id) => {
+    const group = createDefaultFolder(path, name);
     if (id) group.id = id;
     set((s) => {
       const groupsWithoutHome = s.groups.filter((g) => g.type !== "home");
@@ -307,10 +307,10 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     return groups.find((g) => g.id === activeGroupId);
   },
 
-  setWorkspaceView: (groupId, view) =>
+  setFolderView: (groupId, view) =>
     set((s) => ({
       groups: s.groups.map((g) =>
-        g.type === "workspace" && g.id === groupId
+        g.type === "folder" && g.id === groupId
           ? { ...g, activeView: view }
           : g,
       ),
@@ -319,16 +319,16 @@ export const useFrameStore = create<FrameState>((set, get) => ({
   getCurrentView: () => {
     const group = get().getActiveGroup();
     if (!group) return null;
-    if (group.type === "workspace") return group.activeView;
+    if (group.type === "folder") return group.activeView;
     if (group.type === "terminal") return "terminal";
     return null;
   },
 
   setCurrentView: (view) => {
-    const { activeGroupId, setWorkspaceView, getActiveGroup } = get();
+    const { activeGroupId, setFolderView, getActiveGroup } = get();
     const group = getActiveGroup();
-    if (group?.type === "workspace" && activeGroupId) {
-      setWorkspaceView(activeGroupId, view);
+    if (group?.type === "folder" && activeGroupId) {
+      setFolderView(activeGroupId, view);
     }
   },
 
@@ -336,7 +336,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     set((s) => ({
       groups: s.groups.map((g) => {
         if (g.id !== groupId) return g;
-        if (g.type === "workspace") {
+        if (g.type === "folder") {
           const v = view || g.activeView;
           const viewData = g.views[v];
           const exists = viewData.tabs.find((t) => t.id === tab.id);
@@ -365,7 +365,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     set((s) => ({
       groups: s.groups.map((g) => {
         if (g.id !== groupId) return g;
-        if (g.type === "workspace") {
+        if (g.type === "folder") {
           const v = view || g.activeView;
           const viewData = g.views[v];
           const tabs = viewData.tabs.filter((t) => t.id !== tabId);
@@ -393,7 +393,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     set((s) => ({
       groups: s.groups.map((g) => {
         if (g.id !== groupId) return g;
-        if (g.type === "workspace") {
+        if (g.type === "folder") {
           const v = view || g.activeView;
           return {
             ...g,
@@ -436,7 +436,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     set((s) => ({
       groups: s.groups.map((g) => {
         if (g.id !== s.activeGroupId) return g;
-        if (g.type === "workspace") {
+        if (g.type === "folder") {
           const v = g.activeView;
           const viewData = g.views[v];
           return {
@@ -470,7 +470,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
       groups: s.groups.map((g) => {
         if (g.id !== activeGroupId) return g;
 
-        if (g.type === "workspace") {
+        if (g.type === "folder") {
           const v = g.activeView;
           const viewData = g.views[v];
           const existingTab = viewData.tabs.find((t) => t.id === tab.id);

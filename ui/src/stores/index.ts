@@ -21,12 +21,11 @@ export {
   type TabItem,
   type PageGroup,
   type HomeGroup,
-  type WorkspaceGroup,
+  type FolderGroup,
   type TerminalGroup,
   type PluginGroup,
   type SettingsGroup,
   type GroupType,
   type ViewType,
 } from "./frameStore";
-export { useWorkspaceStore } from "./workspaceStore";
 export { useSessionStore } from "./sessionStore";

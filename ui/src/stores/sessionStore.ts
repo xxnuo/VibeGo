@@ -1,13 +1,24 @@
 import { create } from "zustand";
 import { sessionApi, type SessionDetail } from "../api/session";
-import { useFrameStore, type WorkspaceGroup } from "./frameStore";
+import { useFrameStore, type FolderGroup } from "./frameStore";
+
+export interface RecentFolder {
+  path: string;
+  name: string;
+  lastOpenAt: number;
+  isPinned: boolean;
+}
 
 interface SessionState {
-  activeWorkspaceId: string | null;
-  openWorkspaceIds: string[];
-  workspaceStates: Record<string, WorkspaceGroup["views"]>;
+  recentFolders: RecentFolder[];
+  openFolders: Array<{
+    id: string;
+    path: string;
+    name: string;
+    views: FolderGroup["views"];
+  }>;
+  activeGroupId: string | null;
   preferences: {
-    lastActiveGroupId: string | null;
     sidebarCollapsed: boolean;
   };
 }
@@ -20,22 +31,17 @@ interface SessionStoreState {
 
   fetchCurrentSession: () => Promise<void>;
   saveSessionState: () => Promise<void>;
-  setActiveWorkspace: (id: string | null) => void;
-  addOpenWorkspace: (id: string) => void;
-  removeOpenWorkspace: (id: string) => void;
-  setPreference: <K extends keyof SessionState["preferences"]>(
-    key: K,
-    value: SessionState["preferences"][K]
-  ) => void;
+  addRecentFolder: (path: string, name: string) => void;
+  removeRecentFolder: (path: string) => void;
+  togglePinFolder: (path: string) => void;
   syncFromFrameStore: () => void;
 }
 
 const defaultSessionState: SessionState = {
-  activeWorkspaceId: null,
-  openWorkspaceIds: [],
-  workspaceStates: {},
+  recentFolders: [],
+  openFolders: [],
+  activeGroupId: null,
   preferences: {
-    lastActiveGroupId: null,
     sidebarCollapsed: false,
   },
 };
@@ -76,68 +82,66 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }
   },
 
-  setActiveWorkspace: (id: string | null) => {
-    set((s) => ({
-      sessionState: { ...s.sessionState, activeWorkspaceId: id },
-    }));
-  },
-
-  addOpenWorkspace: (id: string) => {
+  addRecentFolder: (path: string, name: string) => {
     set((s) => {
-      if (s.sessionState.openWorkspaceIds.includes(id)) return s;
+      const existing = s.sessionState.recentFolders.find((f) => f.path === path);
+      if (existing) {
+        return {
+          sessionState: {
+            ...s.sessionState,
+            recentFolders: s.sessionState.recentFolders.map((f) =>
+              f.path === path ? { ...f, lastOpenAt: Date.now() } : f
+            ),
+          },
+        };
+      }
       return {
         sessionState: {
           ...s.sessionState,
-          openWorkspaceIds: [...s.sessionState.openWorkspaceIds, id],
+          recentFolders: [
+            { path, name, lastOpenAt: Date.now(), isPinned: false },
+            ...s.sessionState.recentFolders,
+          ].slice(0, 20),
         },
       };
     });
   },
 
-  removeOpenWorkspace: (id: string) => {
+  removeRecentFolder: (path: string) => {
     set((s) => ({
       sessionState: {
         ...s.sessionState,
-        openWorkspaceIds: s.sessionState.openWorkspaceIds.filter(
-          (wid) => wid !== id
-        ),
-        activeWorkspaceId:
-          s.sessionState.activeWorkspaceId === id
-            ? null
-            : s.sessionState.activeWorkspaceId,
+        recentFolders: s.sessionState.recentFolders.filter((f) => f.path !== path),
       },
     }));
   },
 
-  setPreference: (key, value) => {
+  togglePinFolder: (path: string) => {
     set((s) => ({
       sessionState: {
         ...s.sessionState,
-        preferences: { ...s.sessionState.preferences, [key]: value },
+        recentFolders: s.sessionState.recentFolders.map((f) =>
+          f.path === path ? { ...f, isPinned: !f.isPinned } : f
+        ),
       },
     }));
   },
 
   syncFromFrameStore: () => {
     const frameState = useFrameStore.getState();
-    const workspaceGroups = frameState.groups.filter(
-      (g): g is WorkspaceGroup => g.type === "workspace"
+    const folderGroups = frameState.groups.filter(
+      (g): g is FolderGroup => g.type === "folder"
     );
-    const openWorkspaceIds = workspaceGroups.map((g) => g.id);
-    const workspaceStates: Record<string, WorkspaceGroup["views"]> = {};
-    workspaceGroups.forEach((g) => {
-      workspaceStates[g.id] = g.views;
-    });
     set((s) => ({
       sessionState: {
         ...s.sessionState,
-        activeWorkspaceId: frameState.activeGroupId,
-        openWorkspaceIds,
-        workspaceStates,
-        preferences: {
-          ...s.sessionState.preferences,
-          lastActiveGroupId: frameState.activeGroupId,
-        },
+        activeGroupId: frameState.activeGroupId,
+        openFolders: folderGroups.map((g) => ({
+          id: g.id,
+          path: g.path,
+          name: g.name,
+          views: g.views,
+        })),
       },
     }));
   },

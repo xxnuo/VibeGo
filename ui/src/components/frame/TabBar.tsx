@@ -91,7 +91,7 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
 
   const getViewIcon = () => {
     if (!activeGroup) return <FolderOpen size={18} />;
-    if (activeGroup.type === "workspace" && currentView) {
+    if (activeGroup.type === "folder" && currentView) {
       return VIEW_ICONS[currentView];
     }
     if (activeGroup.type === "terminal") return <Terminal size={18} />;
@@ -100,12 +100,12 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
   };
 
   const isFilesView =
-    activeGroup?.type === "workspace" &&
+    activeGroup?.type === "folder" &&
     currentView === "files" &&
     activeTabId === null;
-  const isGitView = activeGroup?.type === "workspace" && currentView === "git";
+  const isGitView = activeGroup?.type === "folder" && currentView === "git";
   const showRefreshButton = isFilesView || isGitView;
-  const showBackButton = activeGroup?.type === "workspace" || tabs.length > 0;
+  const showBackButton = activeGroup?.type === "folder" || tabs.length > 0;
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const isCodeFile =

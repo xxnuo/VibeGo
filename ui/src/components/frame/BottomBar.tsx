@@ -32,7 +32,7 @@ const VIEW_ICONS: Record<ViewType, React.ReactNode> = {
 
 const GROUP_TYPE_ICONS = {
   home: <Home size={16} />,
-  workspace: <FolderOpen size={16} />,
+  folder: <FolderOpen size={16} />,
   terminal: <Terminal size={16} />,
   plugin: <Box size={16} />,
   settings: <Settings size={16} />,
@@ -55,7 +55,7 @@ const GroupButton: React.FC<GroupButtonProps> = ({
   onGroupClick,
   onViewClick,
 }) => {
-  if (group.type === "workspace") {
+  if (group.type === "folder") {
     if (isExpanded) {
       return (
         <div
@@ -91,7 +91,7 @@ const GroupButton: React.FC<GroupButtonProps> = ({
         }`}
         title={group.name}
       >
-        {GROUP_TYPE_ICONS.workspace}
+        {GROUP_TYPE_ICONS.folder}
       </button>
     );
   }
@@ -116,7 +116,7 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick }) => {
   const activeGroupId = useFrameStore((s) => s.activeGroupId);
   const bottomBarConfig = useFrameStore((s) => s.bottomBarConfig);
   const setActiveGroup = useFrameStore((s) => s.setActiveGroup);
-  const setWorkspaceView = useFrameStore((s) => s.setWorkspaceView);
+  const setFolderView = useFrameStore((s) => s.setFolderView);
   const setCurrentActiveTab = useFrameStore((s) => s.setCurrentActiveTab);
 
   const [compactMode] = useState(false);
@@ -144,13 +144,13 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick }) => {
   const handleViewClick = useCallback(
     (groupId: string, view: ViewType) => {
       setActiveGroup(groupId);
-      setWorkspaceView(groupId, view);
+      setFolderView(groupId, view);
     },
-    [setActiveGroup, setWorkspaceView],
+    [setActiveGroup, setFolderView],
   );
 
   const shouldExpand = (group: PageGroup) => {
-    if (group.type !== "workspace") return false;
+    if (group.type !== "folder") return false;
     if (compactMode) return activeGroupId === group.id;
     return true;
   };

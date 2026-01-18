@@ -21,7 +21,7 @@
     "pin": "固定",
     "unpin": "取消固定",
     "closeSession": "关闭会话",
-    "closeWorkspace": "关闭工作区",
+    "closeFolder": "关闭文件夹",
     "closePage": "关闭页面",
     "save": "保存",
     "saveAs": "另存为",
@@ -107,14 +107,14 @@
     "closeGroup": "关闭分组"
   },
   "home": {
-    "welcome": "选择一个工作区开始",
+    "welcome": "选择一个文件夹开始",
     "openDirectory": "打开目录",
     "enterPath": "输入服务器路径...",
-    "recentWorkspaces": "最近的工作区",
-    "noRecentWorkspaces": "暂无最近的工作区",
+    "recentFolders": "最近的文件夹",
+    "noRecentFolders": "暂无最近的文件夹",
     "pinned": "已固定",
     "recent": "最近",
-    "removeConfirm": "确定要从最近工作区中移除 \"{name}\" 吗？"
+    "removeConfirm": "确定要从最近文件夹中移除 \"{name}\" 吗？"
   },
   "directoryPicker": {
     "title": "选择目录",

@@ -5,7 +5,6 @@ import {
   usePreviewStore,
   useFileManagerStore,
   useFrameStore,
-  useWorkspaceStore,
   useSessionStore,
   type GitFileNode,
   type FileItem,
@@ -81,14 +80,13 @@ const App: React.FC = () => {
   const tabs = useFrameStore((s) => s.getCurrentTabs());
   const addCurrentTab = useFrameStore((s) => s.addCurrentTab);
   const openPreviewTab = useFrameStore((s) => s.openPreviewTab);
-  const addWorkspaceGroup = useFrameStore((s) => s.addWorkspaceGroup);
+  const addFolderGroup = useFrameStore((s) => s.addFolderGroup);
   const addTerminalGroup = useFrameStore((s) => s.addTerminalGroup);
   const addPluginGroup = useFrameStore((s) => s.addPluginGroup);
   const addSettingsGroup = useFrameStore((s) => s.addSettingsGroup);
   const initDefaultGroups = useFrameStore((s) => s.initDefaultGroups);
   const showHomePage = useFrameStore((s) => s.showHomePage);
 
-  const openWorkspace = useWorkspaceStore((s) => s.openWorkspace);
   const fetchCurrentSession = useSessionStore((s) => s.fetchCurrentSession);
   const saveSessionState = useSessionStore((s) => s.saveSessionState);
 
@@ -180,7 +178,7 @@ const App: React.FC = () => {
   const handleTabAction = useCallback(async () => {
     if (!activeGroup) return;
 
-    if (activeGroup.type === "workspace") {
+    if (activeGroup.type === "folder") {
       switch (currentView) {
         case "files":
           if (activeTabId === null) {
@@ -253,28 +251,20 @@ const App: React.FC = () => {
   }, []);
 
   const handleDirectorySelect = useCallback(
-    async (path: string) => {
-      try {
-        const workspace = await openWorkspace(path);
-        addWorkspaceGroup(workspace.path, workspace.name, workspace.id);
-      } catch (e) {
-        console.error("Failed to open workspace:", e);
-      }
+    (path: string) => {
+      const name = path.split("/").pop() || path;
+      addFolderGroup(path, name);
       setDirectoryPickerOpen(false);
     },
-    [openWorkspace, addWorkspaceGroup],
+    [addFolderGroup],
   );
 
-  const handleOpenWorkspace = useCallback(
-    async (path: string) => {
-      try {
-        const workspace = await openWorkspace(path);
-        addWorkspaceGroup(workspace.path, workspace.name, workspace.id);
-      } catch (e) {
-        console.error("Failed to open workspace:", e);
-      }
+  const handleOpenFolder = useCallback(
+    (path: string) => {
+      const name = path.split("/").pop() || path;
+      addFolderGroup(path, name);
     },
-    [openWorkspace, addWorkspaceGroup],
+    [addFolderGroup],
   );
 
   const handleNewTerminal = useCallback(() => {
@@ -294,7 +284,7 @@ const App: React.FC = () => {
     if (!activeGroup) return null;
 
     if (activeGroup.type === "home") {
-      return <HomePage onOpenWorkspace={handleOpenWorkspace} locale={locale} />;
+      return <HomePage onOpenFolder={handleOpenFolder} locale={locale} />;
     }
 
     if (activeGroup.type === "settings") {
@@ -318,7 +308,7 @@ const App: React.FC = () => {
       );
     }
 
-    if (activeGroup.type === "workspace") {
+    if (activeGroup.type === "folder") {
       if (currentView === "git") {
         if (activeTabId === null) {
           return (

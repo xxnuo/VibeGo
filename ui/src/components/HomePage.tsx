@@ -1,39 +1,38 @@
 import React, { useState, useCallback } from "react";
 import { FolderOpen, Terminal } from "lucide-react";
-import RecentWorkspaceList from "./RecentWorkspaceList";
+import RecentFolderList from "./RecentFolderList";
 import DirectoryPicker from "./DirectoryPicker";
-import type { WorkspaceInfo } from "@/api/workspace";
 import { useTranslation, type Locale } from "@/lib/i18n";
 
 interface HomePageProps {
-  onOpenWorkspace: (path: string) => void;
+  onOpenFolder: (path: string) => void;
   locale: Locale;
 }
 
-const HomePage: React.FC<HomePageProps> = ({ onOpenWorkspace, locale }) => {
+const HomePage: React.FC<HomePageProps> = ({ onOpenFolder, locale }) => {
   const t = useTranslation(locale);
   const [isPickerOpen, setPickerOpen] = useState(false);
   const [pathInput, setPathInput] = useState("");
 
   const handleSelectRecent = useCallback(
-    (workspace: WorkspaceInfo) => {
-      onOpenWorkspace(workspace.path);
+    (path: string) => {
+      onOpenFolder(path);
     },
-    [onOpenWorkspace]
+    [onOpenFolder],
   );
 
   const handlePickerSelect = useCallback(
     (path: string) => {
-      onOpenWorkspace(path);
+      onOpenFolder(path);
       setPickerOpen(false);
     },
-    [onOpenWorkspace]
+    [onOpenFolder],
   );
 
   const handlePathSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (pathInput.trim()) {
-      onOpenWorkspace(pathInput.trim());
+      onOpenFolder(pathInput.trim());
       setPathInput("");
     }
   };
@@ -47,7 +46,9 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenWorkspace, locale }) => {
               <Terminal size={28} className="text-ide-accent sm:hidden" />
               <Terminal size={32} className="text-ide-accent hidden sm:block" />
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-ide-text mb-2">VibeGo</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-ide-text mb-2">
+              VibeGo
+            </h1>
             <p className="text-sm sm:text-base text-ide-mute">
               {t("home.welcome")}
             </p>
@@ -86,10 +87,10 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenWorkspace, locale }) => {
 
           <div className="space-y-3">
             <div className="text-xs text-ide-mute uppercase font-bold">
-              {t("home.recentWorkspaces")}
+              {t("home.recentFolders")}
             </div>
             <div className="bg-ide-panel border border-ide-border rounded-xl p-3 sm:p-4">
-              <RecentWorkspaceList onSelect={handleSelectRecent} locale={locale} />
+              <RecentFolderList onSelect={handleSelectRecent} locale={locale} />
             </div>
           </div>
         </div>

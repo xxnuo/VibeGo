@@ -21,7 +21,7 @@
     "pin": "Pin",
     "unpin": "Unpin",
     "closeSession": "Close Session",
-    "closeWorkspace": "Close Workspace",
+    "closeFolder": "Close Folder",
     "closePage": "Close Page",
     "save": "Save",
     "saveAs": "Save As",
@@ -107,14 +107,14 @@
     "closeGroup": "Close Group"
   },
   "home": {
-    "welcome": "Select a workspace to get started",
+    "welcome": "Select a folder to get started",
     "openDirectory": "Open Directory",
     "enterPath": "Enter server path...",
-    "recentWorkspaces": "Recent Workspaces",
-    "noRecentWorkspaces": "No recent workspaces",
+    "recentFolders": "Recent Folders",
+    "noRecentFolders": "No recent folders",
     "pinned": "Pinned",
     "recent": "Recent",
-    "removeConfirm": "Remove \"{name}\" from recent workspaces?"
+    "removeConfirm": "Remove \"{name}\" from recent folders?"
   },
   "directoryPicker": {
     "title": "Select Directory",
