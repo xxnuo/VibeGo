@@ -137,7 +137,7 @@ const App: React.FC = () => {
       openPreviewTab({
         id: `tab-${file.path}`,
         title: file.name,
-        data: { type: "code", path: file.path },
+        data: { type: "code", path: file.path, file },
       });
     },
     [openPreviewTab],
@@ -297,21 +297,24 @@ const App: React.FC = () => {
 
       if (currentView === "files") {
         if (activeTabId !== null && activeTab) {
+          const tabFile = activeTab.data?.file as FileItem | undefined;
           return (
             <FilePreview
-              file={{
-                path: (activeTab.data?.path as string) || activeTab.id,
-                name: activeTab.title,
-                size: 0,
-                isDir: false,
-                isSymlink: false,
-                isHidden: false,
-                mode: "",
-                modTime: "",
-                extension: activeTab.title.includes(".")
-                  ? "." + activeTab.title.split(".").pop()
-                  : "",
-              }}
+              file={
+                tabFile || {
+                  path: (activeTab.data?.path as string) || activeTab.id,
+                  name: activeTab.title,
+                  size: 0,
+                  isDir: false,
+                  isSymlink: false,
+                  isHidden: false,
+                  mode: "",
+                  modTime: "",
+                  extension: activeTab.title.includes(".")
+                    ? "." + activeTab.title.split(".").pop()
+                    : "",
+                }
+              }
             />
           );
         }
