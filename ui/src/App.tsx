@@ -18,6 +18,7 @@ import FileManager from "@/components/FileManager";
 import GitView from "@/components/GitView";
 import TerminalView from "@/components/TerminalView";
 import ProjectMenu from "@/components/ProjectMenu";
+import NewPageMenu from "@/components/NewPageMenu";
 import DiffView from "@/components/DiffView";
 import { FilePreview } from "@/components/preview";
 import SettingsPage from "@/components/SettingsPage";
@@ -25,6 +26,7 @@ import HomePage from "@/components/HomePage";
 import DirectoryPicker from "@/components/DirectoryPicker";
 import { fileApi } from "@/api/file";
 import { useSettingsStore } from "@/lib/settings";
+import "@/plugins";
 
 const MOCK_GIT_FILES: GitFileNode[] = [
   {
@@ -91,6 +93,7 @@ const App: React.FC = () => {
   const saveSessionState = useSessionStore((s) => s.saveSessionState);
 
   const [isNewGroupMenuOpen, setNewGroupMenuOpen] = useState(false);
+  const [isNewPageMenuOpen, setNewPageMenuOpen] = useState(false);
   const [isDirectoryPickerOpen, setDirectoryPickerOpen] = useState(false);
 
   useEffect(() => {
@@ -259,7 +262,7 @@ const App: React.FC = () => {
       }
       setDirectoryPickerOpen(false);
     },
-    [openWorkspace, addWorkspaceGroup]
+    [openWorkspace, addWorkspaceGroup],
   );
 
   const handleOpenWorkspace = useCallback(
@@ -271,7 +274,7 @@ const App: React.FC = () => {
         console.error("Failed to open workspace:", e);
       }
     },
-    [openWorkspace, addWorkspaceGroup]
+    [openWorkspace, addWorkspaceGroup],
   );
 
   const handleNewTerminal = useCallback(() => {
@@ -394,9 +397,16 @@ const App: React.FC = () => {
         onClose={() => setMenuOpen(false)}
         locale={locale}
         onOpenSettings={addSettingsGroup}
+        onShowHomePage={showHomePage}
+        onNewPage={() => setNewPageMenuOpen(true)}
+      />
+      <NewPageMenu
+        isOpen={isNewPageMenuOpen}
+        onClose={() => setNewPageMenuOpen(false)}
+        locale={locale}
         onOpenDirectory={handleOpenDirectory}
         onNewTerminal={handleNewTerminal}
-        onShowHomePage={showHomePage}
+        onNewPlugin={handleNewPlugin}
       />
       <NewGroupMenu
         isOpen={isNewGroupMenuOpen}

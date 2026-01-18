@@ -1,28 +1,33 @@
 import React from "react";
 import {
-  FolderOpen,
   Settings,
   Home,
   X,
-  Terminal,
   Sun,
   Moon,
   Monitor,
+  Terminal,
   Globe,
   XCircle,
+  FilePlus,
+  Save,
+  Undo2,
+  Redo2,
+  Search,
+  Replace,
 } from "lucide-react";
 import { useTranslation, type Locale } from "@/lib/i18n";
 import { useSettingsStore, getSettingSchema } from "@/lib/settings";
-import { useFrameStore, useWorkspaceStore } from "@/stores";
+import { useFrameStore, useWorkspaceStore, usePreviewStore } from "@/stores";
+import { fileApi } from "@/api/file";
 
 interface ProjectMenuProps {
   isOpen: boolean;
   onClose: () => void;
   locale: Locale;
   onOpenSettings: () => void;
-  onOpenDirectory: () => void;
-  onNewTerminal: () => void;
   onShowHomePage: () => void;
+  onNewPage: () => void;
 }
 
 const ProjectMenu: React.FC<ProjectMenuProps> = ({
@@ -30,9 +35,8 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
   onClose,
   locale,
   onOpenSettings,
-  onOpenDirectory,
-  onNewTerminal,
   onShowHomePage,
+  onNewPage,
 }) => {
   const t = useTranslation(locale);
   const settings = useSettingsStore((s) => s.settings);
@@ -56,6 +60,11 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
   const removeGroup = useFrameStore((s) => s.removeGroup);
   const closeWorkspace = useWorkspaceStore((s) => s.closeWorkspace);
 
+  const editMode = usePreviewStore((s) => s.editMode);
+  const isDirty = usePreviewStore((s) => s.isDirty);
+  const file = usePreviewStore((s) => s.file);
+  const content = usePreviewStore((s) => s.content);
+
   if (!isOpen) return null;
 
   const handleSettings = () => {
@@ -63,18 +72,13 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     onClose();
   };
 
-  const handleOpenDirectory = () => {
-    onOpenDirectory();
-    onClose();
-  };
-
-  const handleNewTerminal = () => {
-    onNewTerminal();
-    onClose();
-  };
-
   const handleHome = () => {
     onShowHomePage();
+    onClose();
+  };
+
+  const handleNewPage = () => {
+    onNewPage();
     onClose();
   };
 
@@ -92,18 +96,53 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     setSetting("locale", nextValue);
   };
 
-  const handleCloseSession = () => {
-    if (confirm(t("common.closeSession") + "?")) {
-      window.location.reload();
-    }
-    onClose();
-  };
-
   const handleCloseWorkspace = () => {
     if (activeGroup?.type === "workspace") {
       closeWorkspace(activeGroup.id);
       removeGroup(activeGroup.id);
     }
+    onClose();
+  };
+
+  const handleClosePage = () => {
+    if (activeGroup && activeGroup.type !== "home") {
+      removeGroup(activeGroup.id);
+    }
+    onClose();
+  };
+
+  const handleSave = async () => {
+    if (!file || !isDirty) return;
+    try {
+      await fileApi.write(file.path, content);
+      usePreviewStore.getState().setOriginalContent(content);
+      usePreviewStore.getState().setIsDirty(false);
+    } catch (e) {
+      usePreviewStore
+        .getState()
+        .setError(e instanceof Error ? e.message : "Failed to save");
+    }
+    onClose();
+  };
+
+  const handleSaveAs = async () => {
+    if (!file) return;
+    const newPath = prompt(t("common.saveAs"), file.path);
+    if (newPath && newPath !== file.path) {
+      try {
+        await fileApi.write(newPath, content);
+      } catch (e) {
+        usePreviewStore
+          .getState()
+          .setError(e instanceof Error ? e.message : "Failed to save");
+      }
+    }
+    onClose();
+  };
+
+  const triggerEditorAction = (action: string) => {
+    const event = new CustomEvent("editor-action", { detail: { action } });
+    window.dispatchEvent(event);
     onClose();
   };
 
@@ -141,6 +180,12 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
       onClick: handleHome,
     },
     {
+      id: "new-page",
+      icon: <FilePlus size={20} />,
+      label: t("common.newPage"),
+      onClick: handleNewPage,
+    },
+    {
       id: "settings",
       icon: <Settings size={20} />,
       label: t("common.settings"),
@@ -160,12 +205,6 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
       onClick: handleLocaleToggle,
       title: localeLabel,
     },
-    {
-      id: "close-session",
-      icon: <XCircle size={20} />,
-      label: t("common.closeSession"),
-      onClick: handleCloseSession,
-    },
   ];
 
   const contextItems: Array<{
@@ -175,20 +214,7 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     onClick?: () => void;
     badge?: string | number;
     title?: string;
-  }> = [
-    {
-      id: "open-folder",
-      icon: <FolderOpen size={20} />,
-      label: t("common.openFolder"),
-      onClick: handleOpenDirectory,
-    },
-    {
-      id: "new-terminal",
-      icon: <Terminal size={20} />,
-      label: t("common.newTerminal"),
-      onClick: handleNewTerminal,
-    },
-  ];
+  }> = [];
 
   if (activeGroup?.type === "workspace") {
     contextItems.push({
@@ -196,6 +222,17 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
       icon: <XCircle size={20} />,
       label: t("common.closeWorkspace"),
       onClick: handleCloseWorkspace,
+    });
+  } else if (
+    activeGroup &&
+    activeGroup.type !== "home" &&
+    activeGroup.type !== "settings"
+  ) {
+    contextItems.push({
+      id: "close-page",
+      icon: <XCircle size={20} />,
+      label: t("common.closePage"),
+      onClick: handleClosePage,
     });
   }
 
@@ -213,8 +250,61 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     });
   });
 
+  const editorItems: Array<{
+    id: string;
+    icon: React.ReactNode;
+    label: string;
+    onClick?: () => void;
+    badge?: string | number;
+    title?: string;
+  }> = [];
+
+  if (editMode && activeGroup?.type === "workspace") {
+    editorItems.push(
+      {
+        id: "save",
+        icon: <Save size={20} />,
+        label: t("common.save"),
+        onClick: handleSave,
+      },
+      {
+        id: "save-as",
+        icon: <Save size={20} />,
+        label: t("common.saveAs"),
+        onClick: handleSaveAs,
+      },
+      {
+        id: "undo",
+        icon: <Undo2 size={20} />,
+        label: t("common.undo"),
+        onClick: () => triggerEditorAction("undo"),
+      },
+      {
+        id: "redo",
+        icon: <Redo2 size={20} />,
+        label: t("common.redo"),
+        onClick: () => triggerEditorAction("redo"),
+      },
+      {
+        id: "find",
+        icon: <Search size={20} />,
+        label: t("common.find"),
+        onClick: () => triggerEditorAction("find"),
+      },
+      {
+        id: "replace",
+        icon: <Replace size={20} />,
+        label: t("common.replace"),
+        onClick: () => triggerEditorAction("replace"),
+      },
+    );
+  }
+
   const sections = [
     { id: "builtIn", title: t("menu.builtIn"), items: builtInItems },
+    ...(editorItems.length > 0
+      ? [{ id: "editor", title: t("menu.editor"), items: editorItems }]
+      : []),
     { id: "context", title: t("menu.context"), items: contextItems },
   ].filter((section) => section.items.length > 0);
 

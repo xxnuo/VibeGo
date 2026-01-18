@@ -24,7 +24,12 @@
     "closeWorkspace": "Close Workspace",
     "closePage": "Close Page",
     "save": "Save",
-    "saveAs": "Save As"
+    "saveAs": "Save As",
+    "newPage": "New Page",
+    "undo": "Undo",
+    "redo": "Redo",
+    "find": "Find",
+    "replace": "Replace"
   },
   "sidebar": {
     "project": "Project",
@@ -89,7 +94,8 @@
   },
   "menu": {
     "builtIn": "System",
-    "context": "Actions"
+    "context": "Actions",
+    "editor": "Editor"
   },
   "fileManager": {
     "newFile": "New File",

@@ -24,7 +24,12 @@
     "closeWorkspace": "关闭工作区",
     "closePage": "关闭页面",
     "save": "保存",
-    "saveAs": "另存为"
+    "saveAs": "另存为",
+    "newPage": "新建页面",
+    "undo": "撤销",
+    "redo": "恢复",
+    "find": "查找",
+    "replace": "替换"
   },
   "sidebar": {
     "project": "项目",
@@ -89,7 +94,8 @@
   },
   "menu": {
     "builtIn": "内置",
-    "context": "操作"
+    "context": "操作",
+    "editor": "编辑器"
   },
   "fileManager": {
     "newFile": "新建文件",
