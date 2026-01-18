@@ -56,6 +56,7 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     "en",
   ];
   const activeGroup = useFrameStore((s) => s.getActiveGroup());
+  const groups = useFrameStore((s) => s.groups);
   const pageMenuItems = useFrameStore((s) => s.pageMenuItems);
   const removeGroup = useFrameStore((s) => s.removeGroup);
 
@@ -234,6 +235,16 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     });
   }
 
+  const hasNonHomeGroups = groups.filter((g) => g.type !== "home").length > 0;
+  if (activeGroup?.type === "home" && hasNonHomeGroups) {
+    contextItems.push({
+      id: "close-home",
+      icon: <XCircle size={20} />,
+      label: t("common.closePage"),
+      onClick: handleClosePage,
+    });
+  }
+
   pageMenuItems.forEach((item) => {
     contextItems.push({
       id: item.id,
@@ -341,7 +352,7 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
             <div className="text-[10px] text-ide-mute uppercase font-bold mb-3">
               {section.title}
             </div>
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-4 gap-2">
               {section.items.map((item) => (
                 <MenuItem
                   key={item.id}
@@ -375,9 +386,9 @@ const MenuItem: React.FC<{
   <button
     onClick={onClick}
     title={title || label}
-    className="flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-ide-bg hover:text-ide-accent transition-all text-ide-text group"
+    className="flex flex-col items-center gap-1.5 p-2 rounded-lg hover:bg-ide-bg hover:text-ide-accent transition-all text-ide-text group"
   >
-    <div className="relative p-3 bg-ide-bg rounded-xl border border-ide-border group-hover:border-ide-accent group-hover:shadow-glow transition-all">
+    <div className="relative p-2 bg-ide-bg rounded-xl border border-ide-border group-hover:border-ide-accent group-hover:shadow-glow transition-all">
       {icon}
       {badge && (
         <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full px-1 min-w-[16px] h-4 flex items-center justify-center">
@@ -386,7 +397,7 @@ const MenuItem: React.FC<{
       )}
     </div>
     <div className="flex flex-col items-center gap-0.5">
-      <span className="text-[10px] font-bold uppercase tracking-wide">
+      <span className="text-[11px] font-bold uppercase tracking-wide">
         {label}
       </span>
       {title && <span className="text-[9px] text-ide-mute">{title}</span>}

@@ -1,5 +1,5 @@
 import React from "react";
-import { FolderOpen, Terminal, X } from "lucide-react";
+import { FolderOpen, X } from "lucide-react";
 import { useTranslation, type Locale } from "@/lib/i18n";
 import { pluginRegistry } from "@/plugins/registry";
 
@@ -8,7 +8,6 @@ interface NewPageMenuProps {
   onClose: () => void;
   locale: Locale;
   onOpenDirectory: () => void;
-  onNewTerminal: () => void;
   onNewPlugin: (pluginId: string) => void;
 }
 
@@ -17,13 +16,20 @@ const NewPageMenu: React.FC<NewPageMenuProps> = ({
   onClose,
   locale,
   onOpenDirectory,
-  onNewTerminal,
   onNewPlugin,
 }) => {
   const t = useTranslation(locale);
   const plugins = pluginRegistry.getAll();
 
   if (!isOpen) return null;
+
+  const getPluginName = (plugin: { name: string; nameKey?: string }) => {
+    if (plugin.nameKey) {
+      const translated = t(plugin.nameKey);
+      if (translated !== plugin.nameKey) return translated;
+    }
+    return plugin.name;
+  };
 
   return (
     <>
@@ -57,28 +63,12 @@ const NewPageMenu: React.FC<NewPageMenuProps> = ({
               </div>
             </div>
           </button>
-          <button
-            onClick={() => {
-              onNewTerminal();
-              onClose();
-            }}
-            className="w-full px-4 py-3 flex items-center gap-4 hover:bg-ide-bg rounded-lg transition-colors"
-          >
-            <div className="w-10 h-10 rounded-full bg-ide-accent/10 flex items-center justify-center">
-              <Terminal size={20} className="text-ide-accent" />
-            </div>
-            <div className="text-left">
-              <div className="text-sm font-medium text-ide-text">
-                {t("common.newTerminal")}
-              </div>
-            </div>
-          </button>
           {plugins.length > 0 && (
             <>
               <div className="h-px bg-ide-border my-2" />
               <div className="px-4 py-2">
                 <span className="text-xs font-bold text-ide-mute uppercase">
-                  Plugins
+                  {t("newPage.plugins")}
                 </span>
               </div>
               {plugins.map((plugin) => {
@@ -97,7 +87,7 @@ const NewPageMenu: React.FC<NewPageMenuProps> = ({
                     </div>
                     <div className="text-left">
                       <div className="text-sm font-medium text-ide-text">
-                        {plugin.name}
+                        {getPluginName(plugin)}
                       </div>
                     </div>
                   </button>

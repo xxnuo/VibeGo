@@ -59,6 +59,7 @@ export interface PluginViewProps {
 export interface Plugin {
   id: string;
   name: string;
+  nameKey?: string;
   icon: LucideIcon;
   order?: number;
   view: React.ComponentType<PluginViewProps>;

@@ -1,148 +1,198 @@
 import { create } from "zustand";
-import { sessionApi, type SessionDetail } from "../api/session";
-import { useFrameStore, type FolderGroup } from "./frameStore";
+import { sessionApi, type SessionInfo } from "../api/session";
+import { useFrameStore, type FolderGroup, type PluginGroup } from "./frameStore";
 
-export interface RecentFolder {
-  path: string;
-  name: string;
-  lastOpenAt: number;
-  isPinned: boolean;
-}
+const CURRENT_SESSION_KEY = "current_session_id";
 
-interface SessionState {
-  recentFolders: RecentFolder[];
+export interface SessionState {
   openFolders: Array<{
     id: string;
     path: string;
     name: string;
     views: FolderGroup["views"];
   }>;
+  openPlugins: Array<{
+    id: string;
+    pluginId: string;
+    name: string;
+  }>;
   activeGroupId: string | null;
-  preferences: {
-    sidebarCollapsed: boolean;
-  };
 }
 
 interface SessionStoreState {
-  session: SessionDetail | null;
-  sessionState: SessionState;
+  currentSessionId: string | null;
+  sessions: SessionInfo[];
   loading: boolean;
   error: string | null;
 
-  fetchCurrentSession: () => Promise<void>;
-  saveSessionState: () => Promise<void>;
-  addRecentFolder: (path: string, name: string) => void;
-  removeRecentFolder: (path: string) => void;
-  togglePinFolder: (path: string) => void;
-  syncFromFrameStore: () => void;
+  loadSessions: () => Promise<void>;
+  createSession: (name: string) => Promise<string>;
+  switchSession: (id: string) => Promise<void>;
+  saveCurrentSession: () => Promise<void>;
+  deleteSession: (id: string) => Promise<void>;
+  renameSession: (id: string, name: string) => Promise<void>;
+  getCurrentSessionId: () => string | null;
+  setCurrentSessionId: (id: string | null) => void;
 }
 
-const defaultSessionState: SessionState = {
-  recentFolders: [],
-  openFolders: [],
-  activeGroupId: null,
-  preferences: {
-    sidebarCollapsed: false,
-  },
-};
+function getStoredSessionId(): string | null {
+  return localStorage.getItem(CURRENT_SESSION_KEY);
+}
+
+function setStoredSessionId(id: string | null): void {
+  if (id) {
+    localStorage.setItem(CURRENT_SESSION_KEY, id);
+  } else {
+    localStorage.removeItem(CURRENT_SESSION_KEY);
+  }
+}
+
+function buildSessionState(): SessionState {
+  const frameState = useFrameStore.getState();
+  const folderGroups = frameState.groups.filter(
+    (g): g is FolderGroup => g.type === "folder"
+  );
+  const pluginGroups = frameState.groups.filter(
+    (g): g is PluginGroup => g.type === "plugin"
+  );
+
+  return {
+    openFolders: folderGroups.map((g) => ({
+      id: g.id,
+      path: g.path,
+      name: g.name,
+      views: g.views,
+    })),
+    openPlugins: pluginGroups.map((g) => ({
+      id: g.id,
+      pluginId: g.pluginId,
+      name: g.name,
+    })),
+    activeGroupId: frameState.activeGroupId,
+  };
+}
+
+function restoreSessionState(state: SessionState): void {
+  const frameStore = useFrameStore.getState();
+
+  frameStore.initDefaultGroups();
+
+  state.openFolders.forEach((folder) => {
+    frameStore.addFolderGroup(folder.path, folder.name, folder.id);
+  });
+
+  state.openPlugins.forEach((plugin) => {
+    frameStore.addPluginGroup(plugin.pluginId, plugin.name);
+  });
+
+  if (state.activeGroupId) {
+    frameStore.setActiveGroup(state.activeGroupId);
+  }
+}
 
 export const useSessionStore = create<SessionStoreState>((set, get) => ({
-  session: null,
-  sessionState: defaultSessionState,
+  currentSessionId: getStoredSessionId(),
+  sessions: [],
   loading: false,
   error: null,
 
-  fetchCurrentSession: async () => {
+  loadSessions: async () => {
     set({ loading: true, error: null });
     try {
-      const session = await sessionApi.getCurrent();
-      let state = defaultSessionState;
-      if (session.state && session.state !== "{}") {
-        try {
-          state = { ...defaultSessionState, ...JSON.parse(session.state) };
-        } catch {
-          state = defaultSessionState;
-        }
-      }
-      set({ session, sessionState: state, loading: false });
+      const res = await sessionApi.list();
+      set({ sessions: res.sessions || [], loading: false });
     } catch (e) {
       set({ error: (e as Error).message, loading: false });
     }
   },
 
-  saveSessionState: async () => {
-    const { session } = get();
-    if (!session) return;
-    get().syncFromFrameStore();
-    const { sessionState } = get();
+  createSession: async (name: string) => {
     try {
-      await sessionApi.saveCurrentState(JSON.stringify(sessionState));
+      const res = await sessionApi.create(name);
+      await get().loadSessions();
+      set({ currentSessionId: res.id });
+      setStoredSessionId(res.id);
+      return res.id;
+    } catch (e) {
+      set({ error: (e as Error).message });
+      throw e;
+    }
+  },
+
+  switchSession: async (id: string) => {
+    set({ loading: true, error: null });
+    try {
+      const detail = await sessionApi.get(id);
+      let state: SessionState = {
+        openFolders: [],
+        openPlugins: [],
+        activeGroupId: null,
+      };
+
+      if (detail.state && detail.state !== "{}") {
+        try {
+          state = JSON.parse(detail.state);
+        } catch {
+          state = { openFolders: [], openPlugins: [], activeGroupId: null };
+        }
+      }
+
+      restoreSessionState(state);
+      set({ currentSessionId: id, loading: false });
+      setStoredSessionId(id);
+    } catch (e) {
+      set({ error: (e as Error).message, loading: false });
+    }
+  },
+
+  saveCurrentSession: async () => {
+    const { currentSessionId } = get();
+    if (!currentSessionId) return;
+
+    const state = buildSessionState();
+    try {
+      await sessionApi.update(currentSessionId, {
+        state: JSON.stringify(state),
+      });
     } catch (e) {
       set({ error: (e as Error).message });
     }
   },
 
-  addRecentFolder: (path: string, name: string) => {
-    set((s) => {
-      const existing = s.sessionState.recentFolders.find((f) => f.path === path);
-      if (existing) {
-        return {
-          sessionState: {
-            ...s.sessionState,
-            recentFolders: s.sessionState.recentFolders.map((f) =>
-              f.path === path ? { ...f, lastOpenAt: Date.now() } : f
-            ),
-          },
-        };
+  deleteSession: async (id: string) => {
+    try {
+      await sessionApi.delete(id);
+      const { currentSessionId, sessions } = get();
+      if (currentSessionId === id) {
+        const remaining = sessions.filter((s) => s.id !== id);
+        const newCurrentId = remaining.length > 0 ? remaining[0].id : null;
+        set({ currentSessionId: newCurrentId });
+        setStoredSessionId(newCurrentId);
+        if (newCurrentId) {
+          await get().switchSession(newCurrentId);
+        } else {
+          useFrameStore.getState().initDefaultGroups();
+        }
       }
-      return {
-        sessionState: {
-          ...s.sessionState,
-          recentFolders: [
-            { path, name, lastOpenAt: Date.now(), isPinned: false },
-            ...s.sessionState.recentFolders,
-          ].slice(0, 20),
-        },
-      };
-    });
+      await get().loadSessions();
+    } catch (e) {
+      set({ error: (e as Error).message });
+    }
   },
 
-  removeRecentFolder: (path: string) => {
-    set((s) => ({
-      sessionState: {
-        ...s.sessionState,
-        recentFolders: s.sessionState.recentFolders.filter((f) => f.path !== path),
-      },
-    }));
+  renameSession: async (id: string, name: string) => {
+    try {
+      await sessionApi.update(id, { name });
+      await get().loadSessions();
+    } catch (e) {
+      set({ error: (e as Error).message });
+    }
   },
 
-  togglePinFolder: (path: string) => {
-    set((s) => ({
-      sessionState: {
-        ...s.sessionState,
-        recentFolders: s.sessionState.recentFolders.map((f) =>
-          f.path === path ? { ...f, isPinned: !f.isPinned } : f
-        ),
-      },
-    }));
-  },
+  getCurrentSessionId: () => get().currentSessionId,
 
-  syncFromFrameStore: () => {
-    const frameState = useFrameStore.getState();
-    const folderGroups = frameState.groups.filter(
-      (g): g is FolderGroup => g.type === "folder"
-    );
-    set((s) => ({
-      sessionState: {
-        ...s.sessionState,
-        activeGroupId: frameState.activeGroupId,
-        openFolders: folderGroups.map((g) => ({
-          id: g.id,
-          path: g.path,
-          name: g.name,
-          views: g.views,
-        })),
-      },
-    }));
+  setCurrentSessionId: (id: string | null) => {
+    set({ currentSessionId: id });
+    setStoredSessionId(id);
   },
 }));

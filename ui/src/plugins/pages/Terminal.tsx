@@ -41,6 +41,7 @@ const TerminalPluginView: React.FC<PluginViewProps> = ({ isActive }) => {
 registerPlugin({
   id: "terminal",
   name: "Terminal",
+  nameKey: "plugin.terminal.name",
   icon: Terminal,
   order: 1,
   view: TerminalPluginView,

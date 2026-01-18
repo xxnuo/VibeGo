@@ -81,14 +81,13 @@ const App: React.FC = () => {
   const addCurrentTab = useFrameStore((s) => s.addCurrentTab);
   const openPreviewTab = useFrameStore((s) => s.openPreviewTab);
   const addFolderGroup = useFrameStore((s) => s.addFolderGroup);
-  const addTerminalGroup = useFrameStore((s) => s.addTerminalGroup);
   const addPluginGroup = useFrameStore((s) => s.addPluginGroup);
   const addSettingsGroup = useFrameStore((s) => s.addSettingsGroup);
   const initDefaultGroups = useFrameStore((s) => s.initDefaultGroups);
   const showHomePage = useFrameStore((s) => s.showHomePage);
 
-  const fetchCurrentSession = useSessionStore((s) => s.fetchCurrentSession);
-  const saveSessionState = useSessionStore((s) => s.saveSessionState);
+  const loadSessions = useSessionStore((s) => s.loadSessions);
+  const saveCurrentSession = useSessionStore((s) => s.saveCurrentSession);
 
   const [isNewGroupMenuOpen, setNewGroupMenuOpen] = useState(false);
   const [isNewPageMenuOpen, setNewPageMenuOpen] = useState(false);
@@ -100,16 +99,16 @@ const App: React.FC = () => {
 
   useEffect(() => {
     initDefaultGroups();
-    fetchCurrentSession();
-  }, [initDefaultGroups, fetchCurrentSession]);
+    loadSessions();
+  }, [initDefaultGroups, loadSessions]);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
-      saveSessionState();
+      saveCurrentSession();
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [saveSessionState]);
+  }, [saveCurrentSession]);
 
   useEffect(() => {
     if (themeSetting) setTheme(themeSetting as Theme);
@@ -267,10 +266,6 @@ const App: React.FC = () => {
     [addFolderGroup],
   );
 
-  const handleNewTerminal = useCallback(() => {
-    addTerminalGroup();
-  }, [addTerminalGroup]);
-
   const handleNewPlugin = useCallback(
     (pluginId: string) => {
       addPluginGroup(pluginId, pluginId);
@@ -395,14 +390,12 @@ const App: React.FC = () => {
         onClose={() => setNewPageMenuOpen(false)}
         locale={locale}
         onOpenDirectory={handleOpenDirectory}
-        onNewTerminal={handleNewTerminal}
         onNewPlugin={handleNewPlugin}
       />
       <NewGroupMenu
         isOpen={isNewGroupMenuOpen}
         onClose={() => setNewGroupMenuOpen(false)}
         onOpenDirectory={handleOpenDirectory}
-        onNewTerminal={handleNewTerminal}
         onNewPlugin={handleNewPlugin}
         availablePlugins={[
           { id: "claude-code", name: "Claude Code" },

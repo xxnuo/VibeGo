@@ -109,12 +109,32 @@
   "home": {
     "welcome": "Select a folder to get started",
     "openDirectory": "Open Directory",
-    "enterPath": "Enter server path...",
-    "recentFolders": "Recent Folders",
-    "noRecentFolders": "No recent folders",
-    "pinned": "Pinned",
-    "recent": "Recent",
-    "removeConfirm": "Remove \"{name}\" from recent folders?"
+    "enterPath": "Enter server path..."
+  },
+  "session": {
+    "sessions": "Sessions",
+    "create": "New Session",
+    "rename": "Rename",
+    "delete": "Delete",
+    "deleteConfirm": "Delete session \"{name}\"?",
+    "current": "Current",
+    "noSessions": "No sessions",
+    "createFirst": "Create your first session",
+    "namePlaceholder": "Enter session name..."
+  },
+  "plugin": {
+    "terminal": {
+      "name": "Terminal",
+      "newTab": "New Tab"
+    },
+    "processMonitor": {
+      "name": "Process Monitor",
+      "refresh": "Refresh",
+      "killProcess": "Kill Process"
+    }
+  },
+  "newPage": {
+    "plugins": "Plugins"
   },
   "directoryPicker": {
     "title": "Select Directory",

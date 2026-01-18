@@ -23,25 +23,22 @@ func (h *SessionHandler) Register(r *gin.RouterGroup) {
 	g := r.Group("/session")
 	g.GET("", h.List)
 	g.POST("", h.Create)
-	g.GET("/current", h.GetCurrent)
-	g.PUT("/current/state", h.SaveCurrentState)
 	g.GET("/:id", h.Get)
-	g.PUT("/:id/state", h.SaveState)
+	g.PUT("/:id", h.Update)
 	g.DELETE("/:id", h.Delete)
 }
 
 type SessionInfo struct {
-	ID         string `json:"id"`
-	UserID     string `json:"user_id"`
-	DeviceID   string `json:"device_id"`
-	DeviceName string `json:"device_name"`
-	CreatedAt  int64  `json:"created_at"`
-	UpdatedAt  int64  `json:"updated_at"`
+	ID        string `json:"id"`
+	UserID    string `json:"user_id"`
+	Name      string `json:"name"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
 }
 
 func (h *SessionHandler) List(c *gin.Context) {
 	page := 1
-	pageSize := 20
+	pageSize := 50
 	if p := c.Query("page"); p != "" {
 		if n, err := strconv.Atoi(p); err == nil && n > 0 {
 			page = n
@@ -66,12 +63,11 @@ func (h *SessionHandler) List(c *gin.Context) {
 	list := make([]SessionInfo, len(sessions))
 	for i, s := range sessions {
 		list[i] = SessionInfo{
-			ID:         s.ID,
-			UserID:     s.UserID,
-			DeviceID:   s.DeviceID,
-			DeviceName: s.DeviceName,
-			CreatedAt:  s.CreatedAt,
-			UpdatedAt:  s.UpdatedAt,
+			ID:        s.ID,
+			UserID:    s.UserID,
+			Name:      s.Name,
+			CreatedAt: s.CreatedAt,
+			UpdatedAt: s.UpdatedAt,
 		}
 	}
 
@@ -84,25 +80,26 @@ func (h *SessionHandler) List(c *gin.Context) {
 }
 
 type CreateSessionRequest struct {
-	UserID     string `json:"user_id"`
-	DeviceID   string `json:"device_id"`
-	DeviceName string `json:"device_name"`
+	Name string `json:"name"`
 }
 
 func (h *SessionHandler) Create(c *gin.Context) {
 	var req CreateSessionRequest
 	c.ShouldBindJSON(&req)
 
+	name := req.Name
+	if name == "" {
+		name = "Untitled Session"
+	}
+
 	now := time.Now().Unix()
 	session := model.UserSession{
-		ID:         uuid.New().String(),
-		UserID:     req.UserID,
-		DeviceID:   req.DeviceID,
-		DeviceName: req.DeviceName,
-		State:      "{}",
-		CreatedAt:  now,
-		UpdatedAt:  now,
-		ExpiresAt:  now + 30*24*60*60,
+		ID:        uuid.New().String(),
+		UserID:    "",
+		Name:      name,
+		State:     "{}",
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 
 	if err := h.db.Create(&session).Error; err != nil {
@@ -123,11 +120,12 @@ func (h *SessionHandler) Get(c *gin.Context) {
 	c.JSON(http.StatusOK, session)
 }
 
-type SaveStateRequest struct {
-	State string `json:"state"`
+type UpdateSessionRequest struct {
+	Name  *string `json:"name,omitempty"`
+	State *string `json:"state,omitempty"`
 }
 
-func (h *SessionHandler) SaveState(c *gin.Context) {
+func (h *SessionHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 	var session model.UserSession
 	if err := h.db.First(&session, "id = ?", id).Error; err != nil {
@@ -135,16 +133,23 @@ func (h *SessionHandler) SaveState(c *gin.Context) {
 		return
 	}
 
-	var req SaveStateRequest
+	var req UpdateSessionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := h.db.Model(&session).Updates(map[string]any{
-		"state":      req.State,
+	updates := map[string]any{
 		"updated_at": time.Now().Unix(),
-	}).Error; err != nil {
+	}
+	if req.Name != nil {
+		updates["name"] = *req.Name
+	}
+	if req.State != nil {
+		updates["state"] = *req.State
+	}
+
+	if err := h.db.Model(&session).Updates(updates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -163,85 +168,5 @@ func (h *SessionHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": true})
-}
-
-func (h *SessionHandler) GetCurrent(c *gin.Context) {
-	deviceID := c.GetHeader("X-Device-ID")
-	if deviceID == "" {
-		deviceID = "default"
-	}
-
-	var session model.UserSession
-	result := h.db.First(&session, "device_id = ?", deviceID)
-
-	if result.Error == gorm.ErrRecordNotFound {
-		now := time.Now().Unix()
-		session = model.UserSession{
-			ID:         uuid.New().String(),
-			UserID:     "",
-			DeviceID:   deviceID,
-			DeviceName: c.GetHeader("X-Device-Name"),
-			State:      "{}",
-			CreatedAt:  now,
-			UpdatedAt:  now,
-			ExpiresAt:  now + 30*24*60*60,
-		}
-		if err := h.db.Create(&session).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-	} else if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, session)
-}
-
-func (h *SessionHandler) SaveCurrentState(c *gin.Context) {
-	deviceID := c.GetHeader("X-Device-ID")
-	if deviceID == "" {
-		deviceID = "default"
-	}
-
-	var session model.UserSession
-	result := h.db.First(&session, "device_id = ?", deviceID)
-
-	if result.Error == gorm.ErrRecordNotFound {
-		now := time.Now().Unix()
-		session = model.UserSession{
-			ID:         uuid.New().String(),
-			UserID:     "",
-			DeviceID:   deviceID,
-			DeviceName: c.GetHeader("X-Device-Name"),
-			State:      "{}",
-			CreatedAt:  now,
-			UpdatedAt:  now,
-			ExpiresAt:  now + 30*24*60*60,
-		}
-		if err := h.db.Create(&session).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-	} else if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
-		return
-	}
-
-	var req SaveStateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	if err := h.db.Model(&session).Updates(map[string]any{
-		"state":      req.State,
-		"updated_at": time.Now().Unix(),
-	}).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

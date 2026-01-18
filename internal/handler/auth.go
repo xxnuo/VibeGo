@@ -171,17 +171,19 @@ func (h *AuthHandler) getOrCreateUser(username, token string) *model.User {
 	return &user
 }
 
-func (h *AuthHandler) createSession(userID, deviceName string) *model.UserSession {
+func (h *AuthHandler) createSession(userID, sessionName string) *model.UserSession {
 	now := time.Now().Unix()
+	name := sessionName
+	if name == "" {
+		name = "Default Session"
+	}
 	session := model.UserSession{
-		ID:         uuid.New().String(),
-		UserID:     userID,
-		DeviceID:   uuid.New().String(),
-		DeviceName: deviceName,
-		State:      "{}",
-		CreatedAt:  now,
-		UpdatedAt:  now,
-		ExpiresAt:  now + 30*24*60*60,
+		ID:        uuid.New().String(),
+		UserID:    userID,
+		Name:      name,
+		State:     "{}",
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 	h.db.Create(&session)
 	return &session

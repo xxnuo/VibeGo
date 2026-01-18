@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { FolderOpen, Terminal } from "lucide-react";
-import RecentFolderList from "./RecentFolderList";
+import RecentSessionList from "./RecentSessionList";
 import DirectoryPicker from "./DirectoryPicker";
 import { useTranslation, type Locale } from "@/lib/i18n";
 
@@ -14,12 +14,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenFolder, locale }) => {
   const [isPickerOpen, setPickerOpen] = useState(false);
   const [pathInput, setPathInput] = useState("");
 
-  const handleSelectRecent = useCallback(
-    (path: string) => {
-      onOpenFolder(path);
-    },
-    [onOpenFolder],
-  );
+  const handleSwitchSession = useCallback(() => {}, []);
 
   const handlePickerSelect = useCallback(
     (path: string) => {
@@ -86,11 +81,11 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenFolder, locale }) => {
           </div>
 
           <div className="space-y-3">
-            <div className="text-xs text-ide-mute uppercase font-bold">
-              {t("home.recentFolders")}
-            </div>
             <div className="bg-ide-panel border border-ide-border rounded-xl p-3 sm:p-4">
-              <RecentFolderList onSelect={handleSelectRecent} locale={locale} />
+              <RecentSessionList
+                onSwitchSession={handleSwitchSession}
+                locale={locale}
+              />
             </div>
           </div>
         </div>

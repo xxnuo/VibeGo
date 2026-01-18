@@ -38,36 +38,40 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isEditing, setIsEditing] = useState(false);
   const historyIndexRef = useRef(historyIndex);
+  const pathScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     historyIndexRef.current = historyIndex;
   }, [historyIndex]);
 
-  const loadDirectories = useCallback(async (path: string, addToHistory = true) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fileApi.list(path);
-      const dirs = res.files.filter((f) => f.isDir);
-      dirs.sort((a, b) => a.name.localeCompare(b.name));
-      setDirectories(dirs);
-      setCurrentPath(res.path);
-      setInputPath(res.path);
-      if (addToHistory) {
-        setPathHistory((prev) => {
-          const newHistory = prev.slice(0, historyIndexRef.current + 1);
-          newHistory.push(res.path);
-          return newHistory;
-        });
-        setHistoryIndex((prev) => prev + 1);
+  const loadDirectories = useCallback(
+    async (path: string, addToHistory = true) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fileApi.list(path);
+        const dirs = res.files.filter((f) => f.isDir);
+        dirs.sort((a, b) => a.name.localeCompare(b.name));
+        setDirectories(dirs);
+        setCurrentPath(res.path);
+        setInputPath(res.path);
+        if (addToHistory) {
+          setPathHistory((prev) => {
+            const newHistory = prev.slice(0, historyIndexRef.current + 1);
+            newHistory.push(res.path);
+            return newHistory;
+          });
+          setHistoryIndex((prev) => prev + 1);
+        }
+      } catch (e) {
+        setError((e as Error).message);
+        setDirectories([]);
+      } finally {
+        setLoading(false);
       }
-    } catch (e) {
-      setError((e as Error).message);
-      setDirectories([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (isOpen) {
@@ -76,6 +80,12 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
       loadDirectories(initialPath);
     }
   }, [isOpen, initialPath, loadDirectories]);
+
+  useEffect(() => {
+    if (pathScrollRef.current) {
+      pathScrollRef.current.scrollLeft = pathScrollRef.current.scrollWidth;
+    }
+  }, [currentPath]);
 
   const handleNavigate = (path: string) => {
     loadDirectories(path);
@@ -119,7 +129,8 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
     onClose();
   };
 
-  const pathParts = currentPath === "/" ? [] : currentPath.split("/").filter(Boolean);
+  const pathParts =
+    currentPath === "/" ? [] : currentPath.split("/").filter(Boolean);
   const canGoBack = historyIndex > 0;
   const canGoForward = historyIndex < pathHistory.length - 1;
   const canGoUp = currentPath !== "/";
@@ -134,7 +145,9 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
       />
       <div className="fixed inset-0 sm:inset-4 sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[500px] sm:max-h-[80vh] sm:h-auto bg-ide-panel sm:border border-ide-border sm:rounded-xl shadow-2xl z-50 flex flex-col overflow-hidden">
         <div className="flex items-center justify-between p-3 sm:p-4 border-b border-ide-border">
-          <h3 className="font-bold text-ide-text text-sm sm:text-base">{t("directoryPicker.title")}</h3>
+          <h3 className="font-bold text-ide-text text-sm sm:text-base">
+            {t("directoryPicker.title")}
+          </h3>
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg hover:bg-ide-bg text-ide-mute hover:text-ide-text"
@@ -188,7 +201,10 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
           </button>
 
           {isEditing ? (
-            <form onSubmit={handleInputSubmit} className="flex-1 flex items-center gap-1">
+            <form
+              onSubmit={handleInputSubmit}
+              className="flex-1 flex items-center gap-1"
+            >
               <input
                 type="text"
                 value={inputPath}
@@ -216,6 +232,7 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
             </form>
           ) : (
             <div
+              ref={pathScrollRef}
               className="flex-1 flex items-center gap-0.5 overflow-x-auto no-scrollbar touch-pan-x"
               onClick={() => setIsEditing(true)}
             >
@@ -224,11 +241,16 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
               ) : (
                 pathParts.map((part, index) => (
                   <React.Fragment key={index}>
-                    <ChevronRight size={14} className="shrink-0 text-ide-mute/50" />
+                    <ChevronRight
+                      size={14}
+                      className="shrink-0 text-ide-mute/50"
+                    />
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleNavigate("/" + pathParts.slice(0, index + 1).join("/"));
+                        handleNavigate(
+                          "/" + pathParts.slice(0, index + 1).join("/"),
+                        );
                       }}
                       className={`shrink-0 px-2 py-1 rounded-md text-xs font-medium transition-colors truncate max-w-[100px] ${
                         index === pathParts.length - 1
@@ -283,7 +305,9 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
         <div className="p-3 sm:p-4 border-t border-ide-border">
           <div className="flex items-center gap-2 mb-3 p-2 bg-ide-bg rounded-lg">
             <FolderOpen size={18} className="text-ide-accent flex-shrink-0" />
-            <span className="text-xs sm:text-sm text-ide-text truncate">{currentPath}</span>
+            <span className="text-xs sm:text-sm text-ide-text truncate">
+              {currentPath}
+            </span>
           </div>
           <div className="flex gap-2">
             <button

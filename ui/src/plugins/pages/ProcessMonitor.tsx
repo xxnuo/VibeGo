@@ -55,6 +55,7 @@ const ProcessMonitorView: React.FC<PluginViewProps> = ({ isActive }) => {
 registerPlugin({
   id: "process-monitor",
   name: "Process Monitor",
+  nameKey: "plugin.processMonitor.name",
   icon: Activity,
   order: 10,
   view: ProcessMonitorView,

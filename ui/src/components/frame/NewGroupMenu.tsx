@@ -1,12 +1,11 @@
 import React from "react";
-import { FolderOpen, Terminal, Box, X } from "lucide-react";
+import { FolderOpen, Box, X } from "lucide-react";
 import { useFrameStore } from "@/stores/frameStore";
 
 interface NewGroupMenuProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenDirectory: () => void;
-  onNewTerminal: () => void;
   onNewPlugin: (pluginId: string) => void;
   availablePlugins?: { id: string; name: string; icon?: React.ReactNode }[];
 }
@@ -15,7 +14,6 @@ const NewGroupMenu: React.FC<NewGroupMenuProps> = ({
   isOpen,
   onClose,
   onOpenDirectory,
-  onNewTerminal,
   onNewPlugin,
   availablePlugins = [],
 }) => {
@@ -55,25 +53,6 @@ const NewGroupMenu: React.FC<NewGroupMenuProps> = ({
               </div>
               <div className="text-xs text-ide-mute">
                 Browse and open a folder
-              </div>
-            </div>
-          </button>
-          <button
-            onClick={() => {
-              onNewTerminal();
-              onClose();
-            }}
-            className="w-full px-4 py-3 flex items-center gap-4 hover:bg-ide-bg rounded-lg transition-colors"
-          >
-            <div className="w-10 h-10 rounded-full bg-ide-accent/10 flex items-center justify-center">
-              <Terminal size={20} className="text-ide-accent" />
-            </div>
-            <div className="text-left">
-              <div className="text-sm font-medium text-ide-text">
-                New Terminal
-              </div>
-              <div className="text-xs text-ide-mute">
-                Open a terminal session
               </div>
             </div>
           </button>

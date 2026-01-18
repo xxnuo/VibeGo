@@ -1,19 +1,9 @@
 const API_BASE = "/api";
 
-function getDeviceId(): string {
-  let deviceId = localStorage.getItem("device_id");
-  if (!deviceId) {
-    deviceId = `device-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-    localStorage.setItem("device_id", deviceId);
-  }
-  return deviceId;
-}
-
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${endpoint}`, {
     headers: {
       "Content-Type": "application/json",
-      "X-Device-ID": getDeviceId(),
       ...options?.headers,
     },
     ...options,
@@ -28,8 +18,7 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
 export interface SessionInfo {
   id: string;
   user_id: string;
-  device_id: string;
-  device_name: string;
+  name: string;
   created_at: number;
   updated_at: number;
 }
@@ -37,16 +26,14 @@ export interface SessionInfo {
 export interface SessionDetail {
   id: string;
   user_id: string;
-  device_id: string;
-  device_name: string;
+  name: string;
   state: string;
   created_at: number;
   updated_at: number;
-  expires_at: number;
 }
 
 export const sessionApi = {
-  list: (page = 1, pageSize = 20) =>
+  list: (page = 1, pageSize = 50) =>
     request<{
       sessions: SessionInfo[];
       page: number;
@@ -54,26 +41,18 @@ export const sessionApi = {
       total: number;
     }>(`/session?page=${page}&page_size=${pageSize}`),
 
-  create: (deviceId: string, deviceName: string) =>
+  create: (name: string) =>
     request<{ ok: boolean; id: string }>("/session", {
       method: "POST",
-      body: JSON.stringify({ device_id: deviceId, device_name: deviceName }),
-    }),
-
-  getCurrent: () => request<SessionDetail>("/session/current"),
-
-  saveCurrentState: (state: string) =>
-    request<{ ok: boolean }>("/session/current/state", {
-      method: "PUT",
-      body: JSON.stringify({ state }),
+      body: JSON.stringify({ name }),
     }),
 
   get: (id: string) => request<SessionDetail>(`/session/${id}`),
 
-  saveState: (id: string, state: string) =>
-    request<{ ok: boolean }>(`/session/${id}/state`, {
+  update: (id: string, data: { name?: string; state?: string }) =>
+    request<{ ok: boolean }>(`/session/${id}`, {
       method: "PUT",
-      body: JSON.stringify({ state }),
+      body: JSON.stringify(data),
     }),
 
   delete: (id: string) =>
