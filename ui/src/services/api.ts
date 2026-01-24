@@ -167,7 +167,6 @@ export const getTerminals = async (): Promise<TerminalSession[]> => {
   return data.terminals.map((t: any) => ({
     id: t.id,
     name: t.name || "Terminal",
-    history: [],
   }));
 };
 
@@ -182,7 +181,6 @@ export const createTerminal = async (): Promise<TerminalSession> => {
   return {
     id: data.id,
     name: data.name || "Terminal",
-    history: [],
   };
 };
 

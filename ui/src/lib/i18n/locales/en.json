@@ -52,10 +52,21 @@
   },
   "git": {
     "changes": "Changes",
+    "history": "History",
     "commit": "Commit",
     "pullRequest": "Pull Request",
     "commitMessage": "Commit message...",
-    "configureUpstream": "Configure upstream to enable PRs."
+    "configureUpstream": "Configure upstream to enable PRs.",
+    "staged": "Staged Changes",
+    "unstaged": "Changes",
+    "stageAll": "Stage All",
+    "unstageAll": "Unstage All",
+    "discard": "Discard",
+    "noChanges": "No changes",
+    "noCommits": "No commits yet",
+    "stage": "Stage",
+    "unstage": "Unstage",
+    "refresh": "Refresh"
   },
   "terminal": {
     "noActiveSession": "No terminal session active"

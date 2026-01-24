@@ -22,7 +22,8 @@ type localCommand struct {
 }
 
 func newLocalCommand(shell string, args []string, cwd string, cols, rows int, opts ...localCommandOption) (*localCommand, error) {
-	env := append(os.Environ(), "TERM=xterm-256color")
+	// Set PROMPT_EOL_MARK to empty to avoid the '%' char on Lines ending without newline (zsh feature)
+	env := append(os.Environ(), "TERM=xterm-256color", "PROMPT_EOL_MARK=")
 
 	spawnOpts := ptyx.SpawnOpts{
 		Prog: shell,

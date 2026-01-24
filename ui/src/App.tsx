@@ -1,12 +1,10 @@
 import React, { useEffect, useCallback, useState } from "react";
 import {
   useAppStore,
-  useTerminalStore,
   usePreviewStore,
   useFileManagerStore,
   useFrameStore,
   useSessionStore,
-  type GitFileNode,
   type FileItem,
   type Theme,
   type Locale,
@@ -14,8 +12,9 @@ import {
 
 import { AppFrame, NewGroupMenu } from "@/components/frame";
 import FileManager from "@/components/FileManager";
+import { useTerminalCreate } from "@/hooks/useTerminal";
 import GitView from "@/components/GitView";
-import TerminalView from "@/components/TerminalView";
+import TerminalPage from "@/components/TerminalPage";
 import ProjectMenu from "@/components/ProjectMenu";
 import NewPageMenu from "@/components/NewPageMenu";
 import DiffView from "@/components/DiffView";
@@ -27,47 +26,10 @@ import { fileApi } from "@/api/file";
 import { useSettingsStore } from "@/lib/settings";
 import "@/plugins";
 
-const MOCK_GIT_FILES: GitFileNode[] = [
-  {
-    id: "git-1",
-    name: "payload.js",
-    path: "src/kernel/payload.js",
-    status: "modified",
-    originalContent: "const deploy = () => console.log('Waiting...');",
-    modifiedContent: "const deploy = () => console.log('Payload delivered');",
-  },
-  {
-    id: "git-2",
-    name: "decrypt.ts",
-    path: "src/kernel/decrypt.ts",
-    status: "added",
-    originalContent: "",
-    modifiedContent: "export const crack = (hash) => { ... }",
-  },
-  {
-    id: "git-3",
-    name: "logs.txt",
-    path: "logs.txt",
-    status: "deleted",
-    originalContent: "ACCESS GRANTED",
-    modifiedContent: "",
-  },
-];
-
-const MOCK_TERMINALS = [
-  {
-    id: "term-1",
-    name: "root@proxynode",
-    history: ["> connecting to 192.168.0.1...", "> secure handshake... OK"],
-  },
-  { id: "term-2", name: "net_watch", history: ["scanning ports..."] },
-];
-
 const App: React.FC = () => {
   const { theme, locale, isMenuOpen, setMenuOpen, setTheme, setLocale } =
     useAppStore();
-  const { terminals, activeTerminalId, setTerminals, addTerminal } =
-    useTerminalStore();
+
   const resetPreview = usePreviewStore((s) => s.reset);
   const { currentPath } = useFileManagerStore();
   const initSettings = useSettingsStore((s) => s.init);
@@ -87,6 +49,7 @@ const App: React.FC = () => {
   const showHomePage = useFrameStore((s) => s.showHomePage);
 
   const saveCurrentSession = useSessionStore((s) => s.saveCurrentSession);
+  const createTerminalMutation = useTerminalCreate();
 
   const [isNewGroupMenuOpen, setNewGroupMenuOpen] = useState(false);
   const [isNewPageMenuOpen, setNewPageMenuOpen] = useState(false);
@@ -133,10 +96,6 @@ const App: React.FC = () => {
   }, [fontFamily]);
 
   useEffect(() => {
-    if (terminals.length === 0) setTerminals(MOCK_TERMINALS);
-  }, []);
-
-  useEffect(() => {
     const root = document.documentElement;
     const body = document.body;
     root.className = "";
@@ -155,15 +114,15 @@ const App: React.FC = () => {
     }
   }, [theme]);
 
-  const handleGitFileClick = useCallback(
-    (gitFile: GitFileNode) => {
+  const handleGitDiff = useCallback(
+    (original: string, modified: string, title: string) => {
       addCurrentTab({
-        id: `diff-${gitFile.id}`,
-        title: `${gitFile.name} [DIFF]`,
+        id: `diff-${Date.now()}`,
+        title,
         data: {
           type: "diff",
-          original: gitFile.originalContent,
-          modified: gitFile.modifiedContent,
+          original,
+          modified,
         },
       });
     },
@@ -223,21 +182,13 @@ const App: React.FC = () => {
           }
           break;
         case "terminal":
-          addTerminal({
-            id: `term-${Date.now()}`,
-            name: `shell-${terminals.length + 1}`,
-            history: [],
-          });
+          createTerminalMutation.mutate({ cwd: activeGroup.path });
           break;
         case "git":
           break;
       }
     } else if (activeGroup.type === "terminal") {
-      addCurrentTab({
-        id: `term-${Date.now()}`,
-        title: `Terminal ${tabs.length + 1}`,
-        data: { type: "terminal" },
-      });
+      createTerminalMutation.mutate({});
     } else if (activeGroup.type === "plugin") {
       addCurrentTab({
         id: `plugin-tab-${Date.now()}`,
@@ -249,8 +200,6 @@ const App: React.FC = () => {
     activeGroup,
     currentView,
     currentPath,
-    terminals.length,
-    addTerminal,
     addCurrentTab,
     tabs.length,
     activeTabId,
@@ -300,12 +249,7 @@ const App: React.FC = () => {
     }
 
     if (activeGroup.type === "terminal") {
-      return (
-        <TerminalView
-          activeTerminalId={activeTerminalId || ""}
-          terminals={terminals}
-        />
-      );
+      return <TerminalPage />;
     }
 
     if (activeGroup.type === "plugin") {
@@ -321,9 +265,9 @@ const App: React.FC = () => {
         if (activeTabId === null) {
           return (
             <GitView
-              files={MOCK_GIT_FILES}
-              onFileClick={handleGitFileClick}
+              path={activeGroup.path}
               locale={locale}
+              onFileDiff={handleGitDiff}
             />
           );
         }
@@ -338,12 +282,7 @@ const App: React.FC = () => {
       }
 
       if (currentView === "terminal") {
-        return (
-          <TerminalView
-            activeTerminalId={activeTerminalId || ""}
-            terminals={terminals}
-          />
-        );
+        return <TerminalPage cwd={activeGroup.path} />;
       }
 
       if (currentView === "files") {

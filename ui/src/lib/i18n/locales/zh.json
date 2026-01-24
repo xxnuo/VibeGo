@@ -52,10 +52,21 @@
   },
   "git": {
     "changes": "更改",
+    "history": "历史",
     "commit": "提交",
     "pullRequest": "合并请求",
     "commitMessage": "提交信息...",
-    "configureUpstream": "配置上游以启用 PR。"
+    "configureUpstream": "配置上游以启用 PR。",
+    "staged": "已暂存",
+    "unstaged": "未暂存",
+    "stageAll": "全部暂存",
+    "unstageAll": "取消全部",
+    "discard": "放弃更改",
+    "noChanges": "没有更改",
+    "noCommits": "暂无提交记录",
+    "stage": "暂存",
+    "unstage": "取消暂存",
+    "refresh": "刷新"
   },
   "terminal": {
     "noActiveSession": "无活动终端会话"

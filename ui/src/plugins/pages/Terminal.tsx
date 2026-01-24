@@ -1,41 +1,10 @@
-import React, { useEffect } from "react";
-import { Terminal, Plus } from "lucide-react";
-import { useFrameStore } from "@/stores/frameStore";
-import { useTerminalStore } from "@/stores/terminalStore";
+import React from "react";
+import { Terminal } from "lucide-react";
 import { registerPlugin, type PluginViewProps } from "../registry";
-import TerminalView from "@/components/TerminalView";
+import TerminalPage from "@/components/TerminalPage";
 
-const TerminalPluginView: React.FC<PluginViewProps> = ({ isActive }) => {
-  const setPageMenuItems = useFrameStore((s) => s.setPageMenuItems);
-  const addCurrentTab = useFrameStore((s) => s.addCurrentTab);
-  const tabs = useFrameStore((s) => s.getCurrentTabs());
-  const { terminals, activeTerminalId } = useTerminalStore();
-
-  useEffect(() => {
-    if (!isActive) return;
-    setPageMenuItems([
-      {
-        id: "new-terminal-tab",
-        icon: <Plus size={20} />,
-        label: "New Tab",
-        onClick: () => {
-          addCurrentTab({
-            id: `term-${Date.now()}`,
-            title: `Terminal ${tabs.length + 1}`,
-            data: { type: "terminal" },
-          });
-        },
-      },
-    ]);
-    return () => setPageMenuItems([]);
-  }, [isActive, setPageMenuItems, addCurrentTab, tabs.length]);
-
-  return (
-    <TerminalView
-      activeTerminalId={activeTerminalId || ""}
-      terminals={terminals}
-    />
-  );
+const TerminalPluginView: React.FC<PluginViewProps> = () => {
+  return <TerminalPage />;
 };
 
 registerPlugin({

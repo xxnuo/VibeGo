@@ -1,84 +1,200 @@
-import React from "react";
-import { GitBranch, RotateCw, Play } from "lucide-react";
-import type { GitFileNode, Locale } from "@/stores";
+import React, { useState, useEffect, useCallback } from "react";
+import { GitBranch, RotateCw, History, FileText } from "lucide-react";
+import GitChangesView from "./GitChangesView";
+import GitHistoryView from "./GitHistoryView";
+import {
+  useGitStore,
+  useFrameStore,
+  type GitFileNode,
+  type Locale,
+} from "@/stores";
+import type { GitCommit } from "@/api/git";
 
 interface GitViewProps {
-  files: GitFileNode[];
-  onFileClick: (file: GitFileNode) => void;
+  path: string;
   locale: Locale;
+  onFileDiff: (original: string, modified: string, title: string) => void;
 }
 
-const GitView: React.FC<GitViewProps> = ({ files, onFileClick }) => {
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "modified":
-        return "text-yellow-500";
-      case "added":
-        return "text-green-500";
-      case "deleted":
-        return "text-red-500";
-      default:
-        return "text-ide-mute";
+type TabType = "changes" | "history";
+
+const i18n = {
+  en: {
+    changes: "Changes",
+    history: "History",
+    refresh: "Refresh",
+  },
+  zh: {
+    changes: "更改",
+    history: "历史",
+    refresh: "刷新",
+  },
+};
+
+const GitView: React.FC<GitViewProps> = ({ path, locale, onFileDiff }) => {
+  const t = i18n[locale] || i18n.en;
+  const [activeTab, setActiveTab] = useState<TabType>("changes");
+  const setTopBarConfig = useFrameStore((s) => s.setTopBarConfig);
+
+  const {
+    currentBranch,
+    stagedFiles,
+    unstagedFiles,
+    commits,
+    commitMessage,
+    isLoading,
+    selectedCommitFiles,
+    selectedCommit,
+    setCurrentPath,
+    setCommitMessage,
+    fetchStatus,
+    fetchLog,
+    stageFile,
+    unstageFile,
+    stageAll,
+    unstageAll,
+    discardFile,
+    commit,
+    getDiff,
+    setSelectedCommit,
+    setSelectedCommitFiles,
+  } = useGitStore();
+
+  useEffect(() => {
+    setCurrentPath(path);
+    fetchStatus();
+    fetchLog();
+  }, [path, setCurrentPath, fetchStatus, fetchLog]);
+
+  const handleRefresh = useCallback(() => {
+    fetchStatus();
+    if (activeTab === "history") {
+      fetchLog();
     }
-  };
+  }, [fetchStatus, fetchLog, activeTab]);
 
-  return (
-    <div className="flex flex-col h-full bg-ide-bg p-4 text-ide-text overflow-y-auto font-mono">
-      <div className="flex items-center justify-between mb-6 shrink-0 border-b border-ide-accent pb-2">
-        <h2 className="text-lg font-bold flex items-center gap-2 text-ide-accent">
-          <GitBranch size={18} />
-          VCS_CONTROL
-        </h2>
-        <button className="p-1 hover:text-ide-accent animate-spin-slow">
-          <RotateCw size={16} />
-        </button>
-      </div>
-
-      <div className="space-y-4 flex-1">
-        <div className="border border-ide-border bg-ide-panel/30">
-          <div className="flex justify-between items-center p-2 border-b border-ide-border bg-ide-panel">
-            <span className="text-xs font-bold text-ide-accent uppercase">
-              STAGED_CHANGES
-            </span>
-            <span className="text-xs bg-ide-accent text-black px-1 font-bold">
-              {files.length}
-            </span>
-          </div>
-          <div className="divide-y divide-ide-border">
-            {files.map((file) => (
-              <button
-                key={file.id}
-                onClick={() => onFileClick(file)}
-                className="w-full flex items-center gap-3 p-2 hover:bg-ide-accent/10 transition-colors text-left group"
-              >
-                <div
-                  className={`w-4 text-center font-bold text-xs ${getStatusColor(file.status)}`}
-                >
-                  {file.status[0].toUpperCase()}
-                </div>
-                <div className="flex flex-col overflow-hidden">
-                  <span className="text-xs font-bold text-ide-text group-hover:text-ide-accent truncate">
-                    {file.name}
-                  </span>
-                  <span className="text-[9px] text-ide-mute truncate">
-                    {file.path}
-                  </span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="border border-ide-border bg-ide-panel/30 p-2">
-          <textarea
-            placeholder="> enter_commit_msg"
-            className="w-full bg-black border border-ide-border p-2 text-xs text-ide-accent focus:outline-none focus:border-ide-accent min-h-[60px] placeholder-ide-mute/50"
-          />
-          <button className="w-full mt-2 bg-ide-accent text-black font-bold py-2 text-xs flex items-center justify-center gap-2 hover:bg-ide-accent/80">
-            <Play size={12} fill="currentColor" />
-            EXECUTE_COMMIT
+  useEffect(() => {
+    setTopBarConfig({
+      show: true,
+      leftButtons: [
+        {
+          icon: <GitBranch size={16} />,
+          label: currentBranch,
+          disabled: true,
+        },
+      ],
+      centerContent: (
+        <div className="flex bg-ide-panel/50 rounded-md p-0.5 border border-ide-border">
+          <button
+            onClick={() => setActiveTab("changes")}
+            className={`px-3 py-0.5 text-xs font-medium rounded-sm transition-colors ${
+              activeTab === "changes"
+                ? "bg-ide-accent text-ide-bg shadow-sm"
+                : "text-ide-mute hover:text-ide-text"
+            }`}
+          >
+            {t.changes}
+            {stagedFiles.length + unstagedFiles.length > 0 &&
+              ` (${stagedFiles.length + unstagedFiles.length})`}
+          </button>
+          <button
+            onClick={() => setActiveTab("history")}
+            className={`px-3 py-0.5 text-xs font-medium rounded-sm transition-colors ${
+              activeTab === "history"
+                ? "bg-ide-accent text-ide-bg shadow-sm"
+                : "text-ide-mute hover:text-ide-text"
+            }`}
+          >
+            {t.history}
           </button>
         </div>
+      ),
+      rightButtons: [
+        {
+          icon: (
+            <RotateCw size={16} className={isLoading ? "animate-spin" : ""} />
+          ),
+          label: t.refresh,
+          onClick: handleRefresh,
+          disabled: isLoading,
+        },
+      ],
+    });
+
+    return () => {
+      setTopBarConfig({ show: false });
+    };
+  }, [
+    setTopBarConfig,
+    currentBranch,
+    activeTab,
+    stagedFiles.length,
+    unstagedFiles.length,
+    isLoading,
+    t,
+    handleRefresh,
+  ]);
+
+  const handleFileClick = useCallback(
+    async (file: GitFileNode) => {
+      const diff = await getDiff(file.path);
+      if (diff) {
+        onFileDiff(diff.old, diff.new, `${file.name} [DIFF]`);
+      }
+    },
+    [getDiff, onFileDiff],
+  );
+
+  const handleCommitSelect = useCallback(
+    async (commitInfo: GitCommit) => {
+      setSelectedCommit(commitInfo);
+      setSelectedCommitFiles([]);
+    },
+    [setSelectedCommit, setSelectedCommitFiles],
+  );
+
+  const handleHistoryFileClick = useCallback(
+    async (_commit: GitCommit, _filePath: string) => {},
+    [],
+  );
+
+  const handleCommit = useCallback(async () => {
+    await commit();
+  }, [commit]);
+
+  return (
+    <div className="flex flex-col h-full bg-ide-bg">
+      <div className="flex-1 overflow-hidden">
+        {activeTab === "changes" ? (
+          <GitChangesView
+            stagedFiles={stagedFiles}
+            unstagedFiles={unstagedFiles}
+            commitMessage={commitMessage}
+            isLoading={isLoading}
+            locale={locale}
+            onFileClick={handleFileClick}
+            onStageFile={stageFile}
+            onUnstageFile={unstageFile}
+            onDiscardFile={discardFile}
+            onStageAll={stageAll}
+            onUnstageAll={unstageAll}
+            onCommitMessageChange={setCommitMessage}
+            onCommit={handleCommit}
+          />
+        ) : (
+          <GitHistoryView
+            commits={commits}
+            isLoading={isLoading}
+            locale={locale}
+            onCommitSelect={handleCommitSelect}
+            onFileClick={handleHistoryFileClick}
+            selectedCommitFiles={selectedCommitFiles.map((f) => ({
+              path: f.path,
+              status: f.status,
+            }))}
+            selectedCommitHash={selectedCommit?.hash || null}
+          />
+        )}
       </div>
     </div>
   );

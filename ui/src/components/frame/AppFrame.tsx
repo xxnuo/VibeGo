@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { useFrameStore } from "@/stores/frameStore";
-import TopBar from "./TopBar";
+
 import TabBar from "./TabBar";
 import BottomBar from "./BottomBar";
 
@@ -26,11 +26,11 @@ const AppFrame: React.FC<AppFrameProps> = ({
 
   return (
     <div className="h-dvh min-h-dvh flex flex-col bg-ide-bg text-ide-text overflow-hidden font-mono transition-colors duration-300">
-      {topBarConfig.show ? (
-        <TopBar />
-      ) : (
-        <TabBar onAction={onTabAction} onBackToList={onBackToList} />
-      )}
+      <TabBar
+        onAction={onTabAction}
+        onBackToList={onBackToList}
+        topBarConfig={topBarConfig}
+      />
       <main className="flex-1 overflow-hidden relative border-b border-ide-border">
         {children}
       </main>
