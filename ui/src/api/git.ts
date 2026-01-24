@@ -97,4 +97,16 @@ export const gitApi = {
       method: "POST",
       body: JSON.stringify({ path }),
     }),
+
+  branches: (path: string) =>
+    request<{ branches: Array<{ name: string; isCurrent: boolean }>; currentBranch: string }>("/git/branches", {
+      method: "POST",
+      body: JSON.stringify({ path }),
+    }),
+
+  switchBranch: (path: string, branch: string) =>
+    request<{ ok: boolean; branch: string }>("/git/switch-branch", {
+      method: "POST",
+      body: JSON.stringify({ path, branch }),
+    }),
 };

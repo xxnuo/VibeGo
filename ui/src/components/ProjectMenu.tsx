@@ -19,6 +19,7 @@ import {
 import { useTranslation, type Locale } from "@/lib/i18n";
 import { useSettingsStore, getSettingSchema } from "@/lib/settings";
 import { useFrameStore, usePreviewStore } from "@/stores";
+import { useSessionStore } from "@/stores/sessionStore";
 import { fileApi } from "@/api/file";
 
 interface ProjectMenuProps {
@@ -59,6 +60,8 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
   const groups = useFrameStore((s) => s.groups);
   const pageMenuItems = useFrameStore((s) => s.pageMenuItems);
   const removeGroup = useFrameStore((s) => s.removeGroup);
+  const deleteSession = useSessionStore((s) => s.deleteSession);
+  const currentSessionId = useSessionStore((s) => s.currentSessionId);
 
   const editMode = usePreviewStore((s) => s.editMode);
   const isDirty = usePreviewStore((s) => s.isDirty);
@@ -96,9 +99,13 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     setSetting("locale", nextValue);
   };
 
-  const handleCloseFolder = () => {
+  const handleCloseFolder = async () => {
     if (activeGroup?.type === "folder") {
-      removeGroup(activeGroup.id);
+      if (currentSessionId) {
+        await deleteSession(currentSessionId);
+      } else {
+        removeGroup(activeGroup.id);
+      }
     }
     onClose();
   };
@@ -172,39 +179,39 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     badge?: string | number;
     title?: string;
   }> = [
-      {
-        id: "home",
-        icon: <Home size={20} />,
-        label: t("common.home"),
-        onClick: handleHome,
-      },
-      {
-        id: "new-page",
-        icon: <FilePlus size={20} />,
-        label: t("common.newPage"),
-        onClick: handleNewPage,
-      },
-      {
-        id: "settings",
-        icon: <Settings size={20} />,
-        label: t("common.settings"),
-        onClick: handleSettings,
-      },
-      {
-        id: "theme",
-        icon: themeIcon,
-        label: t("common.theme"),
-        onClick: handleThemeToggle,
-        title: themeLabel,
-      },
-      {
-        id: "language",
-        icon: <Globe size={20} />,
-        label: t("common.language"),
-        onClick: handleLocaleToggle,
-        title: localeLabel,
-      },
-    ];
+    {
+      id: "home",
+      icon: <Home size={20} />,
+      label: t("common.home"),
+      onClick: handleHome,
+    },
+    {
+      id: "new-page",
+      icon: <FilePlus size={20} />,
+      label: t("common.newPage"),
+      onClick: handleNewPage,
+    },
+    {
+      id: "settings",
+      icon: <Settings size={20} />,
+      label: t("common.settings"),
+      onClick: handleSettings,
+    },
+    {
+      id: "theme",
+      icon: themeIcon,
+      label: t("common.theme"),
+      onClick: handleThemeToggle,
+      title: themeLabel,
+    },
+    {
+      id: "language",
+      icon: <Globe size={20} />,
+      label: t("common.language"),
+      onClick: handleLocaleToggle,
+      title: localeLabel,
+    },
+  ];
 
   const contextItems: Array<{
     id: string;
@@ -236,13 +243,15 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
   }
 
   const hasNonHomeGroups = groups.filter((g) => g.type !== "home").length > 0;
-  if (activeGroup?.type === "home" && hasNonHomeGroups) {
-    contextItems.push({
-      id: "close-home",
-      icon: <XCircle size={20} />,
-      label: t("common.closePage"),
-      onClick: handleClosePage,
-    });
+  if (activeGroup?.type === "home") {
+    if (hasNonHomeGroups) {
+      contextItems.push({
+        id: "close-home",
+        icon: <XCircle size={20} />,
+        label: t("common.closePage"),
+        onClick: handleClosePage,
+      });
+    }
   }
 
   pageMenuItems.forEach((item) => {

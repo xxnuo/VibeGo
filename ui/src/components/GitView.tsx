@@ -1,22 +1,17 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { GitBranch, RotateCw, History, FileText } from "lucide-react";
+import React, { useEffect, useCallback, useMemo } from "react";
 import GitChangesView from "./GitChangesView";
 import GitHistoryView from "./GitHistoryView";
-import {
-  useGitStore,
-  useFrameStore,
-  type GitFileNode,
-  type Locale,
-} from "@/stores";
+import { useGitStore, type GitFileNode, type Locale } from "@/stores";
 import type { GitCommit } from "@/api/git";
+import { usePageTopBar } from "@/hooks/usePageTopBar";
+import { GitBranch, RotateCw, FileText, History } from "lucide-react";
 
 interface GitViewProps {
   path: string;
   locale: Locale;
   onFileDiff: (original: string, modified: string, title: string) => void;
+  isActive?: boolean;
 }
-
-type TabType = "changes" | "history";
 
 const i18n = {
   en: {
@@ -31,13 +26,15 @@ const i18n = {
   },
 };
 
-const GitView: React.FC<GitViewProps> = ({ path, locale, onFileDiff }) => {
+const GitView: React.FC<GitViewProps> = ({
+  path,
+  locale,
+  onFileDiff,
+  isActive = true,
+}) => {
   const t = i18n[locale] || i18n.en;
-  const [activeTab, setActiveTab] = useState<TabType>("changes");
-  const setTopBarConfig = useFrameStore((s) => s.setTopBarConfig);
 
   const {
-    currentBranch,
     stagedFiles,
     unstagedFiles,
     commits,
@@ -45,10 +42,17 @@ const GitView: React.FC<GitViewProps> = ({ path, locale, onFileDiff }) => {
     isLoading,
     selectedCommitFiles,
     selectedCommit,
+    currentBranch,
+    branches,
+    activeTab,
     setCurrentPath,
     setCommitMessage,
+    setActiveTab,
+    reset,
     fetchStatus,
     fetchLog,
+    fetchBranches,
+    switchBranch,
     stageFile,
     unstageFile,
     stageAll,
@@ -61,10 +65,12 @@ const GitView: React.FC<GitViewProps> = ({ path, locale, onFileDiff }) => {
   } = useGitStore();
 
   useEffect(() => {
+    reset();
     setCurrentPath(path);
     fetchStatus();
     fetchLog();
-  }, [path, setCurrentPath, fetchStatus, fetchLog]);
+    fetchBranches();
+  }, [path, setCurrentPath, reset, fetchStatus, fetchLog, fetchBranches]);
 
   const handleRefresh = useCallback(() => {
     fetchStatus();
@@ -73,40 +79,62 @@ const GitView: React.FC<GitViewProps> = ({ path, locale, onFileDiff }) => {
     }
   }, [fetchStatus, fetchLog, activeTab]);
 
-  useEffect(() => {
-    setTopBarConfig({
+  const handleBranchClick = useCallback(() => {
+    if (branches.length === 0) return;
+
+    const branchList = branches
+      .map((b, i) => `${i + 1}. ${b}${b === currentBranch ? " (current)" : ""}`)
+      .join("\n");
+    const input = prompt(
+      `Select branch:\n${branchList}\n\nEnter branch name:`,
+      currentBranch,
+    );
+
+    if (input && input !== currentBranch && branches.includes(input)) {
+      switchBranch(input);
+    }
+  }, [branches, currentBranch, switchBranch]);
+
+  const topBarConfig = useMemo(() => {
+    if (!isActive) return null;
+
+    return {
       show: true,
       leftButtons: [
         {
           icon: <GitBranch size={16} />,
-          label: currentBranch,
-          disabled: true,
+          onClick: handleBranchClick,
+          disabled: branches.length === 0,
         },
       ],
       centerContent: (
-        <div className="flex bg-ide-panel/50 rounded-md p-0.5 border border-ide-border">
-          <button
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar touch-pan-x h-full">
+          <div
             onClick={() => setActiveTab("changes")}
-            className={`px-3 py-0.5 text-xs font-medium rounded-sm transition-colors ${
+            className={`shrink-0 px-2 h-7 rounded-md flex items-center gap-1 text-xs border transition-all cursor-pointer ${
               activeTab === "changes"
-                ? "bg-ide-accent text-ide-bg shadow-sm"
-                : "text-ide-mute hover:text-ide-text"
+                ? "bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm"
+                : "bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text"
             }`}
           >
-            {t.changes}
-            {stagedFiles.length + unstagedFiles.length > 0 &&
-              ` (${stagedFiles.length + unstagedFiles.length})`}
-          </button>
-          <button
+            <FileText size={12} />
+            <span className="font-medium">
+              {t.changes}
+              {stagedFiles.length + unstagedFiles.length > 0 &&
+                ` (${stagedFiles.length + unstagedFiles.length})`}
+            </span>
+          </div>
+          <div
             onClick={() => setActiveTab("history")}
-            className={`px-3 py-0.5 text-xs font-medium rounded-sm transition-colors ${
+            className={`shrink-0 px-2 h-7 rounded-md flex items-center gap-1 text-xs border transition-all cursor-pointer ${
               activeTab === "history"
-                ? "bg-ide-accent text-ide-bg shadow-sm"
-                : "text-ide-mute hover:text-ide-text"
+                ? "bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm"
+                : "bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text"
             }`}
           >
-            {t.history}
-          </button>
+            <History size={12} />
+            <span className="font-medium">{t.history}</span>
+          </div>
         </div>
       ),
       rightButtons: [
@@ -114,26 +142,26 @@ const GitView: React.FC<GitViewProps> = ({ path, locale, onFileDiff }) => {
           icon: (
             <RotateCw size={16} className={isLoading ? "animate-spin" : ""} />
           ),
-          label: t.refresh,
           onClick: handleRefresh,
           disabled: isLoading,
         },
       ],
-    });
-
-    return () => {
-      setTopBarConfig({ show: false });
     };
   }, [
-    setTopBarConfig,
+    isActive,
+    branches,
     currentBranch,
     activeTab,
     stagedFiles.length,
     unstagedFiles.length,
     isLoading,
     t,
+    setActiveTab,
     handleRefresh,
+    handleBranchClick,
   ]);
+
+  usePageTopBar(topBarConfig, [topBarConfig]);
 
   const handleFileClick = useCallback(
     async (file: GitFileNode) => {

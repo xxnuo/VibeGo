@@ -1,5 +1,6 @@
 export { default as AppFrame } from "./AppFrame";
 
+export { default as TopBar } from "./TopBar";
 export { default as TabBar } from "./TabBar";
 export { default as BottomBar } from "./BottomBar";
 export { default as NewGroupMenu } from "./NewGroupMenu";

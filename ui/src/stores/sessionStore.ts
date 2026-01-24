@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { sessionApi, type SessionInfo } from "../api/session";
 import { useFrameStore, type FolderGroup, type PluginGroup } from "./frameStore";
 import { useFileManagerStore } from "./fileManagerStore";
+import { useTerminalStore, type TerminalSession } from "./terminalStore";
 
 const CURRENT_SESSION_KEY = "current_session_id";
 
@@ -20,6 +21,8 @@ export interface SessionState {
     pluginId: string;
     name: string;
   }>;
+  terminalsByGroup: Record<string, TerminalSession[]>;
+  activeTerminalByGroup: Record<string, string | null>;
   settingsOpen?: boolean;
   activeGroupId: string | null;
 }
@@ -59,6 +62,7 @@ function setStoredSessionId(id: string | null): void {
 
 function buildSessionState(): SessionState {
   const frameState = useFrameStore.getState();
+  const terminalState = useTerminalStore.getState();
   const folderGroups = frameState.groups.filter(
     (g): g is FolderGroup => g.type === "folder"
   );
@@ -79,6 +83,8 @@ function buildSessionState(): SessionState {
       pluginId: g.pluginId,
       name: g.name,
     })),
+    terminalsByGroup: terminalState.terminalsByGroup,
+    activeTerminalByGroup: terminalState.activeIdByGroup,
     settingsOpen: !!settingsGroup,
     activeGroupId: frameState.activeGroupId,
   };
@@ -87,9 +93,11 @@ function buildSessionState(): SessionState {
 function restoreSessionState(state: SessionState): void {
   const frameStore = useFrameStore.getState();
   const fileManagerStore = useFileManagerStore.getState();
+  const terminalStore = useTerminalStore.getState();
 
   frameStore.initDefaultGroups();
   fileManagerStore.reset();
+  terminalStore.reset();
 
   let lastAddedGroupId: string | null = null;
 
@@ -103,6 +111,22 @@ function restoreSessionState(state: SessionState): void {
 
   if (state.settingsOpen || state.activeGroupId === "settings") {
     frameStore.addSettingsGroup();
+  }
+
+  if (state.terminalsByGroup) {
+    Object.entries(state.terminalsByGroup).forEach(([groupId, terminals]) => {
+      terminals.forEach((terminal) => {
+        terminalStore.addTerminal(groupId, terminal);
+      });
+    });
+  }
+
+  if (state.activeTerminalByGroup) {
+    Object.entries(state.activeTerminalByGroup).forEach(([groupId, activeId]) => {
+      if (activeId) {
+        terminalStore.setActiveId(groupId, activeId);
+      }
+    });
   }
 
   const currentGroups = useFrameStore.getState().groups;
@@ -193,6 +217,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           },
         }],
         openPlugins: [],
+        terminalsByGroup: {},
+        activeTerminalByGroup: {},
         activeGroupId: groupId,
       };
 
@@ -214,14 +240,27 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       let state: SessionState = {
         openFolders: [],
         openPlugins: [],
+        terminalsByGroup: {},
+        activeTerminalByGroup: {},
         activeGroupId: null,
       };
 
       if (detail.state && detail.state !== "{}") {
         try {
-          state = JSON.parse(detail.state);
+          const parsed = JSON.parse(detail.state);
+          state = {
+            ...parsed,
+            terminalsByGroup: parsed.terminalsByGroup || {},
+            activeTerminalByGroup: parsed.activeTerminalByGroup || {},
+          };
         } catch {
-          state = { openFolders: [], openPlugins: [], activeGroupId: null };
+          state = {
+            openFolders: [],
+            openPlugins: [],
+            terminalsByGroup: {},
+            activeTerminalByGroup: {},
+            activeGroupId: null,
+          };
         }
       }
 

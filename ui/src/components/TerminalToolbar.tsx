@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Plus, LayoutList, LayoutGrid, Trash2, ArrowLeft } from "lucide-react";
+import React from "react";
+import { Plus, LayoutList, Trash2 } from "lucide-react";
 import type { TerminalSession } from "@/stores/terminalStore";
 import TerminalTabs from "./TerminalTabs";
 

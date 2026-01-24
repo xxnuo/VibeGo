@@ -24,6 +24,7 @@ interface GitState {
   commitMessage: string;
   isLoading: boolean;
   error: string | null;
+  activeTab: "changes" | "history";
 
   setCurrentPath: (path: string | null) => void;
   setFiles: (files: GitFileNode[]) => void;
@@ -34,9 +35,13 @@ interface GitState {
   setError: (error: string | null) => void;
   setSelectedCommit: (commit: GitCommit | null) => void;
   setSelectedCommitFiles: (files: GitFileNode[]) => void;
+  setActiveTab: (tab: "changes" | "history") => void;
 
+  reset: () => void;
   fetchStatus: () => Promise<void>;
   fetchLog: (limit?: number) => Promise<void>;
+  fetchBranches: () => Promise<void>;
+  switchBranch: (branch: string) => Promise<void>;
   stageFile: (path: string) => Promise<void>;
   unstageFile: (path: string) => Promise<void>;
   stageAll: () => Promise<void>;
@@ -107,6 +112,7 @@ export const useGitStore = create<GitState>((set, get) => ({
   commitMessage: "",
   isLoading: false,
   error: null,
+  activeTab: "changes",
 
   setCurrentPath: (path) => set({ currentPath: path }),
   setFiles: (files) => set({ files }),
@@ -117,6 +123,19 @@ export const useGitStore = create<GitState>((set, get) => ({
   setError: (error) => set({ error }),
   setSelectedCommit: (commit) => set({ selectedCommit: commit }),
   setSelectedCommitFiles: (files) => set({ selectedCommitFiles: files }),
+  setActiveTab: (tab) => set({ activeTab: tab }),
+
+  reset: () => set({
+    files: [],
+    stagedFiles: [],
+    unstagedFiles: [],
+    commits: [],
+    selectedCommit: null,
+    selectedCommitFiles: [],
+    commitMessage: "",
+    isLoading: false,
+    error: null,
+  }),
 
   fetchStatus: async () => {
     const { currentPath } = get();
@@ -148,6 +167,37 @@ export const useGitStore = create<GitState>((set, get) => ({
       set({ commits: res.commits });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : "Failed to fetch log" });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  fetchBranches: async () => {
+    const { currentPath } = get();
+    if (!currentPath) return;
+
+    try {
+      const res = await gitApi.branches(currentPath);
+      set({
+        branches: res.branches.map(b => b.name),
+        currentBranch: res.currentBranch,
+      });
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : "Failed to fetch branches" });
+    }
+  },
+
+  switchBranch: async (branch: string) => {
+    const { currentPath, fetchStatus, fetchBranches } = get();
+    if (!currentPath) return;
+
+    set({ isLoading: true, error: null });
+    try {
+      await gitApi.switchBranch(currentPath, branch);
+      await fetchBranches();
+      await fetchStatus();
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : "Failed to switch branch" });
     } finally {
       set({ isLoading: false });
     }

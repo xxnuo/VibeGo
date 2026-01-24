@@ -34,6 +34,8 @@ func (h *GitHandler) Register(r *gin.RouterGroup) {
 	g.POST("/checkout", h.Checkout)
 	g.POST("/commit", h.Commit)
 	g.POST("/undo", h.UndoCommit)
+	g.POST("/branches", h.Branches)
+	g.POST("/switch-branch", h.SwitchBranch)
 }
 
 func (h *GitHandler) openRepo(path string) (*git.Repository, error) {

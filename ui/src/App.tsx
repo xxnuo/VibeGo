@@ -12,7 +12,6 @@ import {
 
 import { AppFrame, NewGroupMenu } from "@/components/frame";
 import FileManager from "@/components/FileManager";
-import { useTerminalCreate } from "@/hooks/useTerminal";
 import GitView from "@/components/GitView";
 import TerminalPage from "@/components/TerminalPage";
 import ProjectMenu from "@/components/ProjectMenu";
@@ -44,12 +43,11 @@ const App: React.FC = () => {
   const addCurrentTab = useFrameStore((s) => s.addCurrentTab);
   const openPreviewTab = useFrameStore((s) => s.openPreviewTab);
   const addPluginGroup = useFrameStore((s) => s.addPluginGroup);
-  const addSettingsGroup = useFrameStore((s) => s.addSettingsGroup);
+  const addSettingsGroup = useFrameStore ((s) => s.addSettingsGroup);
   const initDefaultGroups = useFrameStore((s) => s.initDefaultGroups);
   const showHomePage = useFrameStore((s) => s.showHomePage);
 
   const saveCurrentSession = useSessionStore((s) => s.saveCurrentSession);
-  const createTerminalMutation = useTerminalCreate();
 
   const [isNewGroupMenuOpen, setNewGroupMenuOpen] = useState(false);
   const [isNewPageMenuOpen, setNewPageMenuOpen] = useState(false);
@@ -182,13 +180,12 @@ const App: React.FC = () => {
           }
           break;
         case "terminal":
-          createTerminalMutation.mutate({ cwd: activeGroup.path });
           break;
         case "git":
           break;
       }
     } else if (activeGroup.type === "terminal") {
-      createTerminalMutation.mutate({});
+      // Terminal page handles its own TopBar
     } else if (activeGroup.type === "plugin") {
       addCurrentTab({
         id: `plugin-tab-${Date.now()}`,
@@ -249,7 +246,7 @@ const App: React.FC = () => {
     }
 
     if (activeGroup.type === "terminal") {
-      return <TerminalPage />;
+      return <TerminalPage groupId={activeGroup.id} />;
     }
 
     if (activeGroup.type === "plugin") {
@@ -268,6 +265,7 @@ const App: React.FC = () => {
               path={activeGroup.path}
               locale={locale}
               onFileDiff={handleGitDiff}
+              isActive={true}
             />
           );
         }
@@ -282,7 +280,7 @@ const App: React.FC = () => {
       }
 
       if (currentView === "terminal") {
-        return <TerminalPage cwd={activeGroup.path} />;
+        return <TerminalPage groupId={activeGroup.id} cwd={activeGroup.path} />;
       }
 
       if (currentView === "files") {

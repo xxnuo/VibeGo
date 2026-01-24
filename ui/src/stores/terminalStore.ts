@@ -7,90 +7,158 @@ export interface TerminalSession {
 }
 
 interface TerminalState {
-  terminals: TerminalSession[];
-  activeTerminalId: string | null;
-  isListManagerOpen: boolean;
+  terminalsByGroup: Record<string, TerminalSession[]>;
+  activeIdByGroup: Record<string, string | null>;
+  listManagerOpenByGroup: Record<string, boolean>;
 
-  setTerminals: (terminals: TerminalSession[]) => void;
-  addTerminal: (terminal: TerminalSession) => void;
-  removeTerminal: (id: string) => void;
-  clearAllTerminals: () => void;
-  setActiveTerminalId: (id: string | null) => void;
-  updateTerminal: (id: string, updates: Partial<TerminalSession>) => void;
-  renameTerminal: (id: string, name: string) => void;
-  pinTerminal: (id: string) => void;
-  setListManagerOpen: (open: boolean) => void;
-  createTerminal: (name?: string) => TerminalSession;
+  getTerminals: (groupId: string) => TerminalSession[];
+  addTerminal: (groupId: string, terminal: TerminalSession) => void;
+  removeTerminal: (groupId: string, terminalId: string) => void;
+  clearAllTerminals: (groupId: string) => void;
+  getActiveId: (groupId: string) => string | null;
+  setActiveId: (groupId: string, terminalId: string | null) => void;
+  updateTerminal: (groupId: string, id: string, updates: Partial<TerminalSession>) => void;
+  renameTerminal: (groupId: string, id: string, name: string) => void;
+  pinTerminal: (groupId: string, id: string) => void;
+  isListManagerOpen: (groupId: string) => boolean;
+  setListManagerOpen: (groupId: string, open: boolean) => void;
+  reset: () => void;
 }
 
 export const useTerminalStore = create<TerminalState>((set, get) => ({
-  terminals: [],
-  activeTerminalId: null,
-  isListManagerOpen: false,
+  terminalsByGroup: {},
+  activeIdByGroup: {},
+  listManagerOpenByGroup: {},
 
-  setTerminals: (terminals) => set({ terminals }),
+  getTerminals: (groupId) => {
+    return get().terminalsByGroup[groupId] || [];
+  },
 
-  addTerminal: (terminal) =>
-    set((s) => ({
-      terminals: [...s.terminals, terminal],
-      activeTerminalId: terminal.id,
-      isListManagerOpen: false,
-    })),
-
-  removeTerminal: (id) =>
+  addTerminal: (groupId, terminal) =>
     set((s) => {
-      const removeIndex = s.terminals.findIndex((t) => t.id === id);
-      const terminals = s.terminals.filter((t) => t.id !== id);
-      let activeTerminalId = s.activeTerminalId;
-      if (s.activeTerminalId === id) {
-        if (terminals.length > 0) {
-          activeTerminalId = terminals[Math.min(removeIndex, terminals.length - 1)].id;
-        } else {
-          activeTerminalId = null;
-        }
-      }
-      return { terminals, activeTerminalId };
+      const isRestoring = s.terminalsByGroup[groupId]?.length > 0;
+      return {
+        terminalsByGroup: {
+          ...s.terminalsByGroup,
+          [groupId]: [...(s.terminalsByGroup[groupId] || []), terminal],
+        },
+        activeIdByGroup: isRestoring
+          ? s.activeIdByGroup
+          : {
+            ...s.activeIdByGroup,
+            [groupId]: terminal.id,
+          },
+        listManagerOpenByGroup: isRestoring
+          ? s.listManagerOpenByGroup
+          : {
+            ...s.listManagerOpenByGroup,
+            [groupId]: false,
+          },
+      };
     }),
 
-  clearAllTerminals: () =>
-    set({ terminals: [], activeTerminalId: null }),
+  removeTerminal: (groupId, terminalId) =>
+    set((s) => {
+      const terminals = s.terminalsByGroup[groupId] || [];
+      const removeIndex = terminals.findIndex((t) => t.id === terminalId);
+      const newTerminals = terminals.filter((t) => t.id !== terminalId);
 
-  setActiveTerminalId: (id) =>
-    set({ activeTerminalId: id, isListManagerOpen: false }),
+      let activeId = s.activeIdByGroup[groupId];
+      if (activeId === terminalId) {
+        if (newTerminals.length > 0) {
+          activeId = newTerminals[Math.min(removeIndex, newTerminals.length - 1)].id;
+        } else {
+          activeId = null;
+        }
+      }
 
-  updateTerminal: (id, updates) =>
+      return {
+        terminalsByGroup: {
+          ...s.terminalsByGroup,
+          [groupId]: newTerminals,
+        },
+        activeIdByGroup: {
+          ...s.activeIdByGroup,
+          [groupId]: activeId,
+        },
+      };
+    }),
+
+  clearAllTerminals: (groupId) =>
     set((s) => ({
-      terminals: s.terminals.map((t) =>
-        t.id === id ? { ...t, ...updates } : t,
-      ),
+      terminalsByGroup: {
+        ...s.terminalsByGroup,
+        [groupId]: [],
+      },
+      activeIdByGroup: {
+        ...s.activeIdByGroup,
+        [groupId]: null,
+      },
     })),
 
-  renameTerminal: (id, name) =>
-    set((s) => ({
-      terminals: s.terminals.map((t) =>
-        t.id === id ? { ...t, name } : t,
-      ),
-    })),
-
-  pinTerminal: (id) =>
-    set((s) => ({
-      terminals: s.terminals.map((t) =>
-        t.id === id ? { ...t, pinned: true } : t,
-      ),
-    })),
-
-  setListManagerOpen: (open) => set({ isListManagerOpen: open }),
-
-  createTerminal: (name) => {
-    const { terminals } = get();
-    const id = `term-${Date.now()}`;
-    const terminalName = name || `Terminal ${terminals.length + 1}`;
-    const terminal: TerminalSession = { id, name: terminalName };
-    set((s) => ({
-      terminals: [...s.terminals, terminal],
-      activeTerminalId: id,
-      isListManagerOpen: false,
-    }));
-    return terminal;
+  getActiveId: (groupId) => {
+    return get().activeIdByGroup[groupId] || null;
   },
+
+  setActiveId: (groupId, terminalId) =>
+    set((s) => ({
+      activeIdByGroup: {
+        ...s.activeIdByGroup,
+        [groupId]: terminalId,
+      },
+      listManagerOpenByGroup: {
+        ...s.listManagerOpenByGroup,
+        [groupId]: false,
+      },
+    })),
+
+  updateTerminal: (groupId, id, updates) =>
+    set((s) => ({
+      terminalsByGroup: {
+        ...s.terminalsByGroup,
+        [groupId]: (s.terminalsByGroup[groupId] || []).map((t) =>
+          t.id === id ? { ...t, ...updates } : t,
+        ),
+      },
+    })),
+
+  renameTerminal: (groupId, id, name) =>
+    set((s) => ({
+      terminalsByGroup: {
+        ...s.terminalsByGroup,
+        [groupId]: (s.terminalsByGroup[groupId] || []).map((t) =>
+          t.id === id ? { ...t, name } : t,
+        ),
+      },
+    })),
+
+  pinTerminal: (groupId, id) =>
+    set((s) => ({
+      terminalsByGroup: {
+        ...s.terminalsByGroup,
+        [groupId]: (s.terminalsByGroup[groupId] || []).map((t) =>
+          t.id === id ? { ...t, pinned: true } : t,
+        ),
+      },
+    })),
+
+  isListManagerOpen: (groupId) => {
+    const state = get().listManagerOpenByGroup[groupId];
+    return state === undefined ? true : state;
+  },
+
+  setListManagerOpen: (groupId, open) =>
+    set((s) => ({
+      listManagerOpenByGroup: {
+        ...s.listManagerOpenByGroup,
+        [groupId]: open,
+      },
+    })),
+
+  reset: () =>
+    set({
+      terminalsByGroup: {},
+      activeIdByGroup: {},
+      listManagerOpenByGroup: {},
+    }),
 }));
