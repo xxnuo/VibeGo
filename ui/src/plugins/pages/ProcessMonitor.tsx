@@ -11,7 +11,7 @@ const ProcessMonitorView: React.FC<PluginViewProps> = ({ isActive }) => {
     setPageMenuItems([
       {
         id: "refresh-processes",
-        icon: <RefreshCw size={20} />,
+        icon: <RefreshCw size={18} />,
         label: "Refresh",
         onClick: () => {
           console.log("Refresh process list");

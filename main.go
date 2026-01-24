@@ -51,7 +51,7 @@ func main() {
 
 	r.Use(middleware.Recovery())
 	r.Use(middleware.Logger())
-	r.Use(middleware.RateLimit(100, time.Minute))
+	r.Use(middleware.RateLimit(1000, time.Minute))
 	r.Use(middleware.AllowWAN(cfg.AllowWAN))
 	r.Use(middleware.CORS(cfg.CORSOrigins))
 

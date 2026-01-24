@@ -518,7 +518,7 @@ const FileListItem: React.FC<FileItemProps> = ({
         {formatDate(file.modTime)}
       </div>
       {file.isDir && (
-        <ChevronRight size={16} className="text-ide-mute shrink-0" />
+        <ChevronRight size={18} className="text-ide-mute shrink-0" />
       )}
     </div>
   );

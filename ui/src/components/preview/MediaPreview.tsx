@@ -27,7 +27,7 @@ const MediaPreview: React.FC = () => {
           className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text"
           title="Download"
         >
-          <Download size={16} />
+          <Download size={18} />
         </a>
         <a
           href={mediaUrl}
@@ -36,7 +36,7 @@ const MediaPreview: React.FC = () => {
           className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text"
           title="Open in new tab"
         >
-          <ExternalLink size={16} />
+          <ExternalLink size={18} />
         </a>
       </div>
       <div className="flex-1 flex items-center justify-center p-4">

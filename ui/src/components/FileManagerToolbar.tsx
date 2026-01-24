@@ -96,7 +96,7 @@ const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
           <>
             {searchActive ? (
               <div className="flex-1 flex items-center gap-2 bg-ide-bg rounded-md px-2">
-                <Search size={16} className="text-ide-mute" />
+                <Search size={18} className="text-ide-mute" />
                 <input
                   type="text"
                   value={searchQuery}
@@ -112,7 +112,7 @@ const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
                   }}
                   className="p-1 rounded hover:bg-ide-panel"
                 >
-                  <X size={16} className="text-ide-mute" />
+                  <X size={18} className="text-ide-mute" />
                 </button>
               </div>
             ) : (

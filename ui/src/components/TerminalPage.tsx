@@ -92,7 +92,7 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
       show: true,
       leftButtons: [
         {
-          icon: <Terminal size={16} />,
+          icon: <Terminal size={18} />,
           onClick: handleToggleListManager,
           active: listManagerOpen,
           // Add styling to match file browser button if needed,
@@ -137,7 +137,7 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
         ) : null,
       rightButtons: [
         {
-          icon: <Plus size={16} />,
+          icon: <Plus size={18} />,
           onClick: handleCreateTerminal,
         },
       ],

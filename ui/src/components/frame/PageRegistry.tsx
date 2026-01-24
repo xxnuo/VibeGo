@@ -54,7 +54,7 @@ export const DEFAULT_PAGE_CONFIGS: Omit<PageConfig, "component">[] = [
   {
     id: "files",
     viewType: AppView.FILES,
-    icon: <Files size={16} />,
+    icon: <Files size={18} />,
     label: "Files",
     tabBarConfig: {
       showBackButton: true,
@@ -65,7 +65,7 @@ export const DEFAULT_PAGE_CONFIGS: Omit<PageConfig, "component">[] = [
   {
     id: "git",
     viewType: AppView.GIT,
-    icon: <GitGraph size={16} />,
+    icon: <GitGraph size={18} />,
     label: "Git",
     tabBarConfig: {
       showBackButton: true,
@@ -76,7 +76,7 @@ export const DEFAULT_PAGE_CONFIGS: Omit<PageConfig, "component">[] = [
   {
     id: "terminal",
     viewType: AppView.TERMINAL,
-    icon: <Terminal size={16} />,
+    icon: <Terminal size={18} />,
     label: "Terminal",
     tabBarConfig: {
       showBackButton: false,
@@ -87,7 +87,7 @@ export const DEFAULT_PAGE_CONFIGS: Omit<PageConfig, "component">[] = [
   {
     id: "plugin",
     viewType: AppView.PLUGIN,
-    icon: <Box size={16} />,
+    icon: <Box size={18} />,
     label: "Plugin",
     tabBarConfig: {
       showBackButton: true,

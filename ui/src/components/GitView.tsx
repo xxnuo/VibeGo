@@ -4,7 +4,7 @@ import GitHistoryView from "./GitHistoryView";
 import { useGitStore, type GitFileNode, type Locale } from "@/stores";
 import type { GitCommit } from "@/api/git";
 import { usePageTopBar } from "@/hooks/usePageTopBar";
-import { GitBranch, RotateCw, FileText, History } from "lucide-react";
+import { GitBranch, RefreshCw, FileText, History } from "lucide-react";
 
 interface GitViewProps {
   path: string;
@@ -102,7 +102,7 @@ const GitView: React.FC<GitViewProps> = ({
       show: true,
       leftButtons: [
         {
-          icon: <GitBranch size={16} />,
+          icon: <GitBranch size={18} />,
           onClick: handleBranchClick,
           disabled: branches.length === 0,
         },
@@ -140,7 +140,7 @@ const GitView: React.FC<GitViewProps> = ({
       rightButtons: [
         {
           icon: (
-            <RotateCw size={16} className={isLoading ? "animate-spin" : ""} />
+            <RefreshCw size={18} className={isLoading ? "animate-spin" : ""} />
           ),
           onClick: handleRefresh,
           disabled: isLoading,

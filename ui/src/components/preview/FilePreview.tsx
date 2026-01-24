@@ -153,7 +153,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file }) => {
                 onClick={loadFileAsCode}
                 className="flex items-center gap-2 px-4 py-2 bg-ide-panel border border-ide-border text-ide-text rounded text-sm hover:bg-ide-bg"
               >
-                <Code size={16} />
+                <Code size={18} />
                 {t("preview.openAsText")}
               </button>
               <a
@@ -161,7 +161,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file }) => {
                 download={file.name}
                 className="flex items-center justify-center gap-2 px-4 py-2 bg-ide-accent text-ide-bg rounded text-sm hover:opacity-90"
               >
-                <Download size={16} />
+                <Download size={18} />
                 {t("preview.download")}
               </a>
             </div>

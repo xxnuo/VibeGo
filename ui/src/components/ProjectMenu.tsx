@@ -337,7 +337,7 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
         <div className="flex justify-between items-center mb-6 pb-2 border-b border-ide-border">
           <h3 className="font-bold text-ide-text flex items-center gap-2">
             <span className="bg-ide-accent text-ide-bg p-1 rounded-md">
-              <Terminal size={16} />
+              <Terminal size={18} />
             </span>
             VibeGo
           </h3>

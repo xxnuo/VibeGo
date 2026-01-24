@@ -85,7 +85,7 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({
     value: string;
   }) => (
     <div className="flex items-start gap-3 py-2">
-      <Icon size={16} className="text-ide-mute mt-0.5 shrink-0" />
+      <Icon size={18} className="text-ide-mute mt-0.5 shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="text-[10px] text-ide-mute uppercase tracking-wider">
           {label}
@@ -131,12 +131,20 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({
             value={`${file.mode} (${formatPermissions(file.mode)})`}
           />
           {file.mimeType && (
-            <InfoRow icon={File} label={t("fileDetail.type")} value={file.mimeType} />
+            <InfoRow
+              icon={File}
+              label={t("fileDetail.type")}
+              value={file.mimeType}
+            />
           )}
           {file.isSymlink && (
             <InfoRow icon={Link2} label={t("fileDetail.symlink")} value="Yes" />
           )}
-          <InfoRow icon={Folder} label={t("fileDetail.path")} value={file.path} />
+          <InfoRow
+            icon={Folder}
+            label={t("fileDetail.path")}
+            value={file.path}
+          />
         </div>
 
         <div className="px-4 pt-3 border-t border-ide-border">
@@ -146,7 +154,9 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({
               className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-ide-bg transition-colors"
             >
               <Copy size={20} className="text-ide-mute" />
-              <span className="text-[10px] text-ide-mute">{t("fileDetail.copyPath")}</span>
+              <span className="text-[10px] text-ide-mute">
+                {t("fileDetail.copyPath")}
+              </span>
             </button>
             {onRename && (
               <button
@@ -154,7 +164,9 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({
                 className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-ide-bg transition-colors"
               >
                 <Edit3 size={20} className="text-ide-mute" />
-                <span className="text-[10px] text-ide-mute">{t("common.rename")}</span>
+                <span className="text-[10px] text-ide-mute">
+                  {t("common.rename")}
+                </span>
               </button>
             )}
             {!file.isDir && (
@@ -163,7 +175,9 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({
                 className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-ide-bg transition-colors"
               >
                 <Download size={20} className="text-ide-mute" />
-                <span className="text-[10px] text-ide-mute">{t("fileDetail.download")}</span>
+                <span className="text-[10px] text-ide-mute">
+                  {t("fileDetail.download")}
+                </span>
               </button>
             )}
             {onDelete && (
@@ -172,7 +186,9 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({
                 className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-ide-bg transition-colors"
               >
                 <Trash2 size={20} className="text-red-500" />
-                <span className="text-[10px] text-red-500">{t("common.delete")}</span>
+                <span className="text-[10px] text-red-500">
+                  {t("common.delete")}
+                </span>
               </button>
             )}
           </div>

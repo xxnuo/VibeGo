@@ -141,7 +141,7 @@ const FileManagerBreadcrumb: React.FC<FileManagerBreadcrumbProps> = ({
         onClick={() => handlePartClick(-1)}
         className="shrink-0 p-1.5 rounded-md text-ide-mute hover:text-ide-accent hover:bg-ide-bg transition-colors"
       >
-        <Home size={16} />
+        <Home size={18} />
       </button>
 
       {isEditing ? (
@@ -158,13 +158,13 @@ const FileManagerBreadcrumb: React.FC<FileManagerBreadcrumbProps> = ({
             onClick={handleEditSubmit}
             className="p-1.5 rounded-md text-green-500 hover:bg-ide-bg transition-colors"
           >
-            <Check size={16} />
+            <Check size={18} />
           </button>
           <button
             onClick={handleEditCancel}
             className="p-1.5 rounded-md text-red-500 hover:bg-ide-bg transition-colors"
           >
-            <X size={16} />
+            <X size={18} />
           </button>
         </div>
       ) : (

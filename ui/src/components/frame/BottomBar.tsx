@@ -25,17 +25,17 @@ interface BottomBarProps {
 }
 
 const VIEW_ICONS: Record<ViewType, React.ReactNode> = {
-  files: <Files size={16} />,
-  git: <GitGraph size={16} />,
-  terminal: <Terminal size={16} />,
+  files: <Files size={18} />,
+  git: <GitGraph size={18} />,
+  terminal: <Terminal size={18} />,
 };
 
 const GROUP_TYPE_ICONS = {
-  home: <Home size={16} />,
-  folder: <FolderOpen size={16} />,
-  terminal: <Terminal size={16} />,
-  plugin: <Box size={16} />,
-  settings: <Settings size={16} />,
+  home: <Home size={18} />,
+  folder: <FolderOpen size={18} />,
+  terminal: <Terminal size={18} />,
+  plugin: <Box size={18} />,
+  settings: <Settings size={18} />,
 };
 
 interface GroupButtonProps {
@@ -59,19 +59,21 @@ const GroupButton: React.FC<GroupButtonProps> = ({
     if (isExpanded) {
       return (
         <div
-          className={`flex h-full items-center gap-0.5 px-1 ${hasMultipleGroups
+          className={`flex h-full items-center gap-0.5 px-1 ${
+            hasMultipleGroups
               ? "bg-ide-panel/70 border border-ide-border/30 rounded-md shadow-inner"
               : ""
-            }`}
+          }`}
         >
           {(["files", "git", "terminal"] as ViewType[]).map((view) => (
             <button
               key={view}
               onClick={() => onViewClick(group.id, view)}
-              className={`px-2 h-full rounded flex items-center transition-all ${isActive && group.activeView === view
+              className={`px-2 h-full rounded flex items-center transition-all ${
+                isActive && group.activeView === view
                   ? "text-ide-accent"
                   : "text-ide-mute hover:text-ide-text"
-                }`}
+              }`}
             >
               {VIEW_ICONS[view]}
             </button>
@@ -82,10 +84,11 @@ const GroupButton: React.FC<GroupButtonProps> = ({
     return (
       <button
         onClick={() => onGroupClick(group.id)}
-        className={`px-3 h-full rounded flex items-center gap-2 transition-all ${isActive
+        className={`px-3 h-full rounded flex items-center gap-2 transition-all ${
+          isActive
             ? "bg-ide-panel text-ide-accent shadow-sm"
             : "text-ide-mute hover:text-ide-text"
-          }`}
+        }`}
         title={group.name}
       >
         {GROUP_TYPE_ICONS.folder}
@@ -96,10 +99,11 @@ const GroupButton: React.FC<GroupButtonProps> = ({
   return (
     <button
       onClick={() => onGroupClick(group.id)}
-      className={`px-3 h-full rounded flex items-center gap-2 transition-all ${isActive
+      className={`px-3 h-full rounded flex items-center gap-2 transition-all ${
+        isActive
           ? "bg-ide-panel text-ide-accent shadow-sm"
           : "text-ide-mute hover:text-ide-text"
-        }`}
+      }`}
       title={group.name}
     >
       {GROUP_TYPE_ICONS[group.type] || GROUP_TYPE_ICONS.plugin}
@@ -172,17 +176,17 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick }) => {
     bottomBarConfig.rightButtons && bottomBarConfig.rightButtons.length > 0
       ? bottomBarConfig.rightButtons
       : [
-        {
-          icon: isFullscreen ? (
-            <Minimize size={16} />
-          ) : (
-            <Maximize size={16} />
-          ),
-          label: isFullscreen ? "Exit Fullscreen" : "Fullscreen",
-          onClick: handleToggleFullscreen,
-          active: isFullscreen,
-        },
-      ];
+          {
+            icon: isFullscreen ? (
+              <Minimize size={18} />
+            ) : (
+              <Maximize size={18} />
+            ),
+            label: isFullscreen ? "Exit Fullscreen" : "Fullscreen",
+            onClick: handleToggleFullscreen,
+            active: isFullscreen,
+          },
+        ];
 
   if (!bottomBarConfig.show) {
     return null;
@@ -232,10 +236,11 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick }) => {
               <button
                 key={item.id}
                 onClick={item.onClick}
-                className={`px-3 h-full rounded flex items-center gap-2 transition-all relative ${bottomBarConfig.activeItemId === item.id
+                className={`px-3 h-full rounded flex items-center gap-2 transition-all relative ${
+                  bottomBarConfig.activeItemId === item.id
                     ? "bg-ide-panel text-ide-accent shadow-sm"
                     : "text-ide-mute hover:text-ide-text"
-                  }`}
+                }`}
                 title={item.label}
               >
                 {item.icon}

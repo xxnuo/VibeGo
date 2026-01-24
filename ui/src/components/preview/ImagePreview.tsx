@@ -76,7 +76,7 @@ const ImagePreviewContent: React.FC<{ file: FileItem }> = ({ file }) => {
           className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text"
           title="Zoom Out"
         >
-          <ZoomOut size={16} />
+          <ZoomOut size={18} />
         </button>
         <span className="text-xs text-ide-mute min-w-[50px] text-center">
           {Math.round(scale * 100)}%
@@ -86,14 +86,14 @@ const ImagePreviewContent: React.FC<{ file: FileItem }> = ({ file }) => {
           className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text"
           title="Zoom In"
         >
-          <ZoomIn size={16} />
+          <ZoomIn size={18} />
         </button>
         <button
           onClick={handleReset}
           className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text"
           title="Reset"
         >
-          <RotateCcw size={16} />
+          <RotateCcw size={18} />
         </button>
         <div className="flex-1" />
         <a
@@ -102,14 +102,14 @@ const ImagePreviewContent: React.FC<{ file: FileItem }> = ({ file }) => {
           className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text"
           title="Download"
         >
-          <Download size={16} />
+          <Download size={18} />
         </a>
         <button
           onClick={() => window.open(imageUrl, "_blank")}
           className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text"
           title="Open in new tab"
         >
-          <ExternalLink size={16} />
+          <ExternalLink size={18} />
         </button>
       </div>
       <div

@@ -197,7 +197,7 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
             onClick={handleHome}
             className="shrink-0 p-1.5 rounded-md text-ide-mute hover:text-ide-accent hover:bg-ide-bg transition-colors"
           >
-            <Home size={16} />
+            <Home size={18} />
           </button>
 
           {isEditing ? (
@@ -217,7 +217,7 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
                 type="submit"
                 className="p-1.5 rounded-md text-green-500 hover:bg-ide-bg transition-colors"
               >
-                <Check size={16} />
+                <Check size={18} />
               </button>
               <button
                 type="button"
@@ -227,7 +227,7 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
                 }}
                 className="p-1.5 rounded-md text-red-500 hover:bg-ide-bg transition-colors"
               >
-                <X size={16} />
+                <X size={18} />
               </button>
             </form>
           ) : (
@@ -293,7 +293,7 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
                     {dir.name}
                   </span>
                   <ChevronRight
-                    size={16}
+                    size={18}
                     className="text-ide-mute opacity-0 group-hover:opacity-100"
                   />
                 </button>
