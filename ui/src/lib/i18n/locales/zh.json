@@ -29,7 +29,18 @@
     "undo": "撤销",
     "redo": "恢复",
     "find": "查找",
-    "replace": "替换"
+    "replace": "替换",
+    "delete": "删除"
+  },
+  "fileDetail": {
+    "size": "大小",
+    "modified": "修改时间",
+    "permissions": "权限",
+    "type": "类型",
+    "symlink": "符号链接",
+    "path": "路径",
+    "copyPath": "复制路径",
+    "download": "下载"
   },
   "sidebar": {
     "project": "项目",
@@ -70,6 +81,10 @@
     "locale": {
       "label": "语言",
       "description": "选择显示语言"
+    },
+    "fontFamily": {
+      "label": "字体",
+      "description": "选择编辑器和界面字体"
     },
     "showHiddenFiles": {
       "label": "显示隐藏文件",

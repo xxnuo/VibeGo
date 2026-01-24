@@ -46,6 +46,18 @@ export const SETTINGS_SCHEMA: SettingSchema[] = [
     ],
   },
   {
+    key: "fontFamily",
+    type: "select",
+    category: "appearance",
+    labelKey: "settings.fontFamily.label",
+    descriptionKey: "settings.fontFamily.description",
+    defaultValue: "jetbrains-mono",
+    options: [
+      { value: "default", label: "Default" },
+      { value: "jetbrains-mono", label: "JetBrains Mono" },
+    ],
+  },
+  {
     key: "showHiddenFiles",
     type: "toggle",
     category: "fileManager",

@@ -5,6 +5,9 @@ import { useFileManagerStore } from "./fileManagerStore";
 
 const CURRENT_SESSION_KEY = "current_session_id";
 
+let autoSaveUnsub: (() => void) | null = null;
+let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
 export interface SessionState {
   openFolders: Array<{
     id: string;
@@ -17,6 +20,7 @@ export interface SessionState {
     pluginId: string;
     name: string;
   }>;
+  settingsOpen?: boolean;
   activeGroupId: string | null;
 }
 
@@ -37,7 +41,9 @@ interface SessionStoreState {
   renameSession: (id: string, name: string) => Promise<void>;
   getCurrentSessionId: () => string | null;
   setCurrentSessionId: (id: string | null) => void;
+  initAutoSave: () => void;
 }
+
 
 function getStoredSessionId(): string | null {
   return localStorage.getItem(CURRENT_SESSION_KEY);
@@ -59,6 +65,7 @@ function buildSessionState(): SessionState {
   const pluginGroups = frameState.groups.filter(
     (g): g is PluginGroup => g.type === "plugin"
   );
+  const settingsGroup = frameState.groups.find((g) => g.type === "settings");
 
   return {
     openFolders: folderGroups.map((g) => ({
@@ -72,6 +79,7 @@ function buildSessionState(): SessionState {
       pluginId: g.pluginId,
       name: g.name,
     })),
+    settingsOpen: !!settingsGroup,
     activeGroupId: frameState.activeGroupId,
   };
 }
@@ -90,11 +98,21 @@ function restoreSessionState(state: SessionState): void {
   });
 
   state.openPlugins.forEach((plugin) => {
-    frameStore.addPluginGroup(plugin.pluginId, plugin.name);
+    frameStore.addPluginGroup(plugin.pluginId, plugin.name, plugin.id);
   });
 
-  if (state.activeGroupId) {
-    frameStore.setActiveGroup(state.activeGroupId);
+  if (state.settingsOpen || state.activeGroupId === "settings") {
+    frameStore.addSettingsGroup();
+  }
+
+  const currentGroups = useFrameStore.getState().groups;
+
+  if (state.activeGroupId && state.activeGroupId !== "home") {
+    if (currentGroups.some((g) => g.id === state.activeGroupId)) {
+      frameStore.setActiveGroup(state.activeGroupId);
+    } else if (lastAddedGroupId) {
+      frameStore.setActiveGroup(lastAddedGroupId);
+    }
   } else if (lastAddedGroupId) {
     frameStore.setActiveGroup(lastAddedGroupId);
   }
@@ -105,6 +123,16 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   sessions: [],
   loading: false,
   error: null,
+
+  initAutoSave: () => {
+    if (autoSaveUnsub) return;
+    autoSaveUnsub = useFrameStore.subscribe(() => {
+      if (autoSaveTimer) clearTimeout(autoSaveTimer);
+      autoSaveTimer = setTimeout(() => {
+        get().saveCurrentSession();
+      }, 1000);
+    });
+  },
 
   loadSessions: async () => {
     set({ loading: true, error: null });
@@ -117,6 +145,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   },
 
   initSession: async () => {
+    get().initAutoSave();
     await get().loadSessions();
     const { currentSessionId, sessions, switchSession } = get();
     if (currentSessionId && sessions.some((s) => s.id === currentSessionId)) {

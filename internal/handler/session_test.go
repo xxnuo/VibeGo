@@ -87,8 +87,8 @@ func TestSessionNewEmptyBody(t *testing.T) {
 func TestSessionList(t *testing.T) {
 	h, r := setupTestSessionHandler(t)
 
-	h.db.Create(&model.UserSession{ID: "s1", DeviceName: "First", State: "{}", CreatedAt: 100, UpdatedAt: 200, ExpiresAt: 999999})
-	h.db.Create(&model.UserSession{ID: "s2", DeviceName: "Second", State: "{}", CreatedAt: 150, UpdatedAt: 300, ExpiresAt: 999999})
+	h.db.Create(&model.UserSession{ID: "s1", Name: "First", State: "{}", CreatedAt: 100, UpdatedAt: 200})
+	h.db.Create(&model.UserSession{ID: "s2", Name: "Second", State: "{}", CreatedAt: 150, UpdatedAt: 300})
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/session", nil)
@@ -120,7 +120,7 @@ func TestSessionListEmpty(t *testing.T) {
 func TestSessionLoad(t *testing.T) {
 	h, r := setupTestSessionHandler(t)
 
-	h.db.Create(&model.UserSession{ID: "load1", DeviceName: "Load Test", State: `{"foo":"bar"}`, CreatedAt: 100, UpdatedAt: 100, ExpiresAt: 999999})
+	h.db.Create(&model.UserSession{ID: "load1", Name: "Load Test", State: `{"foo":"bar"}`, CreatedAt: 100, UpdatedAt: 100})
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/session/load1", nil)
@@ -130,7 +130,7 @@ func TestSessionLoad(t *testing.T) {
 	var result model.UserSession
 	json.Unmarshal(w.Body.Bytes(), &result)
 	assert.Equal(t, "load1", result.ID)
-	assert.Equal(t, "Load Test", result.DeviceName)
+	assert.Equal(t, "Load Test", result.Name)
 	assert.Equal(t, `{"foo":"bar"}`, result.State)
 }
 
@@ -147,7 +147,7 @@ func TestSessionLoadNotFound(t *testing.T) {
 func TestSessionSaveState(t *testing.T) {
 	h, r := setupTestSessionHandler(t)
 
-	h.db.Create(&model.UserSession{ID: "save1", DeviceName: "Original", State: "{}", CreatedAt: 100, UpdatedAt: 100, ExpiresAt: 999999})
+	h.db.Create(&model.UserSession{ID: "save1", Name: "Original", State: "{}", CreatedAt: 100, UpdatedAt: 100})
 
 	body := `{"state":"{\"key\":\"value\"}"}`
 	w := httptest.NewRecorder()
@@ -178,7 +178,7 @@ func TestSessionSaveStateNotFound(t *testing.T) {
 func TestSessionRemove(t *testing.T) {
 	h, r := setupTestSessionHandler(t)
 
-	h.db.Create(&model.UserSession{ID: "rm1", DeviceName: "To Remove", State: "{}", CreatedAt: 100, UpdatedAt: 100, ExpiresAt: 999999})
+	h.db.Create(&model.UserSession{ID: "rm1", Name: "To Remove", State: "{}", CreatedAt: 100, UpdatedAt: 100})
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("DELETE", "/api/session/rm1", nil)

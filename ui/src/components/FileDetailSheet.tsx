@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  X,
   File,
   Folder,
   Calendar,
@@ -20,6 +19,9 @@ import {
 } from "@/components/ui/sheet";
 import type { FileItem } from "@/stores/fileManagerStore";
 import { fileApi } from "@/api/file";
+
+import { useTranslation, type Locale } from "@/lib/i18n";
+import { useSettingsStore } from "@/lib/settings";
 
 interface FileDetailSheetProps {
   file: FileItem | null;
@@ -58,6 +60,9 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({
   onDelete,
   onRename,
 }) => {
+  const locale = (useSettingsStore((s) => s.settings.locale) || "zh") as Locale;
+  const t = useTranslation(locale);
+
   if (!file) return null;
 
   const handleDownload = () => {
@@ -106,48 +111,42 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({
             <SheetTitle className="text-ide-text text-left flex-1 truncate">
               {file.name}
             </SheetTitle>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-md hover:bg-ide-bg text-ide-mute"
-            >
-              <X size={18} />
-            </button>
           </div>
         </SheetHeader>
 
-        <div className="py-3 space-y-1 overflow-y-auto max-h-[40vh]">
+        <div className="px-4 py-3 space-y-1 overflow-y-auto max-h-[40vh]">
           <InfoRow
             icon={HardDrive}
-            label="Size"
+            label={t("fileDetail.size")}
             value={file.isDir ? "--" : formatFileSize(file.size)}
           />
           <InfoRow
             icon={Calendar}
-            label="Modified"
+            label={t("fileDetail.modified")}
             value={formatDate(file.modTime)}
           />
           <InfoRow
             icon={Shield}
-            label="Permissions"
+            label={t("fileDetail.permissions")}
             value={`${file.mode} (${formatPermissions(file.mode)})`}
           />
           {file.mimeType && (
-            <InfoRow icon={File} label="Type" value={file.mimeType} />
+            <InfoRow icon={File} label={t("fileDetail.type")} value={file.mimeType} />
           )}
           {file.isSymlink && (
-            <InfoRow icon={Link2} label="Symlink" value="Yes" />
+            <InfoRow icon={Link2} label={t("fileDetail.symlink")} value="Yes" />
           )}
-          <InfoRow icon={Folder} label="Path" value={file.path} />
+          <InfoRow icon={Folder} label={t("fileDetail.path")} value={file.path} />
         </div>
 
-        <div className="pt-3 border-t border-ide-border">
+        <div className="px-4 pt-3 border-t border-ide-border">
           <div className="grid grid-cols-4 gap-2">
             <button
               onClick={handleCopyPath}
               className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-ide-bg transition-colors"
             >
               <Copy size={20} className="text-ide-mute" />
-              <span className="text-[10px] text-ide-mute">Copy Path</span>
+              <span className="text-[10px] text-ide-mute">{t("fileDetail.copyPath")}</span>
             </button>
             {onRename && (
               <button
@@ -155,7 +154,7 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({
                 className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-ide-bg transition-colors"
               >
                 <Edit3 size={20} className="text-ide-mute" />
-                <span className="text-[10px] text-ide-mute">Rename</span>
+                <span className="text-[10px] text-ide-mute">{t("common.rename")}</span>
               </button>
             )}
             {!file.isDir && (
@@ -164,7 +163,7 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({
                 className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-ide-bg transition-colors"
               >
                 <Download size={20} className="text-ide-mute" />
-                <span className="text-[10px] text-ide-mute">Download</span>
+                <span className="text-[10px] text-ide-mute">{t("fileDetail.download")}</span>
               </button>
             )}
             {onDelete && (
@@ -173,7 +172,7 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({
                 className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-ide-bg transition-colors"
               >
                 <Trash2 size={20} className="text-red-500" />
-                <span className="text-[10px] text-red-500">Delete</span>
+                <span className="text-[10px] text-red-500">{t("common.delete")}</span>
               </button>
             )}
           </div>

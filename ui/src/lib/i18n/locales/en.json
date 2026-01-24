@@ -29,7 +29,18 @@
     "undo": "Undo",
     "redo": "Redo",
     "find": "Find",
-    "replace": "Replace"
+    "replace": "Replace",
+    "delete": "Delete"
+  },
+  "fileDetail": {
+    "size": "Size",
+    "modified": "Modified",
+    "permissions": "Permissions",
+    "type": "Type",
+    "symlink": "Symlink",
+    "path": "Path",
+    "copyPath": "Copy Path",
+    "download": "Download"
   },
   "sidebar": {
     "project": "Project",
@@ -70,6 +81,10 @@
     "locale": {
       "label": "Language",
       "description": "Select display language"
+    },
+    "fontFamily": {
+      "label": "Font Family",
+      "description": "Select editor and UI font"
     },
     "showHiddenFiles": {
       "label": "Show Hidden Files",

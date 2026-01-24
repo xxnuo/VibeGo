@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useRef, useEffect } from "react";
 import {
   X,
   Plus,
@@ -50,6 +50,20 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
   const file = usePreviewStore((s) => s.file);
 
   const lastClickTime = useRef<Record<string, number>>({});
+  const tabsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  useEffect(() => {
+    if (activeTabId) {
+      const tabElement = tabsRef.current.get(activeTabId);
+      if (tabElement) {
+        tabElement.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+          inline: "center",
+        });
+      }
+    }
+  }, [activeTabId]);
 
   const handleToggleEdit = useCallback(() => {
     if (!editMode && activeTabId) {
@@ -139,12 +153,15 @@ const TabBar: React.FC<TabBarProps> = ({ onAction, onBackToList }) => {
           {tabs.map((tab) => (
             <div
               key={tab.id}
+              ref={(el) => {
+                if (el) tabsRef.current.set(tab.id, el);
+                else tabsRef.current.delete(tab.id);
+              }}
               onClick={() => handleTabClick(tab.id)}
-              className={`shrink-0 px-2 h-7 rounded-md flex items-center gap-1 text-xs border transition-all cursor-pointer ${
-                activeTabId === tab.id
-                  ? "bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm"
-                  : "bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text"
-              }`}
+              className={`shrink-0 px-2 h-7 rounded-md flex items-center gap-1 text-xs border transition-all cursor-pointer ${activeTabId === tab.id
+                ? "bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm"
+                : "bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text"
+                }`}
             >
               {getTabIcon(tab)}
               <span

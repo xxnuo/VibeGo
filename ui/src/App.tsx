@@ -69,10 +69,11 @@ const App: React.FC = () => {
   const { terminals, activeTerminalId, setTerminals, addTerminal } =
     useTerminalStore();
   const resetPreview = usePreviewStore((s) => s.reset);
-  const { rootPath, goToPath, currentPath } = useFileManagerStore();
+  const { currentPath } = useFileManagerStore();
   const initSettings = useSettingsStore((s) => s.init);
   const themeSetting = useSettingsStore((s) => s.settings.theme);
   const localeSetting = useSettingsStore((s) => s.settings.locale);
+  const fontFamily = useSettingsStore((s) => s.settings.fontFamily);
 
   const activeGroup = useFrameStore((s) => s.getActiveGroup());
   const currentView = useFrameStore((s) => s.getCurrentView());
@@ -122,6 +123,14 @@ const App: React.FC = () => {
   useEffect(() => {
     if (localeSetting) setLocale(localeSetting as Locale);
   }, [localeSetting, setLocale]);
+
+  useEffect(() => {
+    if (fontFamily && fontFamily !== "default") {
+      document.body.setAttribute("data-font", fontFamily);
+    } else {
+      document.body.removeAttribute("data-font");
+    }
+  }, [fontFamily]);
 
   useEffect(() => {
     if (terminals.length === 0) setTerminals(MOCK_TERMINALS);
@@ -174,10 +183,7 @@ const App: React.FC = () => {
 
   const handleBackToList = useCallback(() => {
     resetPreview();
-    if (currentView === "files") {
-      goToPath(rootPath);
-    }
-  }, [resetPreview, currentView, goToPath, rootPath]);
+  }, [resetPreview]);
 
   const handleTabAction = useCallback(async () => {
     if (!activeGroup) return;

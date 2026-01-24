@@ -119,7 +119,7 @@ interface FrameState {
   showHomePage: () => void;
   addFolderGroup: (path: string, name?: string, id?: string) => string;
   addTerminalGroup: (name?: string) => void;
-  addPluginGroup: (pluginId: string, name?: string) => void;
+  addPluginGroup: (pluginId: string, name?: string, id?: string) => void;
   addSettingsGroup: () => void;
   removeGroup: (id: string) => void;
   setActiveGroup: (id: string) => void;
@@ -171,9 +171,9 @@ const createTerminalGroup = (name?: string): TerminalGroup => ({
   activeTabId: null,
 });
 
-const createPluginGroup = (pluginId: string, name?: string): PluginGroup => ({
+const createPluginGroup = (pluginId: string, name?: string, id?: string): PluginGroup => ({
   type: "plugin",
-  id: `plugin-${Date.now()}`,
+  id: id || `plugin-${Date.now()}`,
   name: name || pluginId,
   pluginId,
   tabs: [],
@@ -265,8 +265,8 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     set((s) => ({ groups: [...s.groups, group], activeGroupId: group.id }));
   },
 
-  addPluginGroup: (pluginId, name) => {
-    const group = createPluginGroup(pluginId, name);
+  addPluginGroup: (pluginId, name, id) => {
+    const group = createPluginGroup(pluginId, name, id);
     set((s) => ({ groups: [...s.groups, group], activeGroupId: group.id }));
   },
 
@@ -350,14 +350,14 @@ export const useFrameStore = create<FrameState>((set, get) => ({
             ...g,
             views: {
               ...g.views,
-              [v]: { tabs: [...viewData.tabs, tab], activeTabId: tab.id },
+              [v]: { tabs: [tab, ...viewData.tabs], activeTabId: tab.id },
             },
           };
         }
         if (g.type === "settings" || g.type === "home") return g;
         const exists = g.tabs.find((t: TabItem) => t.id === tab.id);
         if (exists) return { ...g, activeTabId: tab.id };
-        return { ...g, tabs: [...g.tabs, tab], activeTabId: tab.id };
+        return { ...g, tabs: [tab, ...g.tabs], activeTabId: tab.id };
       }),
     })),
 
@@ -368,21 +368,23 @@ export const useFrameStore = create<FrameState>((set, get) => ({
         if (g.type === "folder") {
           const v = view || g.activeView;
           const viewData = g.views[v];
+          const removeIndex = viewData.tabs.findIndex((t) => t.id === tabId);
           const tabs = viewData.tabs.filter((t) => t.id !== tabId);
           const activeTabId =
             viewData.activeTabId === tabId
               ? tabs.length > 0
-                ? tabs[tabs.length - 1].id
+                ? tabs[Math.min(removeIndex, tabs.length - 1)].id
                 : null
               : viewData.activeTabId;
           return { ...g, views: { ...g.views, [v]: { tabs, activeTabId } } };
         }
         if (g.type === "settings" || g.type === "home") return g;
+        const removeIndex = g.tabs.findIndex((t: TabItem) => t.id === tabId);
         const tabs = g.tabs.filter((t: TabItem) => t.id !== tabId);
         const activeTabId =
           g.activeTabId === tabId
             ? tabs.length > 0
-              ? tabs[tabs.length - 1].id
+              ? tabs[Math.min(removeIndex, tabs.length - 1)].id
               : null
             : g.activeTabId;
         return { ...g, tabs, activeTabId };
@@ -487,7 +489,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
               i === previewTabIndex ? { ...tab, pinned: false } : t,
             );
           } else {
-            newTabs = [...viewData.tabs, { ...tab, pinned: false }];
+            newTabs = [{ ...tab, pinned: false }, ...viewData.tabs];
           }
           return {
             ...g,
@@ -508,7 +510,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
             i === previewTabIndex ? { ...tab, pinned: false } : t,
           );
         } else {
-          newTabs = [...g.tabs, { ...tab, pinned: false }];
+          newTabs = [{ ...tab, pinned: false }, ...g.tabs];
         }
         return { ...g, tabs: newTabs, activeTabId: tab.id };
       }),

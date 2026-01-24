@@ -172,39 +172,39 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     badge?: string | number;
     title?: string;
   }> = [
-    {
-      id: "home",
-      icon: <Home size={20} />,
-      label: t("common.home"),
-      onClick: handleHome,
-    },
-    {
-      id: "new-page",
-      icon: <FilePlus size={20} />,
-      label: t("common.newPage"),
-      onClick: handleNewPage,
-    },
-    {
-      id: "settings",
-      icon: <Settings size={20} />,
-      label: t("common.settings"),
-      onClick: handleSettings,
-    },
-    {
-      id: "theme",
-      icon: themeIcon,
-      label: t("common.theme"),
-      onClick: handleThemeToggle,
-      title: themeLabel,
-    },
-    {
-      id: "language",
-      icon: <Globe size={20} />,
-      label: t("common.language"),
-      onClick: handleLocaleToggle,
-      title: localeLabel,
-    },
-  ];
+      {
+        id: "home",
+        icon: <Home size={20} />,
+        label: t("common.home"),
+        onClick: handleHome,
+      },
+      {
+        id: "new-page",
+        icon: <FilePlus size={20} />,
+        label: t("common.newPage"),
+        onClick: handleNewPage,
+      },
+      {
+        id: "settings",
+        icon: <Settings size={20} />,
+        label: t("common.settings"),
+        onClick: handleSettings,
+      },
+      {
+        id: "theme",
+        icon: themeIcon,
+        label: t("common.theme"),
+        onClick: handleThemeToggle,
+        title: themeLabel,
+      },
+      {
+        id: "language",
+        icon: <Globe size={20} />,
+        label: t("common.language"),
+        onClick: handleLocaleToggle,
+        title: localeLabel,
+      },
+    ];
 
   const contextItems: Array<{
     id: string;
@@ -352,7 +352,7 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
             <div className="text-[10px] text-ide-mute uppercase font-bold mb-3">
               {section.title}
             </div>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-4 gap-1">
               {section.items.map((item) => (
                 <MenuItem
                   key={item.id}
@@ -397,10 +397,10 @@ const MenuItem: React.FC<{
       )}
     </div>
     <div className="flex flex-col items-center gap-0.5">
-      <span className="text-[11px] font-bold uppercase tracking-wide">
+      <span className="text-[13px] font-bold uppercase tracking-wide">
         {label}
       </span>
-      {title && <span className="text-[9px] text-ide-mute">{title}</span>}
+      {title && <span className="text-[11px] text-ide-mute">{title}</span>}
     </div>
   </button>
 );

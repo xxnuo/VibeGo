@@ -1,7 +1,9 @@
-import { StrictMode } from "react";
+
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "@/index.css";
+import "@/lib/monaco";
+import "@fontsource-variable/jetbrains-mono";
 import App from "@/App.tsx";
 
 const isCancelError = (error: unknown): boolean => {
@@ -23,21 +25,53 @@ const isCancelError = (error: unknown): boolean => {
   return false;
 };
 
-window.addEventListener("error", (e) => {
-  const msg = e.message || "";
-  const filename = e.filename || "";
-  if (
-    (isCancelError(e.error) ||
-      msg.includes("Canceled") ||
-      msg.includes("canceled")) &&
-    (filename.includes("monaco") ||
-      filename.includes("editor") ||
-      filename.includes("installHook"))
-  ) {
-    e.preventDefault();
-    return true;
-  }
-});
+const originalConsoleError = console.error;
+console.error = function (...args) {
+  // Check if any argument is a Canceled error related to Monaco/Editor
+  const shouldIgnore = args.some((arg) => {
+    const str =
+      arg instanceof Error
+        ? arg.message + (arg.stack || "")
+        : typeof arg === "string"
+          ? arg
+          : "";
+
+    return (
+      (str.includes("Canceled") ||
+        str.includes("canceled") ||
+        str.includes("aborted")) &&
+      (str.includes("monaco") ||
+        str.includes("editor") ||
+        str.includes("installHook") ||
+        str.includes("DeferredPromise") ||
+        str.includes("HTMLBodyElement.handler"))
+    );
+  });
+
+  if (shouldIgnore) return;
+  originalConsoleError.apply(console, args);
+};
+
+window.addEventListener(
+  "error",
+  (e) => {
+    const msg = e.message || "";
+    const filename = e.filename || "";
+    if (
+      (isCancelError(e.error) ||
+        msg.includes("Canceled") ||
+        msg.includes("canceled")) &&
+      (filename.includes("monaco") ||
+        filename.includes("editor") ||
+        filename.includes("installHook"))
+    ) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      return true;
+    }
+  },
+  true,
+);
 
 window.addEventListener("unhandledrejection", (e) => {
   if (isCancelError(e.reason)) {
@@ -55,9 +89,9 @@ const queryClient = new QueryClient({
 });
 
 createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
-  </StrictMode>,
+  // StrictMode causes double-mounting in dev, which can trigger Monaco cancellation errors
+  // removing it helps stabilize the editor init sequence
+  <QueryClientProvider client={queryClient}>
+    <App />
+  </QueryClientProvider>,
 );

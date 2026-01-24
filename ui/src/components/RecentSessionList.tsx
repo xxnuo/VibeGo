@@ -64,7 +64,6 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({
   };
 
   const handleSwitch = async (sessionId: string) => {
-    if (sessionId === currentSessionId) return;
     await switchSession(sessionId);
     onSwitchSession(sessionId);
   };
@@ -138,11 +137,10 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({
               <div
                 key={session.id}
                 onClick={() => handleSwitch(session.id)}
-                className={`group flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg border transition-all ${
-                  isCurrent
-                    ? "bg-ide-accent/10 border-ide-accent/30 cursor-default"
+                className={`group flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg border transition-all ${isCurrent
+                    ? "bg-ide-accent/10 border-ide-accent/30 cursor-pointer"
                     : "border-transparent hover:bg-ide-bg cursor-pointer hover:border-ide-border"
-                }`}
+                  }`}
               >
                 <div
                   className={`p-1.5 sm:p-2 rounded-lg flex-shrink-0 ${isCurrent ? "bg-ide-accent/20" : "bg-ide-bg group-hover:bg-ide-panel"}`}

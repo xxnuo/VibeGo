@@ -107,6 +107,16 @@
   --ide-shadow: none;
 }
 
+[data-font="jetbrains-mono"] {
+  --font-sans:
+    "JetBrains Mono Variable", ui-sans-serif, system-ui, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-mono:
+    "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
+  font-family: var(--font-sans);
+}
+
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);

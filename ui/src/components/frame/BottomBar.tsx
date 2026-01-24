@@ -59,21 +59,19 @@ const GroupButton: React.FC<GroupButtonProps> = ({
     if (isExpanded) {
       return (
         <div
-          className={`flex h-full items-center gap-0.5 px-1 ${
-            hasMultipleGroups
+          className={`flex h-full items-center gap-0.5 px-1 ${hasMultipleGroups
               ? "bg-ide-panel/70 border border-ide-border/30 rounded-md shadow-inner"
               : ""
-          }`}
+            }`}
         >
           {(["files", "git", "terminal"] as ViewType[]).map((view) => (
             <button
               key={view}
               onClick={() => onViewClick(group.id, view)}
-              className={`px-2 h-full rounded flex items-center transition-all ${
-                isActive && group.activeView === view
+              className={`px-2 h-full rounded flex items-center transition-all ${isActive && group.activeView === view
                   ? "text-ide-accent"
                   : "text-ide-mute hover:text-ide-text"
-              }`}
+                }`}
             >
               {VIEW_ICONS[view]}
             </button>
@@ -84,11 +82,10 @@ const GroupButton: React.FC<GroupButtonProps> = ({
     return (
       <button
         onClick={() => onGroupClick(group.id)}
-        className={`px-3 h-full rounded flex items-center gap-2 transition-all ${
-          isActive
+        className={`px-3 h-full rounded flex items-center gap-2 transition-all ${isActive
             ? "bg-ide-panel text-ide-accent shadow-sm"
             : "text-ide-mute hover:text-ide-text"
-        }`}
+          }`}
         title={group.name}
       >
         {GROUP_TYPE_ICONS.folder}
@@ -99,11 +96,10 @@ const GroupButton: React.FC<GroupButtonProps> = ({
   return (
     <button
       onClick={() => onGroupClick(group.id)}
-      className={`px-3 h-full rounded flex items-center gap-2 transition-all ${
-        isActive
+      className={`px-3 h-full rounded flex items-center gap-2 transition-all ${isActive
           ? "bg-ide-panel text-ide-accent shadow-sm"
           : "text-ide-mute hover:text-ide-text"
-      }`}
+        }`}
       title={group.name}
     >
       {GROUP_TYPE_ICONS[group.type] || GROUP_TYPE_ICONS.plugin}
@@ -176,17 +172,17 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick }) => {
     bottomBarConfig.rightButtons && bottomBarConfig.rightButtons.length > 0
       ? bottomBarConfig.rightButtons
       : [
-          {
-            icon: isFullscreen ? (
-              <Minimize size={16} />
-            ) : (
-              <Maximize size={16} />
-            ),
-            label: isFullscreen ? "Exit Fullscreen" : "Fullscreen",
-            onClick: handleToggleFullscreen,
-            active: isFullscreen,
-          },
-        ];
+        {
+          icon: isFullscreen ? (
+            <Minimize size={16} />
+          ) : (
+            <Maximize size={16} />
+          ),
+          label: isFullscreen ? "Exit Fullscreen" : "Fullscreen",
+          onClick: handleToggleFullscreen,
+          active: isFullscreen,
+        },
+      ];
 
   if (!bottomBarConfig.show) {
     return null;
@@ -195,7 +191,8 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick }) => {
   const useCustomItems =
     bottomBarConfig.customItems && bottomBarConfig.customItems.length > 0;
   const hasMultipleGroups = groups.length > 1;
-  const showGroupBar = groups.length > 0 && !useCustomItems;
+  const isOnlyHome = groups.length === 1 && groups[0].type === "home";
+  const showGroupBar = groups.length > 0 && !useCustomItems && !isOnlyHome;
 
   return (
     <>
@@ -235,11 +232,10 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick }) => {
               <button
                 key={item.id}
                 onClick={item.onClick}
-                className={`px-3 h-full rounded flex items-center gap-2 transition-all relative ${
-                  bottomBarConfig.activeItemId === item.id
+                className={`px-3 h-full rounded flex items-center gap-2 transition-all relative ${bottomBarConfig.activeItemId === item.id
                     ? "bg-ide-panel text-ide-accent shadow-sm"
                     : "text-ide-mute hover:text-ide-text"
-                }`}
+                  }`}
                 title={item.label}
               >
                 {item.icon}
