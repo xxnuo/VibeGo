@@ -281,6 +281,12 @@
       "label": "Desktop Notifications",
       "description": "Prefer browser notifications when the page is in the background and the terminal is not active"
     },
+    "terminalFrontend": {
+      "label": "Terminal Frontend",
+      "description": "Choose the terminal rendering implementation",
+      "optionXterm": "Xterm",
+      "optionWterm": "Wterm"
+    },
     "gitUserName": {
       "label": "Git User Name",
       "description": "User name for Git commits"

@@ -107,6 +107,12 @@ importers:
       '@tanstack/react-virtual':
         specifier: ^3.13.18
         version: 3.13.18(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@wterm/dom':
+        specifier: ^0.1.8
+        version: 0.1.8
+      '@wterm/react':
+        specifier: ^0.1.8
+        version: 0.1.8(@wterm/dom@0.1.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@xterm/addon-clipboard':
         specifier: ^0.2.0
         version: 0.2.0
@@ -1558,6 +1564,19 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     peerDependencies:
       vite: ^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0
+
+  '@wterm/core@0.1.8':
+    resolution: {integrity: sha512-suOX4Irv3/a90Y5Xn60wza7mIUG2Mu1d2U61g2nbDjs4wWD8SCbi26FUZczuKNo2xqWWjkynNXTTULuAjhiJYg==}
+
+  '@wterm/dom@0.1.8':
+    resolution: {integrity: sha512-o1HNI7x3WprzUsWglOzro9f9FDCSJQXTACW9AwpCT6C60EhGchrTM5ruvsqtJj+g2YFqBFcOKSs0HTXJcm7XwA==}
+
+  '@wterm/react@0.1.8':
+    resolution: {integrity: sha512-eW+olCGansLe47Kz9oxsMJLAkysvHItxp7EBlpVmh3I+b98ge42vwekjH67x7ME+MShMpZ4KJhtLhqBtKV44fg==}
+    peerDependencies:
+      '@wterm/dom': 0.1.7
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
 
   '@xterm/addon-clipboard@0.2.0':
     resolution: {integrity: sha512-Dl31BCtBhLaUEECUbEiVcCLvLBbaeGYdT7NofB8OJkGTD3MWgBsaLjXvfGAD4tQNHhm6mbKyYkR7XD8kiZsdNg==}
@@ -3889,6 +3908,18 @@ snapshots:
       vite: rolldown-vite@7.3.1(@types/node@25.2.0)(jiti@2.6.1)
     transitivePeerDependencies:
       - supports-color
+
+  '@wterm/core@0.1.8': {}
+
+  '@wterm/dom@0.1.8':
+    dependencies:
+      '@wterm/core': 0.1.8
+
+  '@wterm/react@0.1.8(@wterm/dom@0.1.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+    dependencies:
+      '@wterm/dom': 0.1.8
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
 
   '@xterm/addon-clipboard@0.2.0':
     dependencies:

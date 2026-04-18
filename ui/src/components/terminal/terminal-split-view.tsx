@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import TerminalInstance from "@/components/terminal/terminal-instance";
-import type { TerminalInstanceStateUpdate } from "@/components/terminal/terminal-instance";
+import type { TerminalInstanceStateUpdate } from "@/components/terminal/terminal-instance-types";
 import type { LayoutNode } from "@/stores/terminal-store";
 
 interface TerminalSplitViewProps {

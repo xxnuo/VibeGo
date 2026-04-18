@@ -121,6 +121,18 @@ export const SETTINGS_SCHEMA: SettingSchema[] = [
     defaultValue: "true",
   },
   {
+    key: "terminalFrontend",
+    type: "select",
+    category: "terminal",
+    labelKey: "settings.terminalFrontend.label",
+    descriptionKey: "settings.terminalFrontend.description",
+    defaultValue: "xterm",
+    options: [
+      { value: "xterm", label: "settings.terminalFrontend.optionXterm" },
+      { value: "wterm", label: "settings.terminalFrontend.optionWterm" },
+    ],
+  },
+  {
     key: "gitUserName",
     type: "text",
     category: "git",

@@ -290,6 +290,12 @@
       "label": "桌面通知",
       "description": "当网页在后台且终端不是活动终端时，优先使用浏览器系统通知"
     },
+    "terminalFrontend": {
+      "label": "终端前端",
+      "description": "选择终端渲染实现",
+      "optionXterm": "Xterm",
+      "optionWterm": "Wterm"
+    },
     "gitUserName": {
       "label": "Git 用户名",
       "description": "用于 Git 提交的用户名"

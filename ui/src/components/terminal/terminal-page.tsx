@@ -5,8 +5,10 @@ import { terminalApi } from "@/api/terminal";
 import { useDialog } from "@/components/common";
 import TerminalHistoryPage from "@/components/terminal/terminal-history-page";
 import TerminalInstance from "@/components/terminal/terminal-instance";
-import type { TerminalInstanceHandle } from "@/components/terminal/terminal-instance";
-import type { TerminalInstanceStateUpdate } from "@/components/terminal/terminal-instance";
+import type {
+  TerminalInstanceHandle,
+  TerminalInstanceStateUpdate,
+} from "@/components/terminal/terminal-instance-types";
 import TerminalListManager from "@/components/terminal/terminal-list-manager";
 import TerminalSplitView from "@/components/terminal/terminal-split-view";
 import { translateKeyEvent } from "@/components/keyboard";
@@ -516,7 +518,10 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
   useEffect(() => {
     return registerHandler((e) => {
       const active = document.activeElement;
-      if (!active || !active.classList.contains("xterm-helper-textarea")) return false;
+      if (!(active instanceof HTMLElement)) return false;
+      const inXterm = active.classList.contains("xterm-helper-textarea");
+      const inWterm = !!active.closest(".wterm");
+      if (!inXterm && !inWterm) return false;
 
       // Only handle if this terminal page instance owns the focused terminal
       const handle = getFocusedTerminalRef();
