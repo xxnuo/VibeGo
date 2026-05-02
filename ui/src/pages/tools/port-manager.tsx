@@ -338,6 +338,12 @@ const PortManagerView: React.FC<PageViewProps> = () => {
     setActiveTab("forwards");
   }, []);
 
+  const handleOpenForward = useCallback((fwd: ForwardRule) => {
+    const protocol = window.location.protocol || "http:";
+    const hostname = window.location.hostname || "localhost";
+    window.open(`${protocol}//${hostname}:${fwd.listenPort}`, "_blank");
+  }, []);
+
   return (
     <div className="h-full flex flex-col bg-ide-bg overflow-hidden">
       <div className="shrink-0 px-3 sm:px-4 py-2 border-b border-ide-border">
@@ -475,6 +481,18 @@ const PortManagerView: React.FC<PageViewProps> = () => {
                         {fwd.error && <div className="mt-1 text-[10px] text-red-500 truncate">{fwd.error}</div>}
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
+                        {fwd.protocol !== "udp" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-ide-mute hover:text-ide-text"
+                            onClick={() => handleOpenForward(fwd)}
+                            disabled={!fwd.enabled}
+                            title={t("plugin.portManager.openInBrowser")}
+                          >
+                            <ExternalLink size={14} />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
