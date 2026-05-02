@@ -334,6 +334,12 @@ func (m *Manager) Close(id string) error {
 
 	at.flushTicker.Stop()
 
+	now := time.Now().Unix()
+	at.status.Store(model.StatusClosed)
+	at.Session.Status = model.StatusClosed
+	at.Session.Readonly = true
+	at.Session.UpdatedAt = now
+
 	at.historyMu.Lock()
 	m.flushHistoryToDB(at)
 	at.historyMu.Unlock()
@@ -341,11 +347,6 @@ func (m *Manager) Close(id string) error {
 	_ = at.Runtime.Close()
 	close(at.Done)
 
-	now := time.Now().Unix()
-	at.status.Store(model.StatusClosed)
-	at.Session.Status = model.StatusClosed
-	at.Session.Readonly = true
-	at.Session.UpdatedAt = now
 	m.db.Model(&model.TerminalSession{}).Where("id = ?", id).Updates(map[string]any{
 		"status":     model.StatusClosed,
 		"readonly":   true,
@@ -431,6 +432,10 @@ func (m *Manager) ptyReadLoop(at *activeTerminal) {
 
 func (m *Manager) monitorRuntime(at *activeTerminal) {
 	_ = at.Runtime.Wait(context.Background())
+
+	if at.status.Load().(string) == model.StatusClosed {
+		return
+	}
 
 	exitCode := at.Runtime.ExitCode()
 	now := time.Now().Unix()
