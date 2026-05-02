@@ -15,3 +15,5 @@ ui/CLAUDE.md
 !/thirdparty/waveterm/LICENSE
 !/thirdparty/waveterm/NOTICE
 /.codex-tmp
+/thirdparty/tailcat
+/thirdparty/waveterm
