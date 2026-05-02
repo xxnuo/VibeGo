@@ -189,6 +189,7 @@ type ClientMessage struct {
 	Seq             uint64   `json:"seq,omitempty"`
 	RenderMs        int64    `json:"renderMs,omitempty"`
 	ReceivedAt      int64    `json:"receivedAt,omitempty"`
+	ClientSentAt    int64    `json:"clientSentAt,omitempty"`
 }
 
 func ParseClientMessage(data []byte) (ClientMessage, error) {

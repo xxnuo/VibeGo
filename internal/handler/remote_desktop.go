@@ -20,6 +20,8 @@ type RemoteDesktopHandler struct {
 	upgrader websocket.Upgrader
 }
 
+const remoteDesktopMaxInputAge = 750 * time.Millisecond
+
 func NewRemoteDesktopHandler() *RemoteDesktopHandler {
 	return NewRemoteDesktopHandlerWithProviders(
 		remotedesktop.NewScreenCaptureProvider(),
@@ -135,11 +137,12 @@ func (h *RemoteDesktopHandler) WebSocket(c *gin.Context) {
 	clipboardSync := atomic.Bool{}
 
 	writeRemoteDesktopJSON(conn, "hello", gin.H{
-		"version":  remotedesktop.ProtocolVersion,
-		"displays": displays,
-		"status":   remotedesktop.RuntimeStatus(h.capture, h.input, h.clip),
-		"config":   session.Config(),
-		"qos":      qos.Snapshot(),
+		"version":   remotedesktop.ProtocolVersion,
+		"displays":  displays,
+		"status":    remotedesktop.RuntimeStatus(h.capture, h.input, h.clip),
+		"config":    session.Config(),
+		"qos":       qos.Snapshot(),
+		"serverNow": time.Now().UnixMilli(),
 	})
 
 	go h.captureLoop(ctx, session, qos, &paused, latest, send)
@@ -291,6 +294,9 @@ func (h *RemoteDesktopHandler) readLoop(ctx context.Context, cancel context.Canc
 }
 
 func (h *RemoteDesktopHandler) handleClientMessage(session *remotedesktop.Session, qos *remotedesktop.QoS, paused *atomic.Bool, clipboardSync *atomic.Bool, msg remotedesktop.ClientMessage, send chan wsOutbound) {
+	if isRemoteDesktopRealtimeInput(msg.Type) && isRemoteDesktopStaleInput(msg.ClientSentAt) {
+		return
+	}
 	switch msg.Type {
 	case "configure":
 		cfg := session.Config()
@@ -416,6 +422,22 @@ func (h *RemoteDesktopHandler) handleClientMessage(session *remotedesktop.Sessio
 		paused.Store(false)
 		queueRemoteDesktopJSON(send, "status", gin.H{"paused": false})
 	}
+}
+
+func isRemoteDesktopRealtimeInput(typ string) bool {
+	switch typ {
+	case "pointer", "wheel", "key", "text", "specialKey":
+		return true
+	default:
+		return false
+	}
+}
+
+func isRemoteDesktopStaleInput(clientSentAt int64) bool {
+	if clientSentAt <= 0 {
+		return false
+	}
+	return time.Since(time.UnixMilli(clientSentAt)) > remoteDesktopMaxInputAge
 }
 
 func (h *RemoteDesktopHandler) specialKey(session *remotedesktop.Session, key string) error {

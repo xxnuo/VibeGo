@@ -181,6 +181,34 @@ func TestRemoteDesktopPointerRelativeMove(t *testing.T) {
 	require.Equal(t, 79, input.y)
 }
 
+func TestRemoteDesktopDropsStaleRealtimeInput(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 100, 80))
+	input := &handlerFakeInput{x: 40, y: 30}
+	h := NewRemoteDesktopHandlerWithProviders(
+		&handlerFakeCapture{
+			displays: []remotedesktop.Display{{ID: 0, Width: 100, Height: 80}},
+			img:      img,
+		},
+		input,
+		&handlerFakeClipboard{},
+	)
+	session := remotedesktop.NewSession(h.capture, h.input, h.clip, remotedesktop.Config{DisplayID: 0})
+	paused := atomic.Bool{}
+	clipboardSync := atomic.Bool{}
+	send := make(chan wsOutbound, 4)
+
+	h.handleClientMessage(session, remotedesktop.NewQoS(session.Config()), &paused, &clipboardSync, remotedesktop.ClientMessage{
+		Type:         "pointer",
+		X:            1,
+		Y:            1,
+		ClientSentAt: time.Now().Add(-2 * time.Second).UnixMilli(),
+	}, send)
+
+	require.Equal(t, 0, input.moveEvents)
+	require.Equal(t, 40, input.x)
+	require.Equal(t, 30, input.y)
+}
+
 func timeNowMilli() int64 {
 	return time.Now().UnixMilli()
 }
