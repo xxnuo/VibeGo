@@ -38,7 +38,7 @@ registerPage({
   category: "tool",
   order: 12,
   singleton: true,
-  newPageDefaultVisible: true,
+  newPageDefaultVisible: false,
   View: lazy(() => import("@/pages/tools/codex")),
 });
 
