@@ -1,4 +1,4 @@
-.PHONY: generate-docs clean-code format dev-server dev-ui build clean-dist build-frontend build-backend package-backend build-release prepare-test test download-sherpa
+.PHONY: generate-docs clean-code format dev-server dev-ui build clean-dist build-frontend build-backend package-backend verify-release build-release bump prepare-test test download-sherpa
 
 VERSION ?= $(shell git describe --tags --match 'v*' 2>/dev/null || echo v0.0.0-dev)
 DIST_DIR ?= dist
@@ -71,6 +71,12 @@ package-backend:
 	tar_name="$${bin%.exe}.tar.gz"; \
 	tar -C $(DIST_DIR) -czf "$(ARTIFACTS_DIR)/$${tar_name}" "$${bin}"
 
+verify-release:
+	cd $(UI_DIR) && pnpm install --frozen-lockfile
+	cd $(UI_DIR) && pnpm run lint
+	cd $(UI_DIR) && pnpm run build
+	go test ./...
+
 build-release:
 	$(MAKE) clean-dist
 	$(MAKE) build-frontend
@@ -80,6 +86,12 @@ build-release:
 		$(MAKE) build-backend GOOS=$${goos} GOARCH=$${goarch} VERSION=$(VERSION); \
 		$(MAKE) package-backend GOOS=$${goos} GOARCH=$${goarch} VERSION=$(VERSION); \
 	done
+
+bump:
+	@bash scripts/bump-version.sh $(filter-out $@,$(MAKECMDGOALS))
+
+%:
+	@:
 
 TEST_REPO_DIR ?= testdata/repo
 
