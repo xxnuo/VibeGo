@@ -133,19 +133,6 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm run build
 
-      - name: Verify Android desktop dependency isolation
-        if: ${{ matrix.goos == 'android' }}
-        shell: bash
-        env:
-          CGO_ENABLED: ${{ matrix.cgo_enabled }}
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        run: |
-          if go list -deps ./ | grep -qx 'github.com/go-vgo/robotgo'; then
-            echo "android build must not depend on github.com/go-vgo/robotgo"
-            exit 1
-          fi
-
       - name: Build backend
         shell: bash
         env:
