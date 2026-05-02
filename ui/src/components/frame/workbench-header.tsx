@@ -1,7 +1,9 @@
 import { Box, FolderOpen, GitGraph, RefreshCw, Terminal } from "lucide-react";
 import React, { useCallback } from "react";
 import TabBar from "@/components/frame/tab-bar";
+import { contextKeys, useContextKeyStore } from "@/framework/host/context-key-service";
 import { useWorkbenchActionStore, type WorkbenchAction } from "@/framework/workbench";
+import { useWorkbenchRegistry } from "@/framework/workbench/registry";
 import { useDefaultPageCloseButton } from "@/hooks/use-default-page-close-button";
 import { useTranslation } from "@/lib/i18n";
 import { useAppStore } from "@/stores/app-store";
@@ -67,7 +69,11 @@ const WorkbenchHeader: React.FC<WorkbenchHeaderProps> = ({ onRefresh, onBackToLi
   const defaultCloseButton = useDefaultPageCloseButton();
   const editorActions = useWorkbenchActionStore((s) => s.editorActions);
   const viewActions = useWorkbenchActionStore((s) => s.viewActions);
-  const actions = [...editorActions, ...viewActions].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  useContextKeyStore((state) => state.revision);
+  const registry = useWorkbenchRegistry();
+  const actions = [...editorActions, ...viewActions]
+    .filter((action) => contextKeys.evalWhen(action.when))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   const customHeader = Boolean(topBarConfig.show);
   const hasCustomCenter = customHeader && Boolean(topBarConfig.centerContent);
   const showTabs = !hasCustomCenter && (!customHeader || tabs.length > 0);
@@ -91,7 +97,7 @@ const WorkbenchHeader: React.FC<WorkbenchHeaderProps> = ({ onRefresh, onBackToLi
   }, [setCurrentActiveTab, onBackToList]);
   const viewIcon =
     activeGroup?.type === "group" && currentView ? (
-      VIEW_ICONS[currentView]
+      VIEW_ICONS[currentView] || React.createElement(registry.get(currentView)?.icon || Box, { size: 18 })
     ) : activeGroup?.type === "tool" ? (
       <Box size={18} />
     ) : (

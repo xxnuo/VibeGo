@@ -4,7 +4,7 @@ import { pageRegistry } from "@/pages/registry";
 
 export type GroupType = "home" | "group" | "tool" | "settings";
 
-export type PageType = "files" | "git" | "terminal";
+export type PageType = string;
 
 export interface PageMenuItem {
   id: string;
@@ -149,6 +149,7 @@ interface FrameState {
   removePageFromGroup: (groupId: string, pageId: string) => void;
 
   addTab: (groupId: string, tab: TabItem, pageId?: string) => void;
+  updateTab: (groupId: string, tabId: string, updates: Partial<TabItem>, pageId?: string) => void;
   removeTab: (groupId: string, tabId: string, pageId?: string) => void;
   setActiveTab: (groupId: string, tabId: string | null, pageId?: string) => void;
 
@@ -167,6 +168,14 @@ interface FrameState {
   setCurrentView: (view: ViewType) => void;
 }
 
+const getWorkspaceViews = () => {
+  const core = ["files", "git", "terminal"];
+  return [
+    ...core.map((id) => pageRegistry.get(id) || { id, name: id[0].toUpperCase() + id.slice(1) }),
+    ...pageRegistry.getAll().filter((page) => page.category === "workspace" && !core.includes(page.id)),
+  ];
+};
+
 const createFolderGroup = (path: string, name?: string): GenericGroup => {
   const groupId = `group-${Date.now()}`;
   const folderName = name || path.split("/").pop() || "Folder";
@@ -174,11 +183,14 @@ const createFolderGroup = (path: string, name?: string): GenericGroup => {
     type: "group",
     id: groupId,
     name: folderName,
-    pages: [
-      { id: `${groupId}-files`, type: "files", label: "Files", path, tabs: [], activeTabId: null },
-      { id: `${groupId}-git`, type: "git", label: "Git", path, tabs: [], activeTabId: null },
-      { id: `${groupId}-terminal`, type: "terminal", label: "Terminal", path, tabs: [], activeTabId: null },
-    ],
+    pages: getWorkspaceViews().map((view) => ({
+      id: `${groupId}-${view.id}`,
+      type: view.id,
+      label: view.name,
+      path,
+      tabs: [],
+      activeTabId: null,
+    })),
     activePageId: `${groupId}-files`,
   };
 };
@@ -308,7 +320,22 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     set((s) => ({
       groups: s.groups.map((g) => {
         if (g.type !== "group" || g.id !== groupId) return g;
-        const pages = payload.pages || [];
+        const path = payload.pages.find((page) => page.type === "files")?.path;
+        const pages = [
+          ...payload.pages,
+          ...(path
+            ? getWorkspaceViews()
+                .filter((view) => !payload.pages.some((page) => page.type === view.id))
+                .map((view) => ({
+                  id: `${g.id}-${view.id}`,
+                  type: view.id,
+                  label: view.name,
+                  path,
+                  tabs: [],
+                  activeTabId: null,
+                }))
+            : []),
+        ];
         const activePageExists = !!payload.activePageId && pages.some((p) => p.id === payload.activePageId);
         const fallbackActivePageId = pages.find((p) => p.type === "files")?.id || pages[0]?.id || null;
         return {
@@ -521,6 +548,23 @@ export const useFrameStore = create<FrameState>((set, get) => ({
       }),
     })),
 
+  updateTab: (groupId, tabId, updates, pageId) =>
+    set((state) => ({
+      groups: state.groups.map((group) => {
+        if (group.id !== groupId) return group;
+        const update = (tabs: TabItem[]) =>
+          tabs.map((tab) => (tab.id === tabId ? { ...tab, ...updates, data: { ...tab.data, ...updates.data } } : tab));
+        if (group.type === "group")
+          return {
+            ...group,
+            pages: group.pages.map((page) =>
+              page.id === (pageId || group.activePageId) ? { ...page, tabs: update(page.tabs) } : page
+            ),
+          };
+        return group.type === "tool" ? { ...group, tabs: update(group.tabs) } : group;
+      }),
+    })),
+
   removeTab: (groupId, tabId, pageId) =>
     set((s) => ({
       groups: s.groups.map((g) => {
@@ -683,3 +727,30 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     }));
   },
 }));
+
+// Add newly registered views without replacing persisted tabs or terminal owners.
+pageRegistry.subscribe(() => {
+  useFrameStore.setState((state) => ({
+    groups: state.groups.map((group) => {
+      if (group.type !== "group") return group;
+      const path = group.pages.find((page) => page.type === "files")?.path;
+      if (!path) return group;
+      const added = getWorkspaceViews().filter((view) => !group.pages.some((page) => page.type === view.id));
+      if (!added.length) return group;
+      return {
+        ...group,
+        pages: [
+          ...group.pages,
+          ...added.map((view) => ({
+            id: `${group.id}-${view.id}`,
+            type: view.id,
+            label: view.name,
+            path,
+            tabs: [],
+            activeTabId: null,
+          })),
+        ],
+      };
+    }),
+  }));
+});

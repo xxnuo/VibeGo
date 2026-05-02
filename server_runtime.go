@@ -144,6 +144,9 @@ func runServerWithOptions(ctx context.Context, options serverOptions) error {
 	fileHandler.SetRemoteFileProvider(sshService)
 	fileHandler.Register(api)
 	handler.NewTerminalHandler(terminalManager).Register(api)
+	taskHandler := handler.NewTaskHandler()
+	defer taskHandler.Close()
+	taskHandler.Register(api)
 	handler.NewSSHHandler(sshService).Register(api)
 	githubHandler.RegisterProtectedRoutes(api)
 	gitHandler := handler.NewGitHandler(db)
@@ -282,6 +285,7 @@ func runServerWithOptions(ctx context.Context, options serverOptions) error {
 			log.Error().Err(err).Msg("HTTP upgrade server shutdown error")
 		}
 	}
+	taskHandler.Close()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error().Err(err).Msg("Server shutdown error")
 	}

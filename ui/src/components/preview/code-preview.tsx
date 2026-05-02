@@ -4,22 +4,33 @@ import React, { useEffect, useMemo, useRef } from "react";
 import { fileApi } from "@/api/file";
 import MobileToolbar from "@/components/common/mobile-toolbar";
 import Editor from "@/components/preview/lazy-editor";
+import { editorService } from "@/framework/host/editor-service";
+import { createStatusBarItem } from "@/framework/host/status-bar-service";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTranslation } from "@/lib/i18n";
 import { useAppStore } from "@/stores/app-store";
+import { useFrameStore } from "@/stores/frame-store";
 import { getLanguageFromExtension, usePreviewStore } from "@/stores/preview-store";
 
 interface CodePreviewProps {
   onSave?: () => void;
+  onOpenWith?: () => void;
 }
 
-const CodePreview: React.FC<CodePreviewProps> = ({ onSave }) => {
+const CodePreview: React.FC<CodePreviewProps> = ({ onSave, onOpenWith }) => {
   const appTheme = useAppStore((s) => s.theme);
   const locale = useAppStore((s) => s.locale);
   const t = useTranslation(locale);
-  const { file, content, originalContent, editMode, isDirty, setContent, setIsDirty, setError } = usePreviewStore();
+  const { file, content, editMode, isDirty, setContent, setIsDirty, setError } = usePreviewStore();
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+
+  const location = useFrameStore(
+    (state) => state.getCurrentTabs().find((tab) => tab.id === state.getCurrentActiveTabId())?.data
+  );
+  useEffect(() => {
+    editorService.navigate(location as { line?: number; column?: number });
+  }, [location?.line, location?.column]);
 
   const language = getLanguageFromExtension(file?.extension);
 
@@ -29,14 +40,73 @@ const CodePreview: React.FC<CodePreviewProps> = ({ onSave }) => {
 
   const isMobile = useIsMobile();
 
+  const openWithRef = useRef(onOpenWith);
+  openWithRef.current = onOpenWith;
+  const menuContextRef = useRef<{ set: (value: boolean) => void } | null>(null);
+  useEffect(() => {
+    menuContextRef.current?.set(Boolean(onOpenWith));
+  }, [Boolean(onOpenWith)]);
+  const cleanupRef = useRef<(() => void) | undefined>(undefined);
+  useEffect(() => () => cleanupRef.current?.(), []);
   const handleEditorMount: OnMount = (editor) => {
+    cleanupRef.current?.();
     editorRef.current = editor;
+    const tab = useFrameStore
+      .getState()
+      .getCurrentTabs()
+      .find((tab) => tab.id === useFrameStore.getState().getCurrentActiveTabId());
+    const detach = editorService.attach(editor, tab?.data as { line?: number; column?: number });
+    const item = createStatusBarItem(
+      "editor",
+      { id: "cursor", alignment: "right" },
+      useFrameStore.getState().activeGroupId || undefined
+    );
+    const update = () => {
+      const position = editor.getPosition();
+      item.text = `${position?.lineNumber || 1}:${position?.column || 1}  UTF-8`;
+      item.tooltip = language;
+      item.show();
+    };
+    update();
+    const listener = editor.onDidChangeCursorPosition(update);
+    const action = (event: Event) => {
+      const name = (event as CustomEvent).detail?.action;
+      const ids: Record<string, string> = {
+        undo: "undo",
+        redo: "redo",
+        find: "actions.find",
+        replace: "editor.action.startFindReplaceAction",
+      };
+      if (name === "undo" || name === "redo") editor.trigger("plugin-host", name, null);
+      else if (ids[name]) void editor.getAction(ids[name])?.run();
+    };
+    const hasCustomEditor = editor.createContextKey<boolean>("vibego.hasCustomEditor", Boolean(openWithRef.current));
+    menuContextRef.current = hasCustomEditor;
+    const openWith = editor.addAction({
+      id: "vibego.openWith",
+      label: locale === "en" ? "Open With" : "打开方式",
+      precondition: "vibego.hasCustomEditor",
+      contextMenuGroupId: "navigation",
+      contextMenuOrder: 10,
+      run: () => {
+        openWithRef.current?.();
+      },
+    });
+    window.addEventListener("editor-action", action);
+    cleanupRef.current = () => {
+      detach();
+      listener.dispose();
+      openWith.dispose();
+      hasCustomEditor.reset();
+      item.dispose();
+      window.removeEventListener("editor-action", action);
+    };
   };
 
   const handleChange = (value: string | undefined) => {
-    if (value !== undefined && editMode) {
+    if (value !== undefined && usePreviewStore.getState().editMode) {
       setContent(value);
-      setIsDirty(value !== originalContent);
+      setIsDirty(value !== usePreviewStore.getState().originalContent);
     }
   };
 

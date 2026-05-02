@@ -1,10 +1,12 @@
 import { Keyboard as KeyboardIcon, List } from "lucide-react";
 import React, { useCallback, useRef, useState } from "react";
+import { PluginList, PluginListItem, PluginScaffold, PluginToolbar } from "@/components/common/plugin-kit";
 import type { KeyEvent } from "@/components/keyboard";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { usePluginHost } from "@/framework/host";
 import { useTranslation } from "@/lib/i18n";
 import type { PageViewProps } from "@/pages/types";
-import { useAppStore } from "@/stores/app-store";
+import { applyKeyboardTestInput } from "@/services/keyboard-test-input";
+
 import { useKeyboardStore } from "@/stores/keyboard-store";
 
 interface EventLogEntry {
@@ -28,9 +30,10 @@ function formatEvent(e: KeyEvent): string {
 }
 
 const KeyboardTestView: React.FC<PageViewProps> = () => {
-  const locale = useAppStore((s) => s.locale);
+  const host = usePluginHost();
+  const locale = host.env.locale as "zh" | "en";
   const t = useTranslation(locale);
-  const isMobile = useIsMobile();
+  const isMobile = host.env.isMobile;
   const [text, setText] = useState<string>("");
   const [eventLog, setEventLog] = useState<EventLogEntry[]>([]);
   const nextId = useRef(0);
@@ -58,229 +61,9 @@ const KeyboardTestView: React.FC<PageViewProps> = () => {
       setEventLog((prev) => [...prev.slice(-199), entry]);
       scrollBottom(logRef);
 
-      const textarea = textareaRef.current;
-      if (!textarea) return;
-
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const currentText = textarea.value;
-
-      let nextText = currentText;
-      let finalCursor = start;
-      let handled = false;
-
-      if (e.value !== "Keyboard") {
-        setUseNativeKb(false);
-        if (textarea.inputMode === "text") {
-          textarea.dataset.ignoreBlur = "true";
-          textarea.inputMode = "none";
-          textarea.blur();
-          textarea.dataset.ignoreBlur = "false";
-        }
-      }
-
-      const handleArrow = (deltaFn: (pos: number) => number, isHorizontalLeft = false, isHorizontalRight = false) => {
-        if (e.select || e.shift) {
-          const dir = textarea.selectionDirection || "none";
-          const activeCursor = dir === "backward" || start === end ? start : end;
-          const newCursor = deltaFn(activeCursor);
-          const fixedCursor = dir === "backward" || start === end ? end : start;
-          const isNowBackward = newCursor < fixedCursor || (newCursor === fixedCursor && dir === "backward");
-          const newStart = Math.min(newCursor, fixedCursor);
-          const newEnd = Math.max(newCursor, fixedCursor);
-          textarea.setSelectionRange(newStart, newEnd, isNowBackward ? "backward" : "forward");
-        } else {
-          if (start !== end && (isHorizontalLeft || isHorizontalRight)) {
-            const collapseCursor = isHorizontalLeft ? start : end;
-            textarea.setSelectionRange(collapseCursor, collapseCursor);
-          } else {
-            const dir = textarea.selectionDirection || "none";
-            const activeCursor = dir === "backward" ? start : end;
-            const newCursor = deltaFn(start !== end ? activeCursor : start);
-            textarea.setSelectionRange(newCursor, newCursor);
-          }
-        }
-        textarea.focus();
-      };
-
-      if (e.value === "SelectAll" || ((e.ctrl || e.meta) && e.value.toLowerCase() === "a")) {
-        textarea.setSelectionRange(0, currentText.length);
-        textarea.focus();
-        return;
-      }
-
-      if (e.value === "Copy" || ((e.ctrl || e.meta) && e.value.toLowerCase() === "c")) {
-        if (start !== end) navigator.clipboard.writeText(currentText.slice(start, end));
-        textarea.focus();
-        return;
-      }
-
-      if (e.value === "Cut" || ((e.ctrl || e.meta) && e.value.toLowerCase() === "x")) {
-        if (start !== end) {
-          navigator.clipboard.writeText(currentText.slice(start, end)).then(() => {
-            historyRef.current.push(currentText);
-            if (historyRef.current.length > 100) historyRef.current.shift();
-            const next = currentText.slice(0, start) + currentText.slice(end);
-            setText(next);
-            setTimeout(() => {
-              if (textareaRef.current) {
-                textareaRef.current.setSelectionRange(start, start);
-                textareaRef.current.focus();
-              }
-            }, 0);
-          });
-        } else {
-          textarea.focus();
-        }
-        return;
-      }
-
-      if (e.value === "Paste" || ((e.ctrl || e.meta) && e.value.toLowerCase() === "v")) {
-        navigator.clipboard
-          .readText()
-          .then((clip) => {
-            historyRef.current.push(currentText);
-            if (historyRef.current.length > 100) historyRef.current.shift();
-            const next = currentText.slice(0, start) + clip + currentText.slice(end);
-            setText(next);
-            const cursor = start + clip.length;
-            setTimeout(() => {
-              if (textareaRef.current) {
-                textareaRef.current.setSelectionRange(cursor, cursor);
-                textareaRef.current.focus();
-              }
-            }, 0);
-          })
-          .catch(() => {
-            textarea.focus();
-          });
-        return;
-      }
-
-      if (e.value === "Undo" || ((e.ctrl || e.meta) && e.value.toLowerCase() === "z")) {
-        if (historyRef.current.length > 0) {
-          const previous = historyRef.current.pop()!;
-          setText(previous);
-          setTimeout(() => {
-            if (textareaRef.current) {
-              textareaRef.current.focus();
-            }
-          }, 0);
-        } else {
-          textarea.focus();
-        }
-        return;
-      }
-
-      if (e.value === "Keyboard") {
-        setUseNativeKb(true);
-        if (textareaRef.current) {
-          textareaRef.current.dataset.ignoreBlur = "true";
-          textareaRef.current.inputMode = "text";
-          textareaRef.current.blur();
-          textareaRef.current.dataset.ignoreBlur = "false";
-          textareaRef.current.focus();
-        }
-        return;
-      }
-
-      if (e.value === "Backspace") {
-        if (start !== end) {
-          nextText = currentText.slice(0, start) + currentText.slice(end);
-          finalCursor = start;
-        } else if (start > 0) {
-          nextText = currentText.slice(0, start - 1) + currentText.slice(end);
-          finalCursor = start - 1;
-        }
-        handled = true;
-      } else if (e.value === "Delete") {
-        if (start !== end) {
-          nextText = currentText.slice(0, start) + currentText.slice(end);
-          finalCursor = start;
-        } else if (start < currentText.length) {
-          nextText = currentText.slice(0, start) + currentText.slice(start + 1);
-          finalCursor = start;
-        }
-        handled = true;
-      } else if (e.value === "ArrowLeft") {
-        handleArrow((pos) => Math.max(0, pos - 1), true, false);
-        return;
-      } else if (e.value === "ArrowRight") {
-        handleArrow((pos) => Math.min(currentText.length, pos + 1), false, true);
-        return;
-      } else if (e.value === "ArrowUp") {
-        handleArrow((pos) => {
-          const textBeforeBox = currentText.slice(0, pos);
-          const lastNewLine = textBeforeBox.lastIndexOf("\n");
-          if (lastNewLine === -1) return 0;
-          const currentColumn = pos - lastNewLine - 1;
-          const prevLineStart = currentText.lastIndexOf("\n", lastNewLine - 1);
-          const prevLineLength = lastNewLine - (prevLineStart + 1);
-          return prevLineStart + 1 + Math.min(currentColumn, Math.max(0, prevLineLength));
-        });
-        return;
-      } else if (e.value === "ArrowDown") {
-        handleArrow((pos) => {
-          const textBeforeBox = currentText.slice(0, pos);
-          const lastNewLine = textBeforeBox.lastIndexOf("\n");
-          const currentColumn = pos - lastNewLine - 1;
-          const nextNewLine = currentText.indexOf("\n", pos);
-          if (nextNewLine === -1) return currentText.length;
-          const nextNextNewLine = currentText.indexOf("\n", nextNewLine + 1);
-          const nextLineEnd = nextNextNewLine === -1 ? currentText.length : nextNextNewLine;
-          const nextLineLength = nextLineEnd - (nextNewLine + 1);
-          return nextNewLine + 1 + Math.min(currentColumn, Math.max(0, nextLineLength));
-        });
-        return;
-      } else if (e.value === "Home") {
-        handleArrow((pos) => {
-          const textBeforeBox = currentText.slice(0, pos);
-          const lastNewLine = textBeforeBox.lastIndexOf("\n");
-          return lastNewLine + 1;
-        });
-        return;
-      } else if (e.value === "End") {
-        handleArrow((pos) => {
-          const nextNewLine = currentText.indexOf("\n", pos);
-          return nextNewLine === -1 ? currentText.length : nextNewLine;
-        });
-        return;
-      } else if (e.value === "PageUp") {
-        handleArrow((pos) => Math.max(0, pos - 150));
-        return;
-      } else if (e.value === "PageDown") {
-        handleArrow((pos) => Math.min(currentText.length, pos + 150));
-        return;
-      } else if (!(e.ctrl || e.meta || e.alt)) {
-        let insertText = "";
-        if (e.value === "Enter") insertText = "\n";
-        else if (e.value === "Tab") insertText = "    ";
-        else if (e.value === "Space") insertText = " ";
-        else if (e.type === "char") insertText = e.value;
-
-        if (insertText) {
-          nextText = currentText.slice(0, start) + insertText + currentText.slice(end);
-          finalCursor = start + insertText.length;
-          handled = true;
-        }
-      }
-
-      if (handled) {
-        historyRef.current.push(currentText);
-        if (historyRef.current.length > 100) historyRef.current.shift();
-        setText(nextText);
-        setTimeout(() => {
-          if (textareaRef.current) {
-            textareaRef.current.selectionStart = finalCursor;
-            textareaRef.current.selectionEnd = finalCursor;
-            textareaRef.current.focus();
-          }
-        }, 0);
-      } else {
-        textarea.focus();
-      }
+      applyKeyboardTestInput(e, textareaRef, historyRef, setText, setUseNativeKb, host.env.clipboard);
     },
-    [scrollBottom]
+    [scrollBottom, host.env.clipboard]
   );
 
   const registerHandler = useKeyboardStore((s) => s.registerHandler);
@@ -299,39 +82,13 @@ const KeyboardTestView: React.FC<PageViewProps> = () => {
   }, []);
 
   return (
-    <div
-      style={{
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        background: "var(--ide-bg)",
-        overflow: "hidden",
-        position: "relative",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "8px 12px",
-          borderBottom: "1px solid var(--ide-border)",
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <KeyboardIcon size={18} style={{ color: "var(--ide-accent)" }} />
-          <span
-            style={{
-              fontWeight: 600,
-              fontSize: "14px",
-              color: "var(--ide-text)",
-            }}
-          >
-            {t("plugin.keyboardTest.title")}
-          </span>
+    <PluginScaffold>
+      <PluginToolbar className="bg-ide-bg">
+        <div className="flex items-center gap-2">
+          <KeyboardIcon size={18} className="text-ide-accent" />
+          <span className="text-sm font-semibold">{t("plugin.keyboardTest.title")}</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <div className="flex items-center gap-2">
           {isMobile && (
             <button
               type="button"
@@ -340,18 +97,7 @@ const KeyboardTestView: React.FC<PageViewProps> = () => {
               aria-controls="keyboard-test-event-log"
               aria-expanded={eventLogVisible}
               title={t("plugin.keyboardTest.eventLog")}
-              style={{
-                minHeight: "44px",
-                minWidth: "44px",
-                display: "grid",
-                placeItems: "center",
-                padding: "0",
-                borderRadius: "6px",
-                border: "1px solid var(--ide-border)",
-                background: eventLogVisible ? "var(--ide-panel)" : "transparent",
-                color: "var(--ide-text)",
-                cursor: "pointer",
-              }}
+              className={`grid min-h-11 min-w-11 place-items-center rounded-md border border-ide-border ${eventLogVisible ? "bg-ide-panel" : "bg-transparent"}`}
             >
               <List size={16} />
             </button>
@@ -360,131 +106,51 @@ const KeyboardTestView: React.FC<PageViewProps> = () => {
             type="button"
             onClick={handleClear}
             aria-label={t("plugin.keyboardTest.clear")}
-            style={{
-              minHeight: "44px",
-              padding: "4px 12px",
-              borderRadius: "6px",
-              border: "1px solid var(--ide-border)",
-              background: "transparent",
-              color: "var(--ide-text)",
-              fontSize: "12px",
-              cursor: "pointer",
-            }}
+            className="min-h-11 rounded-md border border-ide-border px-3 text-xs"
           >
             {t("plugin.keyboardTest.clear")}
           </button>
         </div>
-      </div>
-
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: "flex",
-          flexDirection: isMobile ? "column" : "row",
-          overflow: "hidden",
-          position: "relative",
-        }}
-      >
+      </PluginToolbar>
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
         <textarea
           ref={textareaRef}
           name="keyboard-test-input"
           aria-label={t("plugin.keyboardTest.placeholder")}
           value={text}
-          onChange={(e) => {
+          onChange={(event) => {
             historyRef.current.push(text);
             if (historyRef.current.length > 100) historyRef.current.shift();
-            setText(e.target.value);
+            setText(event.target.value);
           }}
-          onBlur={(e) => {
-            if (e.target.dataset.ignoreBlur === "true") return;
-            setUseNativeKb(false);
+          onBlur={(event) => {
+            if (event.target.dataset.ignoreBlur !== "true") setUseNativeKb(false);
           }}
           inputMode={useNativeKb ? "text" : "none"}
           placeholder={t("plugin.keyboardTest.placeholder")}
-          style={{
-            flex: 1,
-            minHeight: 0,
-            width: isMobile ? "100%" : undefined,
-            padding: "16px",
-            paddingBottom: "260px", // space for floating keyboard
-            fontFamily: "var(--font-mono)",
-            fontSize: "16px",
-            lineHeight: 1.6,
-            color: "var(--ide-text)",
-            background: "var(--ide-panel)",
-            border: "none",
-            resize: "none",
-            outline: "none",
-            boxShadow: "inset 0 0 10px rgba(0,0,0,0.05)",
-          }}
+          className="min-h-0 w-full flex-1 resize-none border-0 bg-ide-panel p-4 pb-[260px] text-base leading-relaxed text-ide-text outline-none shadow-[inset_0_0_10px_rgba(0,0,0,0.05)]"
         />
-
         {(!isMobile || eventLogVisible) && (
-          <div
+          <PluginList
             ref={logRef}
             id="keyboard-test-event-log"
-            style={{
-              width: isMobile ? "100%" : "130px", // a bit more room for text
-              height: isMobile ? "clamp(112px, 34%, 168px)" : undefined,
-              flex: isMobile ? "0 1 clamp(112px, 34%, 168px)" : "0 0 130px",
-              minHeight: isMobile ? "112px" : undefined,
-              overflowY: "auto",
-              padding: isMobile ? "8px 8px 16px" : "12px 8px 260px", // bottom padding so list can scroll past keyboard
-              fontSize: "12px",
-              fontFamily: "var(--font-mono)",
-              color: "var(--ide-mute)",
-              background: "var(--ide-bg)",
-              borderLeft: isMobile ? "none" : "1px solid var(--ide-border)",
-              borderTop: isMobile ? "1px solid var(--ide-border)" : "none",
-              display: "flex",
-              flexDirection: "column",
-            }}
+            className="h-[clamp(112px,34%,168px)] min-h-28 w-full shrink border-t border-ide-border p-2 pb-4 font-mono text-ide-mute md:h-auto md:min-h-0 md:w-[130px] md:shrink-0 md:border-l md:border-t-0 md:pb-[260px]"
           >
-            <div
-              style={{
-                fontSize: "11px",
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: "0.5px",
-                marginBottom: "8px",
-                color: "var(--ide-text)",
-                opacity: 0.6,
-              }}
-            >
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-ide-text/60">
               {t("plugin.keyboardTest.eventLog")}
             </div>
             {eventLog.map((entry) => (
-              <div
+              <PluginListItem
                 key={entry.id}
-                style={{
-                  padding: "4px 6px",
-                  borderRadius: "4px",
-                  marginBottom: "4px",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: "8px",
-                  background: "var(--ide-panel)",
-                }}
+                className="mb-1 justify-center gap-2 rounded border-0 bg-ide-panel px-1.5 py-1 break-all whitespace-pre-wrap text-center text-ide-text"
               >
-                <span
-                  style={{
-                    color: "var(--ide-text)",
-                    fontWeight: entry.event.type === "char" ? 400 : 600,
-                    wordBreak: "break-all",
-                    whiteSpace: "pre-wrap",
-                    textAlign: "center",
-                    width: "100%",
-                  }}
-                >
-                  {entry.formatted}
-                </span>
-              </div>
+                <span className={entry.event.type === "char" ? "font-normal" : "font-semibold"}>{entry.formatted}</span>
+              </PluginListItem>
             ))}
-          </div>
+          </PluginList>
         )}
       </div>
-    </div>
+    </PluginScaffold>
   );
 };
 

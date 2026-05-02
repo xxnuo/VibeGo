@@ -1,8 +1,10 @@
 import React, { useEffect } from "react";
 import BottomBar from "@/components/frame/bottom-bar";
 import SideBar from "@/components/frame/side-bar";
+import StatusBar from "@/components/frame/status-bar";
 import WorkbenchHeader from "@/components/frame/workbench-header";
 import { Keyboard } from "@/components/keyboard";
+import { PluginWorkbenchRuntime } from "@/framework/host/workbench-runtime";
 
 interface AppFrameProps {
   children: React.ReactNode;
@@ -68,7 +70,11 @@ const AppFrame: React.FC<AppFrameProps> = ({ children, onMenuOpen, onRefresh, on
       <SideBar onMenuClick={onMenuOpen} onNewPage={onNewPage} />
       <div className="flex-1 flex flex-col min-w-0">
         <WorkbenchHeader onRefresh={onRefresh} onBackToList={onBackToList} />
-        <main className="flex-1 overflow-hidden relative">{children}</main>
+        <main className="flex-1 overflow-hidden relative">
+          {children}
+          <PluginWorkbenchRuntime />
+        </main>
+        <StatusBar />
         <Keyboard />
         <BottomBar onMenuClick={onMenuOpen} onNewPage={onNewPage} />
       </div>

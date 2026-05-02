@@ -1,9 +1,12 @@
-import { FolderOpen, Terminal, X } from "lucide-react";
+import { X } from "lucide-react";
 import React, { useEffect, useRef } from "react";
+import { toast } from "sonner";
+import { commands } from "@/framework/host/command-service";
+import { contextKeys, useContextKeyStore } from "@/framework/host/context-key-service";
+import { useWorkbenchRegistry } from "@/framework/workbench/registry";
 import { type Locale, useTranslation } from "@/lib/i18n";
 import { isPageVisibleInNewPage } from "@/lib/page-visibility";
 import { useSettingsStore } from "@/lib/settings";
-import { pageRegistry } from "@/pages/registry";
 
 interface NewPageMenuProps {
   isOpen: boolean;
@@ -30,7 +33,15 @@ const NewPageMenu: React.FC<NewPageMenuProps> = ({
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const restorePreviousFocusRef = useRef(true);
   onCloseRef.current = onClose;
-  const tools = pageRegistry.getAll().filter((p) => p.category === "tool" && isPageVisibleInNewPage(p, settings));
+  const registry = useWorkbenchRegistry();
+  useContextKeyStore((state) => state.revision);
+  const items = registry
+    .getMenus("new-page")
+    .filter(
+      (item) =>
+        contextKeys.evalWhen(item.when) &&
+        (!item.command.startsWith("page:") || isPageVisibleInNewPage(registry.get(item.command.slice(5))!, settings))
+    );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -118,56 +129,33 @@ const NewPageMenu: React.FC<NewPageMenuProps> = ({
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          <button
-            type="button"
-            onClick={() => {
-              restorePreviousFocusRef.current = false;
-              onOpenDirectory(previousFocusRef.current);
-              onClose();
-            }}
-            className="w-full px-4 py-3 flex items-center gap-4 hover:bg-ide-bg rounded-lg transition-colors"
-          >
-            <div className="w-10 h-10 shrink-0 rounded-full bg-ide-accent/10 flex items-center justify-center">
-              <FolderOpen size={20} className="text-ide-accent" />
-            </div>
-            <div className="min-w-0 text-left">
-              <div className="text-sm font-medium text-ide-text">{t("common.openFolder")}</div>
-            </div>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onNewTerminal();
-              onClose();
-            }}
-            className="w-full px-4 py-3 flex items-center gap-4 hover:bg-ide-bg rounded-lg transition-colors"
-          >
-            <div className="w-10 h-10 shrink-0 rounded-full bg-ide-accent/10 flex items-center justify-center">
-              <Terminal size={20} className="text-ide-accent" />
-            </div>
-            <div className="min-w-0 text-left">
-              <div className="text-sm font-medium text-ide-text">{t("sidebar.terminal")}</div>
-            </div>
-          </button>
-          {tools.map((tool) => {
-            const IconComponent = tool.icon;
+          {items.map((item) => {
+            const Icon = item.icon;
+            const page = item.command.startsWith("page:") ? registry.get(item.command.slice(5)) : undefined;
             return (
               <button
-                key={tool.id}
+                key={item.id}
                 type="button"
                 onClick={() => {
-                  onNewTool(tool.id);
+                  if (item.command === "open-folder") {
+                    restorePreviousFocusRef.current = false;
+                    onOpenDirectory(previousFocusRef.current);
+                  } else if (item.command === "new-terminal") onNewTerminal();
+                  else if (page) onNewTool(page.id);
+                  else void commands.execute(item.command).catch((error) => toast.error(String(error)));
                   onClose();
                 }}
                 className="w-full px-4 py-3 flex items-center gap-4 hover:bg-ide-bg rounded-lg transition-colors"
               >
                 <div className="w-10 h-10 shrink-0 rounded-full bg-ide-accent/10 flex items-center justify-center">
-                  <IconComponent size={20} className="text-ide-accent" />
+                  {Icon && <Icon size={20} className="text-ide-accent" />}
                 </div>
                 <div className="min-w-0 flex-1 text-left">
                   <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-ide-text">
-                    <span className="min-w-0 truncate">{getToolName(tool)}</span>
-                    {tool.tags?.map((tag) => (
+                    <span className="min-w-0 truncate">
+                      {getToolName({ name: item.title, nameKey: item.titleKey })}
+                    </span>
+                    {page?.tags?.map((tag) => (
                       <span
                         key={tag.labelKey}
                         className="px-1.5 py-0.5 text-[10px] leading-none border border-ide-border text-ide-mute bg-ide-bg rounded"

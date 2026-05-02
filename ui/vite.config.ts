@@ -123,7 +123,9 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
-    rollupOptions: {
+    // Monaco is loaded on demand; keep its cyclic module graph intact within a 3 MB budget.
+    chunkSizeWarningLimit: 3000,
+    rolldownOptions: {
       input: {
         main: path.resolve(import.meta.dirname, "index.html"),
         httpUpgrade: path.resolve(import.meta.dirname, "http-upgrade.html"),

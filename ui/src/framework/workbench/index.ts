@@ -1,9 +1,25 @@
-export { pageRegistry, registerPage, unregisterPage, workbenchRegistry } from "./registry";
+export {
+  definePlugin,
+  pageRegistry,
+  registerPage,
+  registerPlugin,
+  unregisterPage,
+  useWorkbenchRegistry,
+  workbenchRegistry,
+} from "./registry";
 export type {
+  CommandContribution,
+  CustomEditorDefinition,
+  KeybindingContribution,
+  MenuContribution,
   PageCategory,
   PageContext,
   PageId,
   PageViewProps,
+  PluginConfiguration,
+  PluginManifest,
+  QuickOpenItem,
+  QuickOpenProvider,
   TabItem,
   WorkbenchAction,
   WorkbenchLocation,

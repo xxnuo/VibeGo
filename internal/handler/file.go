@@ -200,6 +200,7 @@ type FileCreate struct {
 }
 
 type FileDelete struct {
+	Recursive   *bool  `json:"recursive"`
 	Path        string `json:"path" binding:"required"`
 	IsDir       bool   `json:"isDir"`
 	ForceDelete bool   `json:"forceDelete"`
@@ -865,7 +866,11 @@ func (h *FileHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := os.RemoveAll(p); err != nil {
+	remove := os.RemoveAll
+	if req.Recursive != nil && !*req.Recursive {
+		remove = os.Remove
+	}
+	if err := remove(p); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

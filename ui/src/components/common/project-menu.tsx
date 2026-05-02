@@ -1,28 +1,12 @@
-import {
-  FilePlus,
-  FolderOpen,
-  Globe,
-  Home,
-  Monitor,
-  Moon,
-  Redo2,
-  Replace,
-  Save,
-  Search,
-  Settings,
-  Snowflake,
-  Sun,
-  Sunset,
-  Terminal,
-  Undo2,
-  Waves,
-  X,
-  XCircle,
-} from "lucide-react";
+import { Monitor, Moon, Snowflake, Sun, Sunset, Terminal, Waves, X } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { fileApi } from "@/api/file";
 import { useDialog } from "@/components/common";
 import { ActionButton } from "@/components/common/action-button";
+import { commands } from "@/framework/host/command-service";
+import { evaluateWhen, useContextKeyStore } from "@/framework/host/context-key-service";
+import { useWorkbenchRegistry } from "@/framework/workbench/registry";
 import { type Locale, useTranslation } from "@/lib/i18n";
 import { getSettingSchema, useSettingsStore } from "@/lib/settings";
 import { useFrameStore, usePreviewStore } from "@/stores";
@@ -136,6 +120,9 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
   const file = usePreviewStore((s) => s.file);
   const content = usePreviewStore((s) => s.content);
 
+  const registry = useWorkbenchRegistry();
+  const context = useContextKeyStore((state) => state.values);
+
   if (!isOpen) return null;
 
   const handleSettings = () => {
@@ -232,160 +219,77 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
   const themeLabel = themeSchema?.options?.find((opt) => opt.value === themeValue)?.label || themeValue;
   const localeLabel = localeSchema?.options?.find((opt) => opt.value === localeValue)?.label || localeValue;
 
-  const builtInItems: Array<{
-    id: string;
-    icon: React.ReactNode;
-    label: string;
-    onClick?: () => void;
-    badge?: string | number;
-    title?: string;
-  }> = [
-    {
-      id: "home",
-      icon: <Home size={20} />,
-      label: t("common.home"),
-      onClick: handleHome,
+  const handlers: Record<string, () => void> = {
+    home: handleHome,
+    "new-page": handleNewPage,
+    "open-folder": handleOpenFolder,
+    settings: handleSettings,
+    theme: handleThemeToggle,
+    language: handleLocaleToggle,
+    "close-folder": () => {
+      void handleCloseFolder();
     },
-    {
-      id: "new-page",
-      icon: <FilePlus size={20} />,
-      label: t("common.newPage"),
-      onClick: handleNewPage,
+    "close-page": handleClosePage,
+    save: () => {
+      void handleSave();
     },
-    {
-      id: "open-folder",
-      icon: <FolderOpen size={20} />,
-      label: t("common.openFolder"),
-      onClick: handleOpenFolder,
+    "save-as": () => {
+      void handleSaveAs();
     },
-    {
-      id: "settings",
-      icon: <Settings size={20} />,
-      label: t("common.settings"),
-      onClick: handleSettings,
-    },
-    {
-      id: "theme",
-      icon: themeIcon,
-      label: t("common.theme"),
-      onClick: handleThemeToggle,
-      title: translateOptionLabel(themeLabel),
-    },
-    {
-      id: "language",
-      icon: <Globe size={20} />,
-      label: t("common.language"),
-      onClick: handleLocaleToggle,
-      title: translateOptionLabel(localeLabel),
-    },
-  ];
-
-  const contextItems: Array<{
-    id: string;
-    icon: React.ReactNode;
-    label: string;
-    onClick?: () => void;
-    badge?: string | number;
-    title?: string;
-  }> = [];
-
-  if (activeGroup?.type === "group" && activeGroup.pages.some((p) => p.path)) {
-    contextItems.push({
-      id: "close-folder",
-      icon: <XCircle size={20} />,
-      label: t("common.closeFolder"),
-      onClick: handleCloseFolder,
+    ...Object.fromEntries(
+      ["undo", "redo", "find", "replace"].map((action) => [action, () => triggerEditorAction(action)])
+    ),
+  };
+  const values = {
+    ...context,
+    "editor.editMode": editMode,
+    hasWorkspace: activeGroup?.type === "group" && activeGroup.pages.some((page) => page.path),
+    activeGroupType: activeGroup?.type,
+    hasNonHomeGroups: groups.some((group) => group.type !== "home"),
+  };
+  const contributions = registry
+    .getMenus("project")
+    .filter((item) => evaluateWhen(item.when, values))
+    .map((item) => {
+      const Icon = item.icon;
+      return {
+        id: item.id,
+        section: item.section || "context",
+        icon: item.id === "theme" ? themeIcon : Icon ? <Icon size={20} /> : null,
+        label: item.titleKey && t(item.titleKey) !== item.titleKey ? t(item.titleKey) : item.title,
+        title:
+          item.id === "theme"
+            ? translateOptionLabel(themeLabel)
+            : item.id === "language"
+              ? translateOptionLabel(localeLabel)
+              : undefined,
+        onClick: () => {
+          if (handlers[item.command]) handlers[item.command]();
+          else void commands.execute(item.command).catch((error) => toast.error(String(error)));
+          onClose();
+        },
+        badge: undefined as string | number | undefined,
+      };
     });
-  } else if (activeGroup && activeGroup.type !== "home") {
-    contextItems.push({
-      id: "close-page",
-      icon: <XCircle size={20} />,
-      label: t("common.closePage"),
-      onClick: handleClosePage,
-    });
-  }
-
-  const hasNonHomeGroups = groups.filter((g) => g.type !== "home").length > 0;
-  if (activeGroup?.type === "home") {
-    if (hasNonHomeGroups) {
-      contextItems.push({
-        id: "close-home",
-        icon: <XCircle size={20} />,
-        label: t("common.closePage"),
-        onClick: handleClosePage,
-      });
-    }
-  }
-
-  pageMenuItems.forEach((item) => {
-    contextItems.push({
-      id: item.id,
-      icon: item.icon,
-      label: item.label,
-      onClick: () => {
-        item.onClick?.();
-        onClose();
-      },
-      badge: item.badge,
-      title: undefined,
-    });
-  });
-
-  const editorItems: Array<{
-    id: string;
-    icon: React.ReactNode;
-    label: string;
-    onClick?: () => void;
-    badge?: string | number;
-    title?: string;
-  }> = [];
-
-  if (editMode && activeGroup?.type === "group") {
-    editorItems.push(
-      {
-        id: "save",
-        icon: <Save size={20} />,
-        label: t("common.save"),
-        onClick: handleSave,
-      },
-      {
-        id: "save-as",
-        icon: <Save size={20} />,
-        label: t("common.saveAs"),
-        onClick: handleSaveAs,
-      },
-      {
-        id: "undo",
-        icon: <Undo2 size={20} />,
-        label: t("common.undo"),
-        onClick: () => triggerEditorAction("undo"),
-      },
-      {
-        id: "redo",
-        icon: <Redo2 size={20} />,
-        label: t("common.redo"),
-        onClick: () => triggerEditorAction("redo"),
-      },
-      {
-        id: "find",
-        icon: <Search size={20} />,
-        label: t("common.find"),
-        onClick: () => triggerEditorAction("find"),
-      },
-      {
-        id: "replace",
-        icon: <Replace size={20} />,
-        label: t("common.replace"),
-        onClick: () => triggerEditorAction("replace"),
-      }
-    );
-  }
-
-  const sections = [
-    { id: "builtIn", title: t("menu.builtIn"), items: builtInItems },
-    ...(editorItems.length > 0 ? [{ id: "editor", title: t("menu.editor"), items: editorItems }] : []),
-    { id: "context", title: t("menu.context"), items: contextItems },
-  ].filter((section) => section.items.length > 0);
+  const sections = ["builtIn", "editor", "context"]
+    .map((id) => ({
+      id,
+      title: t(`menu.${id}`),
+      items: [
+        ...contributions.filter((item) => item.section === id),
+        ...(id === "context"
+          ? pageMenuItems.map((item) => ({
+              ...item,
+              title: undefined,
+              onClick: () => {
+                item.onClick?.();
+                onClose();
+              },
+            }))
+          : []),
+      ],
+    }))
+    .filter((section) => section.items.length > 0);
 
   return (
     <>

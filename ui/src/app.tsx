@@ -2,13 +2,15 @@ import React, { Suspense, useCallback, useEffect, useRef, useState } from "react
 import { authApi } from "@/api/auth";
 import { fileApi } from "@/api/file";
 import { DirectoryPicker, NewPageMenu, ProjectMenu } from "@/components/common";
+import { PluginErrorBoundary } from "@/components/common/plugin-kit";
 import { AppFrame, NewGroupMenu } from "@/components/frame";
 import { getStoredAuthKey, LoginPage, setStoredAuthKey } from "@/components/login-page";
 import { Toaster } from "@/components/ui/sonner";
+import { PluginHostScope } from "@/framework/host";
+import { pageRegistry, useWorkbenchRegistry } from "@/framework/workbench/registry";
 import { isCustomFontValue, resolveFontFamily } from "@/lib/fonts";
 import { useTranslation } from "@/lib/i18n";
 import { useSettingsStore } from "@/lib/settings";
-import { pageRegistry } from "@/pages/registry";
 import { shouldBlockTerminalBrowserUnload } from "@/services/terminal-browser-shortcut-guard";
 import { initTerminalCleanup } from "@/services/terminal-cleanup-service";
 import {
@@ -275,6 +277,21 @@ const App: React.FC = () => {
     [addToolGroup]
   );
 
+  useWorkbenchRegistry();
+  const renderPlugin = (id: string, context: import("@/pages/types").PageContext) => {
+    const page = pageRegistry.get(id);
+    if (!page) return null;
+    const View = page.View;
+    const pluginId = pageRegistry.getOwner(id);
+    return (
+      <PluginErrorBoundary key={`${context.groupId}:${id}`} pluginId={pluginId}>
+        <PluginHostScope.Provider value={{ pluginId, groupId: context.groupId, path: context.path }}>
+          <View context={context} />
+        </PluginHostScope.Provider>
+      </PluginErrorBoundary>
+    );
+  };
+
   const renderToolPage = (group: ToolGroup) => {
     const page = pageRegistry.get(group.pageId);
     if (!page) {
@@ -284,8 +301,7 @@ const App: React.FC = () => {
         </div>
       );
     }
-    const View = page.View;
-    return <View context={{ groupId: group.id, tabId: activeTabId, isActive: true }} />;
+    return renderPlugin(group.pageId, { groupId: group.id, tabId: activeTabId, isActive: true });
   };
 
   const renderGroupPage = (group: GenericGroup) => {
@@ -299,8 +315,12 @@ const App: React.FC = () => {
         </div>
       );
     }
-    const View = page.View;
-    return <View context={{ groupId: group.id, tabId: activeTabId, isActive: true, path: currentPage.path }} />;
+    return renderPlugin(currentPage.type, {
+      groupId: group.id,
+      tabId: activeTabId,
+      isActive: true,
+      path: currentPage.path,
+    });
   };
 
   const renderContent = () => {
@@ -308,16 +328,10 @@ const App: React.FC = () => {
 
     switch (activeGroup.type) {
       case "home": {
-        const page = pageRegistry.get("home");
-        if (!page) return null;
-        const View = page.View;
-        return <View context={{ groupId: activeGroup.id, tabId: null, isActive: true }} />;
+        return renderPlugin("home", { groupId: activeGroup.id, tabId: null, isActive: true });
       }
       case "settings": {
-        const page = pageRegistry.get("settings");
-        if (!page) return null;
-        const View = page.View;
-        return <View context={{ groupId: activeGroup.id, tabId: null, isActive: true }} />;
+        return renderPlugin("settings", { groupId: activeGroup.id, tabId: null, isActive: true });
       }
       case "tool":
         return renderToolPage(activeGroup);

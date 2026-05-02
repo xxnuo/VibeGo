@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -2040,4 +2041,27 @@ func TestFileSearchPageOutOfRange(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestFileDeleteHonorsExplicitRecursiveOption(t *testing.T) {
+	_, router, dir := setupTestFileHandler(t)
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "nested"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "nested", "keep.txt"), []byte("keep"), 0644))
+	for _, recursive := range []bool{false, true} {
+		body := fmt.Sprintf(`{"path":"nested","recursive":%t}`, recursive)
+		request := httptest.NewRequest(http.MethodPost, "/api/file/del", strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if recursive {
+			require.Equal(t, http.StatusOK, response.Code)
+			_, err := os.Stat(filepath.Join(dir, "nested"))
+			require.True(t, os.IsNotExist(err))
+		} else {
+			require.Equal(t, http.StatusInternalServerError, response.Code)
+			data, err := os.ReadFile(filepath.Join(dir, "nested", "keep.txt"))
+			require.NoError(t, err)
+			require.Equal(t, "keep", string(data))
+		}
+	}
 }

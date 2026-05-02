@@ -25,6 +25,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { deleteSpeechModelAssets, preloadSpeechModel, speechAssetStates } from "@/components/keyboard/core/sherpa-asr";
 import { useFrameController } from "@/framework/frame/controller";
+import { useWorkbenchRegistry } from "@/framework/workbench/registry";
 import {
   customFontFamily,
   detectCandidateFontFamilies,
@@ -44,10 +45,10 @@ import {
   type SettingSchema,
   useSettingsStore,
 } from "@/lib/settings";
-import { pageRegistry } from "@/pages/registry";
 import type { PageDefinition } from "@/pages/types";
 import { requestTerminalNotificationPermission } from "@/services/terminal-notification-service";
 import { useFrameStore } from "@/stores/frame-store";
+import PluginSettings from "./plugin-settings";
 
 const FONT_SAMPLE = {
   ui: "VibeGo 设置 0123",
@@ -618,7 +619,14 @@ const SettingsPage: React.FC = () => {
   const [speechAssetState, setSpeechAssetState] = useState<Record<string, boolean>>({});
   const [speechAssetBusy, setSpeechAssetBusy] = useState<Record<string, boolean>>({});
   const activeTab = settingsGroup?.activeCategory || SETTING_CATEGORIES[0].key;
-  const toolPages = useMemo(() => pageRegistry.getAll().filter((page) => page.category === "tool"), []);
+  const registry = useWorkbenchRegistry();
+  const toolPages = registry.getAll().filter((page) => page.category === "tool");
+  const categories = [
+    ...SETTING_CATEGORIES,
+    ...(registry.getPlugins().some((plugin) => plugin.contributions?.configuration)
+      ? [{ key: "plugins", labelKey: "pluginSettings" }]
+      : []),
+  ];
   const speechModelSchema = useMemo(
     () => getSettingsByCategory("keyboard").find((schema) => schema.key === "speechModel"),
     []
@@ -707,7 +715,7 @@ const SettingsPage: React.FC = () => {
   const topBarCenterContent = useMemo(
     () => (
       <div className="flex h-full items-center gap-1 overflow-x-auto custom-scrollbar touch-pan-x md:gap-2">
-        {SETTING_CATEGORIES.map((cat) => (
+        {categories.map((cat) => (
           <button
             key={cat.key}
             type="button"
@@ -719,12 +727,14 @@ const SettingsPage: React.FC = () => {
                 : "bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text"
             }`}
           >
-            <span className="font-medium">{t(cat.labelKey)}</span>
+            <span className="font-medium">
+              {cat.key === "plugins" ? (locale === "en" ? "Plugins" : "插件") : t(cat.labelKey)}
+            </span>
           </button>
         ))}
       </div>
     ),
-    [activeTab, setSettingsActiveCategory, t]
+    [activeTab, setSettingsActiveCategory, t, registry.getRevision()]
   );
 
   useEffect(() => {
@@ -910,26 +920,30 @@ const SettingsPage: React.FC = () => {
     <div className="h-full overflow-y-auto bg-ide-bg">
       <div className="mx-auto max-w-2xl p-3 sm:p-4">
         <div className="space-y-2">
-          {activeTab === "notification"
-            ? renderNotificationTab()
-            : activeTab === "page"
-              ? renderPageTab()
-              : categorySettings.map((schema) =>
-                  schema.key === "speechModel" ? (
-                    <React.Fragment key={schema.key}>{renderSpeechModelCard()}</React.Fragment>
-                  ) : (
-                    <SettingItem
-                      key={schema.key}
-                      schema={schema}
-                      value={settings[schema.key] || schema.defaultValue}
-                      settings={settings}
-                      schemas={SETTINGS_SCHEMA}
-                      onChange={(v) => void handleSettingChange(schema.key, v)}
-                      onSettingChange={(key, v) => void handleSettingChange(key, v)}
-                      t={t}
-                    />
-                  )
-                )}
+          {activeTab === "plugins" ? (
+            <PluginSettings />
+          ) : activeTab === "notification" ? (
+            renderNotificationTab()
+          ) : activeTab === "page" ? (
+            renderPageTab()
+          ) : (
+            categorySettings.map((schema) =>
+              schema.key === "speechModel" ? (
+                <React.Fragment key={schema.key}>{renderSpeechModelCard()}</React.Fragment>
+              ) : (
+                <SettingItem
+                  key={schema.key}
+                  schema={schema}
+                  value={settings[schema.key] || schema.defaultValue}
+                  settings={settings}
+                  schemas={SETTINGS_SCHEMA}
+                  onChange={(v) => void handleSettingChange(schema.key, v)}
+                  onSettingChange={(key, v) => void handleSettingChange(key, v)}
+                  t={t}
+                />
+              )
+            )
+          )}
         </div>
       </div>
     </div>

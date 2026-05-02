@@ -104,7 +104,15 @@ export function useTaskbar({ orientation }: UseTaskbarOptions) {
         },
       ];
 
-  const getPageTitle = useCallback((pageType: PageType) => t(`sidebar.${pageType}`), [t]);
+  const getPageTitle = useCallback(
+    (pageType: PageType) => {
+      const page = pageRegistry.get(pageType);
+      const key = page?.nameKey || `sidebar.${pageType}`;
+      const translated = t(key);
+      return translated === key ? page?.name || pageType : translated;
+    },
+    [t]
+  );
   const getGroupTitle = useCallback(
     (group: PageGroup) => {
       if (group.type === "home") return t("common.home");

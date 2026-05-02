@@ -1,4 +1,5 @@
 import { API_BASE, getAuthHeaders, request } from "@/api/request";
+import { pluginEvents } from "@/framework/host/event-bus";
 import { createSerialExecutor, type ViewSession } from "@/lib/view-session";
 
 const runViewUrlRequest = createSerialExecutor();
@@ -89,11 +90,14 @@ export const fileApi = {
   read: (path: string) =>
     request<{ path: string; content: string; size: number }>(`/file/read?path=${encodeURIComponent(path)}`),
 
-  write: (path: string, content: string) =>
-    request<{ ok: boolean; path: string }>("/file/write", {
+  write: async (path: string, content: string) => {
+    const result = await request<{ ok: boolean; path: string }>("/file/write", {
       method: "POST",
       body: JSON.stringify({ path, content }),
-    }),
+    });
+    pluginEvents.emit("save", path);
+    return result;
+  },
 
   create: (opts: { path: string; content?: string; isDir?: boolean; mode?: number }) =>
     request<{ ok: boolean; path: string }>("/file/new", {
@@ -101,10 +105,10 @@ export const fileApi = {
       body: JSON.stringify(opts),
     }),
 
-  delete: (path: string) =>
+  delete: (path: string, options?: { recursive?: boolean }) =>
     request<{ ok: boolean }>("/file/del", {
       method: "POST",
-      body: JSON.stringify({ path }),
+      body: JSON.stringify({ path, ...options }),
     }),
 
   batchDelete: (paths: string[]) =>
@@ -145,11 +149,14 @@ export const fileApi = {
       body: JSON.stringify({ path }),
     }),
 
-  save: (path: string, content: string) =>
-    request<{ ok: boolean }>("/file/save", {
+  save: async (path: string, content: string) => {
+    const result = await request<{ ok: boolean }>("/file/save", {
       method: "POST",
       body: JSON.stringify({ path, content }),
-    }),
+    });
+    pluginEvents.emit("save", path);
+    return result;
+  },
 
   grep: (pattern: string, path = ".", limit = 100) =>
     request<{ matches: GrepMatch[] }>(
