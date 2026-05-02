@@ -179,26 +179,31 @@ export const DialogProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             showCloseButton={false}
             onKeyDown={handleKeyDown}
             style={{ "--dialog-bottom": viewportInset ? `${viewportInset}px` : undefined } as React.CSSProperties}
-            className="md:max-w-md"
+            className="border-ide-border bg-ide-panel text-ide-text shadow-sm md:max-w-md"
           >
-            <DialogHeader>
-              <DialogTitle>{dialog.title}</DialogTitle>
-              {dialog.message && <DialogDescription>{dialog.message}</DialogDescription>}
+            <DialogHeader className="gap-2 text-left">
+              <DialogTitle className="text-base leading-6 text-ide-text">{dialog.title}</DialogTitle>
+              {dialog.message && <DialogDescription className="text-sm leading-6 text-ide-mute">{dialog.message}</DialogDescription>}
             </DialogHeader>
             {dialog.type === "prompt" && (
-              <div className="px-4">
+              <div>
                 <Input
                   type="text"
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   placeholder={dialog.placeholder || ""}
                   autoFocus
+                  className="border-ide-border bg-ide-bg text-ide-text placeholder:text-ide-mute focus-visible:ring-ide-accent/30"
                 />
               </div>
             )}
             <DialogFooter className="gap-3 pt-3 md:flex-row">
               {dialog.type !== "alert" && (
-                <Button variant="outline" onClick={handleClose} className="h-11 w-full md:w-auto">
+                <Button
+                  variant="outline"
+                  onClick={handleClose}
+                  className="h-11 w-full border-ide-border bg-ide-panel text-ide-text hover:bg-ide-bg md:w-auto"
+                >
                   {dialog.cancelText || t("common.cancel")}
                 </Button>
               )}
@@ -207,7 +212,9 @@ export const DialogProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 onClick={handleConfirm}
                 className={cn(
                   "h-11 w-full md:w-auto",
-                  dialog.confirmVariant !== "danger" && "bg-ide-accent text-ide-on-accent hover:bg-ide-accent/90"
+                  dialog.confirmVariant === "danger"
+                    ? "bg-destructive text-white hover:bg-destructive/90"
+                    : "bg-ide-accent text-ide-on-accent hover:bg-ide-accent/90"
                 )}
                 autoFocus={dialog.type !== "prompt"}
               >
