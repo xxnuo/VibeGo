@@ -72,14 +72,6 @@ path.write_text(new_text)
 PY
 }
 
-rollback() {
-	local tag="$1"
-	if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-		git tag -d "${tag}" >/dev/null
-	fi
-	git restore -- ui/package.json ui/package-lock.json main.go internal/docs/swagger.json internal/docs/swagger.yaml
-}
-
 if [ -n "$(git status --porcelain)" ]; then
 	die "working tree is not clean"
 fi
@@ -106,21 +98,36 @@ replace_regex "internal/docs/swagger.yaml" '(^  version: ).*$' "\\g<1>${version}
 
 git add ui/package.json ui/package-lock.json main.go internal/docs/swagger.json internal/docs/swagger.yaml
 git commit -m "chore: bump version ${tag}"
-git tag -a "${tag}" -m "${tag}"
 
 if ! make verify-release; then
 	echo "verify-release failed, rollback to previous version" >&2
-	git tag -d "${tag}" >/dev/null 2>&1 || true
 	git reset --hard HEAD~1
 	exit 1
 fi
 
 current_branch="$(git branch --show-current)"
 if [ -z "${current_branch}" ]; then
-	rollback "${tag}"
 	die "detached HEAD is not supported"
 fi
 
+echo
+git --no-pager log --oneline --decorate -1
+printf "create tag %s on current HEAD and push? [y/N] " "${tag}"
+read -r answer
+case "${answer}" in
+	y|Y|yes|YES)
+		;;
+	*)
+		echo "tag and push skipped"
+		exit 0
+		;;
+esac
+
+if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+	die "tag already exists: ${tag}"
+fi
+
+git tag -a "${tag}" -m "${tag}" HEAD
 git push origin "${current_branch}"
 git push origin "${tag}"
 
