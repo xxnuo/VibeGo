@@ -73,7 +73,7 @@ func printAccessibleAddresses(host, port, scheme string) {
 }
 
 // @title VibeGo API
-// @version 0.2.20
+// @version 0.3.0
 // @description VibeGo 后端服务 API
 // @host localhost:1984
 // @BasePath /api
