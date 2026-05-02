@@ -32,12 +32,6 @@ interface BottomBarProps {
   onNewPage?: () => void;
 }
 
-const PAGE_TYPE_ICONS: Record<PageType, React.ReactNode> = {
-  files: <NavIcon icon={pageRegistry.get("files")?.icon} size={18} />,
-  git: <NavIcon icon={pageRegistry.get("git")?.icon} size={18} />,
-  terminal: <NavIcon icon={pageRegistry.get("terminal")?.icon} size={18} />,
-};
-
 const GROUP_TYPE_ICONS = {
   home: <Home size={18} />,
   group: <FolderOpen size={18} />,
@@ -58,6 +52,11 @@ interface GroupButtonProps {
 
 const getToolIcon = (pageId: string): React.ReactNode => {
   const page = pageRegistry.get(pageId);
+  return <NavIcon icon={page?.icon} size={18} />;
+};
+
+const getPageTypeIcon = (pageType: PageType): React.ReactNode => {
+  const page = pageRegistry.get(pageType);
   return <NavIcon icon={page?.icon} size={18} />;
 };
 
@@ -93,7 +92,7 @@ const GroupButton: React.FC<GroupButtonProps> = ({
               }`}
               title={workspacePath ? `${getPageTitle(page.type)} - ${workspacePath}` : getPageTitle(page.type)}
             >
-              {PAGE_TYPE_ICONS[page.type] || <Box size={18} />}
+              {getPageTypeIcon(page.type)}
             </button>
           ))}
         </div>
