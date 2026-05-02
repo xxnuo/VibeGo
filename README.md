@@ -2,10 +2,11 @@
 
 [中文](README.zh-CN.md) | English
 
-A Web IDE built for Vibe Coding anytime, anywhere. Freely use your Claude Code, Gemini CLI, CodeX, OpenCode, and more.
+A browser-based coding workspace for Vibe Coding anywhere. Connect back to your own machine, open the files you need, run the CLI tools you trust, and keep coding from wherever you are.
 
-Specially designed and optimized for mobile devices, the interface is built with aesthetics and intuitive use as top priorities, letting other complex features take a back seat.
-Therefore, the application is designed entirely around three core pillars: File Explorer, Git, and Terminal.
+VibeGo is designed mobile-first, but it also works well on tablets and desktop-sized screens. It keeps the interface light, direct, and comfortable across devices, while leaving you free to use Claude Code, Gemini CLI, Codex, OpenCode, and any other terminal-native workflow.
+
+The product is intentionally centered on three essentials: Files, Git, and Terminal. Around them, VibeGo also provides optional tool pages that you can open when needed, so the workspace can grow without turning into a heavy, fixed interface.
 
 ## Preview
 
@@ -39,11 +40,12 @@ By default, VibeGo starts at `http://localhost:1984`.
 
 ## Features
 
-- **File Editor:** File browsing and code editing with syntax highlighting, file tree management, and quick navigation.
-- **Built-in Terminal:** Fully interactive web terminal supporting vertical and horizontal split panes, making it easy to run complex command-line tools and AI CLIs.
-- **Git Integration:** A simple yet comprehensive Git GUI for viewing status, diffs, committing, pushing, pulling, force pushing, and managing branches (including merges).
-- **Flexible UI:** Modern and responsive UI design supporting dark/light modes and customizable themes.
-- **Secure Access:** Built-in authentication, LAN access controls, and rate limiting (Fail2ban) to protect your development environment.
+- **Files:** Browse, edit, and organize project files with syntax highlighting, file tree management, and quick navigation.
+- **Terminal:** Run real shell sessions in the browser, with vertical and horizontal split panes for AI CLIs, build tools, dev servers, and long-running tasks.
+- **Git:** Review status and diffs, commit, push, pull, force push, and manage branches or merges from a compact Git interface.
+- **Custom Pages:** Open additional pages for AI session browsing, BlockTerm, process monitoring, port management, remote control, remote desktop, and keyboard testing. Page entries can be shown or hidden from the New Page menu.
+- **Anywhere UI:** A responsive interface for phones, tablets, and large desktop screens, with dark/light modes and customizable themes, built for quick checks as well as real work.
+- **Secure Access:** Built-in authentication, LAN access controls, and rate limiting (Fail2ban) to protect your remote coding entry point.
 
 ## Install
 
@@ -79,13 +81,15 @@ You can configure VibeGo's behavior using command-line arguments or environment 
 
 ## The Origin Story
 
-I've had the idea for this project for a long time: in the future of AI Coding, we definitely won't need bloated, all-in-one IDEs, but rather only the essential features.
+I've had the idea for this project for a long time: AI coding should not be locked to one desk, one device, or one prescribed interface. The most important thing is not to recreate every development feature in the browser, but to make your existing machine, repository, and command-line tools reachable from anywhere.
+
 I've also used many feature-heavy AI Agent tools on the market (such as vibe-kanban, coolvibe, and the web version of opencode):
 
-They are either too complex and heavy, making them hard to learn, and unable to keep up with the rapid iteration speeds of the official CLIs from various AI companies; or they hand over complete control to the AI, completely isolating the human from the code. Current AI isn't ready to be left completely unsupervised, otherwise, it can easily generate unmaintainable "spaghetti code."
+They are either too complex and heavy, making them hard to learn and slow to keep up with the rapid iteration of official CLIs, or they hand over complete control to the AI and isolate the human from the code. Current AI still needs a human close to the files, diffs, and terminal, otherwise it can easily generate unmaintainable "spaghetti code."
 
-Official model providers usually offer GUI interfaces, so I chose not to wrap the CLIs into standard chat interfaces. Instead, I kept the terminal to give users complete freedom.
-Additionally, AI tasks often take time. To avoid interrupting workflow and to provide timely notifications, optimizing for mobile interfaces became a priority—allowing you to truly _Go Anywhere, Anytime_.
+Official model providers already offer GUI interfaces, so I chose not to wrap the CLIs into another standard chat surface. VibeGo keeps the terminal as a first-class space because that is where users have the most freedom: choose any model CLI, any script, any local tool, and any workflow.
+
+AI tasks often take time. You may start something at your desk, then need to check progress, review a diff, fix a file, inspect a process, forward a port, or restart a command while away from the computer. That is why cross-device optimization became a priority: VibeGo is meant to let you keep programming smoothly on phones, tablets, desktops, and across fragments of time.
 
 Finally, it's a personal pursuit. I have always admired Apple's design philosophy: a software must be minimalist and intuitive to be a great tool. Because the interface prioritizes aesthetics and intuition, other complex features are deprioritized. I encourage you to click around everywhere—you'll discover some clever little design touches!
 

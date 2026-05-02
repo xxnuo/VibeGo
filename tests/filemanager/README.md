@@ -1,5 +1,7 @@
 # VibeGo File Manager API Examples
 
+The file manager API is the file foundation of VibeGo's anywhere coding workflow. It lets the browser workspace browse, edit, move, upload, download, compress, and inspect project files while the user stays close to the actual repository.
+
 ## API Endpoints
 
 | Method | Endpoint | Description |
