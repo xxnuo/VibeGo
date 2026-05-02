@@ -13,7 +13,7 @@ import (
 )
 
 // @title VibeGo API
-// @version 0.3.7
+// @version 0.3.8
 // @description VibeGo 后端服务 API
 // @host localhost:1984
 // @BasePath /api
