@@ -29,6 +29,7 @@ import (
 	"github.com/xxnuo/vibego/internal/service/asr"
 	"github.com/xxnuo/vibego/internal/service/sshconnection"
 	"github.com/xxnuo/vibego/internal/service/terminal"
+	"github.com/xxnuo/vibego/internal/service/workspace"
 	vibegoTls "github.com/xxnuo/vibego/internal/tls"
 	"github.com/xxnuo/vibego/internal/transport"
 	"github.com/xxnuo/vibego/internal/version"
@@ -111,11 +112,16 @@ func runServerWithOptions(ctx context.Context, options serverOptions) error {
 	if err := config.MigrateWorkspaceSettings(db); err != nil {
 		return fmt.Errorf("migrate workspace settings: %w", err)
 	}
+	if err := config.MigrateLegacySessionsToWorkspaces(db); err != nil {
+		return fmt.Errorf("migrate workspace inventory: %w", err)
+	}
+	workspaceSync := workspace.New(db)
 	sshService := sshconnection.New(db)
 	defer sshService.Close()
 	terminalManager := terminal.NewManager(db, &terminal.ManagerConfig{
-		Shell:          cfg.DefaultShell,
-		RuntimeFactory: sshService,
+		Shell:            cfg.DefaultShell,
+		RuntimeFactory:   sshService,
+		WorkspaceChanged: workspaceSync.TerminalsChanged,
 	})
 	terminalManager.CleanupOnStart()
 	fileViews, err := middleware.NewFileViewAuthorizer()
@@ -137,7 +143,8 @@ func runServerWithOptions(ctx context.Context, options serverOptions) error {
 
 	handler.NewSettingsHandler(db).Register(api)
 	handler.NewASRHandler(asrService).Register(api)
-	handler.NewSessionHandler(db, terminalManager).Register(api)
+	handler.NewWorkspaceHandler(workspaceSync, terminalManager).Register(api)
+	handler.NewSessionHandler(db, terminalManager).WithWorkspaceSync(workspaceSync).Register(api)
 	handler.NewAISessionHandler(db).Register(api)
 	handler.NewCodexHandler().Register(api)
 	fileHandler := handler.NewFileHandler(fileViews)

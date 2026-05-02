@@ -84,6 +84,7 @@ type Manager struct {
 	wsWriteTimeout         time.Duration
 	snapshotStore          TerminalSnapshotStore
 	runtimeFactory         RuntimeFactory
+	workspaceChanged       func(string, string, string)
 }
 
 type replaySnapshot struct {
@@ -127,6 +128,7 @@ func NewManager(db *gorm.DB, cfg *ManagerConfig) *Manager {
 		wsWriteTimeout:       cfg.WSWriteTimeout,
 		snapshotStore:        NewDBTerminalSnapshotStore(db),
 		runtimeFactory:       cfg.RuntimeFactory,
+		workspaceChanged:     cfg.WorkspaceChanged,
 	}
 }
 
@@ -134,7 +136,12 @@ func (m *Manager) DB() *gorm.DB {
 	return m.db
 }
 
-func (m *Manager) Create(opts CreateOptions) (*TerminalInfo, error) {
+func (m *Manager) Create(opts CreateOptions) (info *TerminalInfo, err error) {
+	defer func() {
+		if err == nil && info != nil {
+			m.notifyWorkspace(info.WorkspaceSessionID, info.ID, "terminal/open")
+		}
+	}()
 	if requestedRuntimeType(opts.RuntimeType) != RuntimeTypeLocal {
 		return m.createRemote(opts, false)
 	}
@@ -156,7 +163,12 @@ func (m *Manager) createWithWorkspaceMutation(opts CreateOptions) (*TerminalInfo
 
 // CreateInWorkspace keeps the explicit HTTP call site while sharing Create's
 // workspace and parent validation.
-func (m *Manager) CreateInWorkspace(opts CreateOptions) (*TerminalInfo, error) {
+func (m *Manager) CreateInWorkspace(opts CreateOptions) (result *TerminalInfo, resultErr error) {
+	defer func() {
+		if resultErr == nil && result != nil {
+			m.notifyWorkspace(result.WorkspaceSessionID, result.ID, "terminal/open")
+		}
+	}()
 	if requestedRuntimeType(opts.RuntimeType) != RuntimeTypeLocal {
 		return m.createRemote(opts, true)
 	}
@@ -638,7 +650,13 @@ func (m *Manager) Rename(id, name string) error {
 	return m.UpdateSettings(id, SettingsUpdate{Name: &name})
 }
 
-func (m *Manager) UpdateSettings(id string, update SettingsUpdate) error {
+func (m *Manager) UpdateSettings(id string, update SettingsUpdate) (resultErr error) {
+	notify := m.workspaceNotifierForTerminal(id, "terminal/update")
+	defer func() {
+		if resultErr == nil {
+			notify()
+		}
+	}()
 	normalized, err := normalizeSettingsUpdate(update)
 	if err != nil {
 		return err
@@ -706,6 +724,9 @@ func (m *Manager) updateWorkspaceTerminalSettings(workspaceSessionID, id string,
 		}
 		if err := applyTerminalSettings(tx, &session, update, &updated); err != nil {
 			return err
+		}
+		if m.workspaceChanged != nil {
+			return tx.Model(&model.UserSession{}).Where("id = ?", workspaceSessionID).Updates(map[string]any{"updated_at": updated.UpdatedAt, "last_active_at": updated.UpdatedAt}).Error
 		}
 
 		var workspace model.UserSession
@@ -834,7 +855,13 @@ func (m *Manager) UpdateShellMetadata(id string, update ShellMetadataUpdate) err
 	return nil
 }
 
-func (m *Manager) Close(id string) error {
+func (m *Manager) Close(id string) (resultErr error) {
+	notify := m.workspaceNotifierForTerminal(id, "terminal/update")
+	defer func() {
+		if resultErr == nil {
+			notify()
+		}
+	}()
 	m.workspaceLifecycleMu.RLock()
 	defer m.workspaceLifecycleMu.RUnlock()
 	unlock := m.lockTerminalLifecycle(id)
@@ -845,7 +872,13 @@ func (m *Manager) Close(id string) error {
 // Reset replaces a live local runtime while preserving the terminal identity
 // and history. Remote runtimes are intentionally excluded because VibeGo does
 // not persist the authentication material needed to recreate them safely.
-func (m *Manager) Reset(id string) (*TerminalInfo, error) {
+func (m *Manager) Reset(id string) (resetInfo *TerminalInfo, resultErr error) {
+	notify := m.workspaceNotifierForTerminal(id, "terminal/update")
+	defer func() {
+		if resultErr == nil {
+			notify()
+		}
+	}()
 	m.workspaceLifecycleMu.RLock()
 	defer m.workspaceLifecycleMu.RUnlock()
 	unlock := m.lockTerminalLifecycle(id)
@@ -1122,7 +1155,13 @@ func (m *Manager) collectDeleteIDs(id string) ([]string, error) {
 	return ids, nil
 }
 
-func (m *Manager) Delete(id string) error {
+func (m *Manager) Delete(id string) (resultErr error) {
+	notify := m.workspaceNotifierForTerminal(id, "terminal/close")
+	defer func() {
+		if resultErr == nil {
+			notify()
+		}
+	}()
 	m.workspaceLifecycleMu.Lock()
 	defer m.workspaceLifecycleMu.Unlock()
 	m.workspaceMutationMu.Lock()
@@ -1205,6 +1244,7 @@ func (m *Manager) monitorRuntimeAsync(at *activeTerminal) {
 }
 
 func (m *Manager) monitorRuntime(at *activeTerminal) error {
+	defer m.workspaceNotifierForTerminal(at.ID, "terminal/update")()
 	waitErr := at.Runtime.Wait(context.Background())
 	if waitErr != nil {
 		// A runtime may be unable to report a clean wait even though its process
@@ -1340,6 +1380,9 @@ func (m *Manager) SyncWorkspaceMetadataWithTransaction(
 	assignments []WorkspaceTerminalAssignment,
 	updateWorkspaceState func(*gorm.DB) error,
 ) error {
+	if m.workspaceChanged != nil {
+		return fmt.Errorf("%w: workspace snapshots are read-only; use lifecycle APIs", ErrInvalidWorkspaceState)
+	}
 	if workspaceSessionID == "" {
 		return ErrWorkspaceNotFound
 	}

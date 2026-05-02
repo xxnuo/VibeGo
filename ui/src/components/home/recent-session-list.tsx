@@ -86,7 +86,6 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({ onSwitchSession, 
   };
 
   const handleSwitch = async (sessionId: string) => {
-    if (!workspaceLoading && sessionId === currentSessionId) return;
     await switchSession(sessionId);
     const state = useSessionStore.getState();
     if (state.currentSessionId === sessionId && !state.loading) {

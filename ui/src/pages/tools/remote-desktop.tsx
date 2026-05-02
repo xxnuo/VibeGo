@@ -95,7 +95,9 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
     const stored = readStored(storage, "view_config", viewStorageKey, defaultViewConfig);
     return {
       ...stored,
-      qualityPreset: storage.get("remoteDesktop.qualityPreset", stored.qualityPreset),
+      qualityPreset:
+        (host.workspace.data.qualityPreset as QualityPreset | undefined) ||
+        storage.get("remoteDesktop.qualityPreset", stored.qualityPreset),
       keyboardMode: storage.get("remoteDesktop.keyboardMode", stored.keyboardMode),
     };
   });
@@ -222,6 +224,8 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
       viewConfigRef.current = nextViewConfig;
       if (next?.qualityPreset && storage.get("remoteDesktop.qualityPreset") !== next.qualityPreset)
         void storage.update("remoteDesktop.qualityPreset", next.qualityPreset);
+      if (next?.qualityPreset && host.workspace.data.qualityPreset !== next.qualityPreset)
+        void host.workspace.updateData({ ...host.workspace.data, qualityPreset: next.qualityPreset });
       if (next?.keyboardMode && storage.get("remoteDesktop.keyboardMode") !== next.keyboardMode)
         void storage.update("remoteDesktop.keyboardMode", next.keyboardMode);
       send({
@@ -240,8 +244,13 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
         clipboardSync: nextClipboardSync,
       });
     },
-    [clipboardSync, controlEnabled, displayId, fps, quality, send, storage, viewConfig]
+    [clipboardSync, controlEnabled, displayId, fps, quality, send, storage, viewConfig, host.workspace]
   );
+
+  useEffect(() => {
+    const preset = host.workspace.data.qualityPreset as QualityPreset | undefined;
+    if (preset && preset !== viewConfigRef.current.qualityPreset) configure({ qualityPreset: preset });
+  }, [host.workspace.data.qualityPreset, configure]);
 
   useEffect(() => {
     const update = () => {

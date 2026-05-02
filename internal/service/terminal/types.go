@@ -91,6 +91,7 @@ type ManagerConfig struct {
 	WSReadTimeout        time.Duration
 	WSWriteTimeout       time.Duration
 	RuntimeFactory       RuntimeFactory
+	WorkspaceChanged     func(string, string, string)
 }
 
 func (c *ManagerConfig) applyDefaults() {

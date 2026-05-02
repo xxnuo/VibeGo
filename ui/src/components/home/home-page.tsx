@@ -3,6 +3,7 @@ import React, { useCallback, useState } from "react";
 import DirectoryPicker from "@/components/common/directory-picker";
 import RecentSessionList from "@/components/home/recent-session-list";
 import { type Locale, useTranslation } from "@/lib/i18n";
+import { useFrameStore } from "@/stores/frame-store";
 
 interface HomePageProps {
   onOpenFolder: (path: string) => void;
@@ -14,7 +15,11 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenFolder, locale }) => {
   const [isPickerOpen, setPickerOpen] = useState(false);
   const [pathInput, setPathInput] = useState("");
 
-  const handleSwitchSession = useCallback(() => {}, []);
+  const handleSwitchSession = useCallback(() => {
+    const frame = useFrameStore.getState();
+    const target = frame.groups.find((group) => group.type === "group" || group.type === "tool");
+    if (target) frame.setActiveGroup(target.id);
+  }, []);
 
   const handlePickerSelect = useCallback(
     async (path: string) => {

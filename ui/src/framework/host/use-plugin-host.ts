@@ -13,6 +13,7 @@ import { usePreviewStore } from "@/stores/preview-store";
 import { useSessionStore } from "@/stores/session-store";
 import { getTerminalWorkspaceGroupIds } from "@/stores/session-workspace-guard";
 import { useTerminalStore } from "@/stores/terminal-store";
+import { useWorkspaceSyncStore, subscribeWorkspaceMutation } from "@/stores/workspace-sync-store";
 import packageInfo from "../../../package.json";
 import { commands } from "./command-service";
 import { contextKeys } from "./context-key-service";
@@ -41,7 +42,10 @@ export function usePluginHost(pluginId?: string): PluginHostContextValue {
   const group = frame.groups.find((group) => group.id === groupId);
   const path =
     scope?.path || (group?.type === "group" ? group.pages.find((page) => page.type === "files")?.path : undefined);
-  const workspaceId = `${useSessionStore((state) => state.currentSessionId) || "local"}:${groupId}`;
+  const sessionId = useSessionStore((state) => state.currentSessionId);
+  const workspaceId = `${sessionId || "local"}:${groupId}`;
+  useWorkspaceSyncStore((state) => state.snapshot);
+  useWorkspaceSyncStore((state) => state.outbox);
   const terminals = useTerminalStore();
   const disposables = useMemo(() => new Set<() => void>(), [plugin, workspaceId]);
   useEffect(
@@ -71,6 +75,22 @@ export function usePluginHost(pluginId?: string): PluginHostContextValue {
       workspace: {
         currentPath: path,
         groupId,
+        data: group?.type === "group" || group?.type === "tool" ? group.data || {} : {},
+        updateData: async (data) => {
+          useFrameStore.setState((state) => ({
+            groups: state.groups.map((group) =>
+              group.id === groupId && (group.type === "group" || group.type === "tool") ? { ...group, data } : group
+            ),
+          }));
+        },
+        dispatchMutation: (action, payload) =>
+          useWorkspaceSyncStore
+            .getState()
+            .dispatch("plugin/mutate", { plugin_id: plugin, action, data: payload, scope: groupId }),
+        dispatch: (action, data) =>
+          useWorkspaceSyncStore
+            .getState()
+            .dispatch("plugin/mutate", { plugin_id: plugin, action, data, scope: groupId }),
         fs: {
           readText: async (path) => (await fileApi.read(path)).content,
           writeText: async (path, content) => {
@@ -251,7 +271,10 @@ export function usePluginHost(pluginId?: string): PluginHostContextValue {
           return item;
         },
       },
-      storage: { workspace: createPluginStorage(plugin, workspaceId), global: createPluginStorage(plugin) },
+      storage: {
+        workspace: createPluginStorage(plugin, sessionId || "local", groupId),
+        global: createPluginStorage(plugin),
+      },
       contextKeys,
       extensions: {
         getExtension<T>(id: string) {
@@ -288,6 +311,19 @@ export function usePluginHost(pluginId?: string): PluginHostContextValue {
         onDidChangeActiveTab: (listener) => own(pluginEvents.on("tab", listener)),
         onDidChangeWorkspace: (listener) => own(pluginEvents.on("workspace", listener)),
         onDidChangeTheme: (listener) => own(pluginEvents.on("theme", listener)),
+        onDidReceiveWorkspaceMutation: (listener) =>
+          own(
+            subscribeWorkspaceMutation((mutation) => {
+              if (mutation.workspace_id !== sessionId) return;
+              const payload = mutation.payload;
+              if (
+                mutation.type.startsWith("plugin/") &&
+                (payload.plugin_id !== plugin || (payload.scope && payload.scope !== groupId))
+              )
+                return;
+              listener(mutation);
+            })
+          ),
       },
       env: {
         clipboard: {

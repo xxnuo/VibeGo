@@ -8,6 +8,22 @@ import (
 	"gorm.io/gorm"
 )
 
+func (m *Manager) notifyWorkspace(id, terminalID, action string) {
+	if m.workspaceChanged != nil && id != "" {
+		m.workspaceChanged(id, terminalID, action)
+	}
+}
+func (m *Manager) workspaceNotifierForTerminal(id, action string) func() {
+	if m.workspaceChanged == nil {
+		return func() {}
+	}
+	var session model.TerminalSession
+	if m.db.Select("workspace_session_id").First(&session, "id = ?", id).Error != nil {
+		return func() {}
+	}
+	return func() { m.notifyWorkspace(session.WorkspaceSessionID, id, action) }
+}
+
 func (m *Manager) WithTerminalLifecycle(fn func() error) error {
 	m.workspaceLifecycleMu.RLock()
 	defer m.workspaceLifecycleMu.RUnlock()

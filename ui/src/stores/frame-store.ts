@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { create } from "zustand";
 import { pageRegistry } from "@/pages/registry";
+import { randomUUID } from "@/lib/uuid";
 
 export type GroupType = "home" | "group" | "tool" | "settings";
 
@@ -79,6 +80,7 @@ export interface GenericGroup {
   name: string;
   pages: GroupPage[];
   activePageId: string | null;
+  data?: Record<string, unknown>;
 }
 
 export interface ToolGroup {
@@ -88,6 +90,7 @@ export interface ToolGroup {
   pageId: string;
   tabs: TabItem[];
   activeTabId: string | null;
+  data?: Record<string, unknown>;
 }
 
 export interface SettingsGroup {
@@ -177,7 +180,7 @@ const getWorkspaceViews = () => {
 };
 
 const createFolderGroup = (path: string, name?: string): GenericGroup => {
-  const groupId = `group-${Date.now()}`;
+  const groupId = `group-${randomUUID()}`;
   const folderName = name || path.split("/").pop() || "Folder";
   return {
     type: "group",
@@ -197,7 +200,7 @@ const createFolderGroup = (path: string, name?: string): GenericGroup => {
 
 const createToolGroup = (pageId: string, name?: string, id?: string): ToolGroup => ({
   type: "tool",
-  id: id || `tool-${Date.now()}`,
+  id: id || `tool-${randomUUID()}`,
   name: name || pageId,
   pageId,
   tabs: [],
@@ -357,12 +360,12 @@ export const useFrameStore = create<FrameState>((set, get) => ({
         return;
       }
     }
-    const group = createToolGroup(pageId, name, id);
+    const group = createToolGroup(pageId, name, id || (pageDef?.singleton ? `tool-${pageId}` : undefined));
     set((s) => ({ groups: [...s.groups, group], activeGroupId: group.id }));
   },
 
   addTerminalGroup: () => {
-    const groupId = `terminal-${Date.now()}`;
+    const groupId = `terminal-${randomUUID()}`;
     const group: GenericGroup = {
       type: "group",
       id: groupId,

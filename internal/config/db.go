@@ -113,3 +113,28 @@ func MigrateWorkspaceSettings(db *gorm.DB) error {
 		return normalizeUserSessionPositions(tx)
 	})
 }
+
+func MigrateLegacySessionsToWorkspaces(db *gorm.DB) error {
+	if err := db.AutoMigrate(&model.Workspace{}, &model.WorkspaceFolder{}, &model.WorkspaceTool{}, &model.WorkspaceTab{}, &model.WorkspaceMutation{}, &model.WorkspacePluginStorage{}); err != nil {
+		return err
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		var sessions []model.UserSession
+		if err := tx.Find(&sessions).Error; err != nil {
+			return err
+		}
+		for _, session := range sessions {
+			var count int64
+			if err := tx.Model(&model.Workspace{}).Where("id = ?", session.ID).Count(&count).Error; err != nil {
+				return err
+			}
+			if count > 0 {
+				continue
+			}
+			if err := migrateSession(tx, session); err != nil {
+				return fmt.Errorf("migrate workspace %s: %w", session.ID, err)
+			}
+		}
+		return nil
+	})
+}

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/xxnuo/vibego/internal/model"
 	"github.com/xxnuo/vibego/internal/service/terminal"
+	workspacesvc "github.com/xxnuo/vibego/internal/service/workspace"
 	"gorm.io/gorm"
 )
 
@@ -24,8 +26,23 @@ var (
 )
 
 type SessionHandler struct {
-	db      *gorm.DB
-	manager *terminal.Manager
+	db            *gorm.DB
+	manager       *terminal.Manager
+	workspaceSync *workspacesvc.Service
+}
+
+func (h *SessionHandler) WithWorkspaceSync(service *workspacesvc.Service) *SessionHandler {
+	h.workspaceSync = service
+	return h
+}
+
+func (h *SessionHandler) commitWorkspace(id, action string, value any) error {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	_, err = h.workspaceSync.Commit(workspacesvc.ClientMutation{ID: uuid.NewString(), WorkspaceID: id, ClientID: "server", Type: action, Payload: raw, CreatedAt: time.Now().UnixMilli()})
+	return err
 }
 
 func NewSessionHandler(db *gorm.DB, managers ...*terminal.Manager) *SessionHandler {
@@ -151,6 +168,14 @@ func (h *SessionHandler) Create(c *gin.Context) {
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
+	if h.workspaceSync != nil {
+		if err := h.commitWorkspace(session.ID, "workspace/create", gin.H{"id": session.ID, "name": name}); err != nil {
+			workspaceError(c, err)
+			return
+		}
+		c.JSON(http.StatusCreated, gin.H{"ok": true, "id": session.ID})
+		return
+	}
 
 	if err := h.db.Transaction(func(tx *gorm.DB) error {
 		position, err := nextSessionPosition(tx)
@@ -242,6 +267,17 @@ func (h *SessionHandler) Update(c *gin.Context) {
 	}
 
 	var err error
+	if h.workspaceSync != nil {
+		if req.Name != nil {
+			err = h.commitWorkspace(id, "workspace/rename", gin.H{"name": *req.Name})
+		}
+		if err != nil {
+			workspaceError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+		return
+	}
 	if h.manager != nil {
 		err = h.manager.MutateWorkspace(id, func(tx *gorm.DB) error {
 			return updateSession(tx, id, req)
@@ -293,6 +329,14 @@ func (h *SessionHandler) Reorder(c *gin.Context) {
 			return
 		}
 		seen[req.IDs[i]] = struct{}{}
+	}
+	if h.workspaceSync != nil {
+		if err := h.workspaceSync.ReorderWorkspaces(req.IDs); err != nil {
+			workspaceError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+		return
 	}
 
 	err := h.db.Transaction(func(tx *gorm.DB) error {
@@ -406,6 +450,10 @@ func updateSession(db *gorm.DB, id string, req UpdateSessionRequest) error {
 
 func (h *SessionHandler) PatchWorkspace(c *gin.Context) {
 	id := c.Param("id")
+	if h.workspaceSync != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "workspace snapshots are read-only; use workspace mutations", "code": "workspace_mutations_required"})
+		return
+	}
 
 	var req WorkspaceStatePatch
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -466,6 +514,20 @@ func (h *SessionHandler) PatchWorkspace(c *gin.Context) {
 
 func (h *SessionHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
+	if h.workspaceSync != nil {
+		if h.manager != nil {
+			if err := h.manager.DeleteWorkspace(id); err != nil {
+				workspaceError(c, err)
+				return
+			}
+		}
+		if err := h.commitWorkspace(id, "workspace/delete", gin.H{"id": id}); err != nil {
+			workspaceError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+		return
+	}
 	// Keep lightweight handler tests and callers that do not configure terminal
 	// lifecycle management compatible with the original session-only delete.
 	if h.manager == nil {

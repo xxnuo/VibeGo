@@ -19,6 +19,7 @@ export interface WorkspaceState {
     name: string;
     pages: GroupPage[];
     activePageId: string | null;
+    data?: Record<string, unknown>;
   }>;
   openTools: Array<{
     id: string;
@@ -26,6 +27,7 @@ export interface WorkspaceState {
     name: string;
     tabs?: GroupPage["tabs"];
     activeTabId?: string | null;
+    data?: Record<string, unknown>;
   }>;
   taskbarOrder: string[];
   terminalsByGroup: Record<string, TerminalSession[]>;

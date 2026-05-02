@@ -458,6 +458,10 @@ func (h *TerminalHandler) SyncWorkspace(c *gin.Context) {
 	}
 	err := h.manager.SyncWorkspaceMetadataWithTransaction(req.WorkspaceSessionID, assignments, updateState)
 	if err != nil {
+		if errors.Is(err, terminal.ErrInvalidWorkspaceState) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error(), "code": "workspace_mutations_required"})
+			return
+		}
 		if errors.Is(err, terminal.ErrWorkspaceNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 			return

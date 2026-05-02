@@ -35,6 +35,10 @@ export interface PluginHostWorkspace {
   ) => void;
   findFiles: (query: string, limit?: number) => Promise<FileItem[]>;
   refresh: () => Promise<void>;
+  dispatchMutation: <T>(action: string, payload: T) => Promise<void>;
+  dispatch: <T>(action: string, data: T) => Promise<void>;
+  readonly data: Record<string, unknown>;
+  updateData: (data: Record<string, unknown>) => Promise<void>;
 }
 
 // ==========================================
@@ -182,6 +186,7 @@ export interface PluginHostEvents {
   onDidChangeActiveTab: (listener: (tabId: string | null) => void) => () => void;
   onDidChangeWorkspace: (listener: (newPath: string | undefined) => void) => () => void;
   onDidChangeTheme: (listener: (theme: string) => void) => () => void;
+  onDidReceiveWorkspaceMutation: (listener: (mutation: { type: string; payload: unknown }) => void) => () => void;
 }
 
 export interface PluginHostEnv {

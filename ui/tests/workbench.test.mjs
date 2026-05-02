@@ -32,7 +32,7 @@ test("workbench registry, taskbars, and contributed actions preserve frame behav
   }
   window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   window.HTMLElement.prototype.scrollIntoView = () => {};
-  const vite = await createServer({ appType: "custom", server: { hmr: false, middlewareMode: true } });
+  const vite = await createServer({ appType: "custom", server: { hmr: false, ws:false, middlewareMode: true } });
   const root = createRoot(document.getElementById("root"));
   t.after(async () => {
     await act(() => root.unmount());
@@ -166,6 +166,9 @@ test("workbench registry, taskbars, and contributed actions preserve frame behav
     const { getTerminalWorkspaceGroupIds } = await vite.ssrLoadModule("/src/stores/session-workspace-guard.ts");
     const patches = [];
     let saved;
+    const { workspaceApi } = await vite.ssrLoadModule("/src/api/workspace-sync.ts");
+    const { inventoryFromFrame } = await vite.ssrLoadModule("/src/stores/workspace-inventory.ts");
+    const { useWorkspaceSyncStore } = await vite.ssrLoadModule("/src/stores/workspace-sync-store.ts");
     const mock = (target, key, value) => {
       patches.push([target, key, target[key]]);
       target[key] = value;
@@ -179,6 +182,8 @@ test("workbench registry, taskbars, and contributed actions preserve frame behav
     mock(settingsApi, "set", async () => ({ ok: true }));
     mock(terminalApi, "syncWorkspace", async () => ({ ok: true }));
     mock(terminalApi, "list", async () => ({ terminals: [] }));
+    mock(workspaceApi,"getSnapshot",async()=>saved);
+    mock(useWorkspaceSyncStore.getState(),"connect",async()=>{});
     const initAutoSave = useSessionStore.getState().initAutoSave;
     useSessionStore.setState({
       currentSessionId: "fixture",
@@ -195,8 +200,9 @@ test("workbench registry, taskbars, and contributed actions preserve frame behav
       frame.addCurrentTab({ id: "tool-tab", title: "Tool tab" });
       frame.setTaskbarOrder(["group:tool", "group:repo"]);
       frame.setActiveGroup("repo");
+      saved={workspace:{id:"fixture",name:"Fixture",revision:1,data:"{}"},...inventoryFromFrame(useFrameStore.getState().groups,"fixture"),storage:[],terminals:[]};
       await useSessionStore.getState().saveCurrentSession();
-      assert.equal(saved.openGroups[0].pages[0].activeTabId, "file");
+      assert.equal(JSON.parse(window.sessionStorage.getItem("vibego:viewport:fixture")).activeTabs["repo-files"], "file");
       useSessionStore.setState({ currentSessionId: null });
       frame.initDefaultGroups();
       await useSessionStore.getState().switchSession("fixture");

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { type TerminalCapabilities, terminalApi } from "@/api/terminal";
+import type { TerminalCapabilities } from "@/api/terminal";
 import { enqueueWorkspaceMutation } from "@/stores/workspace-mutation-queue";
 
 export type TerminalStatus = "running" | "exited" | "closed";
@@ -526,20 +526,6 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
           groupId,
           optimistic
         );
-        const assignments = Object.entries(terminalsByGroup).flatMap(([ownerGroupId, terminals]) =>
-          terminals.map((terminal) => ({
-            id: terminal.id,
-            group_id: ownerGroupId,
-            parent_id: terminal.parentId,
-          }))
-        );
-        await terminalApi.syncWorkspace(workspaceSessionId, assignments, {
-          terminalsByGroup,
-          activeTerminalByGroup: currentState.activeIdByGroup,
-          listManagerOpenByGroup: currentState.listManagerOpenByGroup,
-          terminalLayouts: currentState.terminalLayouts,
-          focusedIdByGroup: currentState.focusedIdByGroup,
-        });
         if (terminalStoreMutationEpoch !== mutationEpoch) {
           throw new Error("terminal reorder superseded");
         }
