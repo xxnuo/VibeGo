@@ -1,17 +1,15 @@
 import {
   Box,
-  Files,
   FolderOpen,
-  GitGraph,
   Home,
   Maximize,
   Menu,
   Minimize,
   Plus,
   Settings,
-  Terminal,
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import NavIcon from "@/components/frame/nav-icon";
 import WorkspaceHintBubble, {
   getWorkspaceGroupTitle,
   getWorkspacePath,
@@ -35,9 +33,9 @@ interface BottomBarProps {
 }
 
 const PAGE_TYPE_ICONS: Record<PageType, React.ReactNode> = {
-  files: <Files size={18} />,
-  git: <GitGraph size={18} />,
-  terminal: <Terminal size={18} />,
+  files: <NavIcon icon={pageRegistry.get("files")?.icon} size={18} />,
+  git: <NavIcon icon={pageRegistry.get("git")?.icon} size={18} />,
+  terminal: <NavIcon icon={pageRegistry.get("terminal")?.icon} size={18} />,
 };
 
 const GROUP_TYPE_ICONS = {
@@ -60,11 +58,7 @@ interface GroupButtonProps {
 
 const getToolIcon = (pageId: string): React.ReactNode => {
   const page = pageRegistry.get(pageId);
-  if (page) {
-    const IconComponent = page.icon;
-    return <IconComponent size={18} />;
-  }
-  return <Box size={18} />;
+  return <NavIcon icon={page?.icon} size={18} />;
 };
 
 const GroupButton: React.FC<GroupButtonProps> = ({
