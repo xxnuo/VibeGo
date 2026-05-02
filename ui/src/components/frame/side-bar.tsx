@@ -84,7 +84,7 @@ const GroupButton: React.FC<GroupButtonProps> = ({
     if (isExpanded) {
       return (
         <div
-          className={`flex flex-col w-full items-center gap-1 py-1 ${
+          className={`flex flex-col w-full items-center gap-1 p-1 ${
             hasMultipleGroups ? "bg-ide-panel/70 border border-ide-border/30 rounded-xl shadow-inner" : ""
           }`}
         >
@@ -92,7 +92,7 @@ const GroupButton: React.FC<GroupButtonProps> = ({
             <button
               key={page.id}
               onClick={(event) => onPageClick(genericGroup, page.id, event.currentTarget)}
-              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+              className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${
                 isActive && genericGroup.activePageId === page.id
                   ? "text-ide-accent bg-ide-panel"
                   : "text-ide-mute hover:text-ide-text hover:bg-ide-panel/50"
