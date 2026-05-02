@@ -18,6 +18,11 @@ export interface RemoteDesktopStatus {
   captureAvailable: boolean;
   inputAvailable: boolean;
   clipboardAvailable: boolean;
+  inputBackend: string;
+  inputBackends: string[];
+  inputSetupRequired: boolean;
+  inputSetupState: string;
+  inputError: string;
   capabilities: {
     capture: boolean;
     input: boolean;
@@ -86,6 +91,10 @@ export const remoteDesktopApi = {
     request<{ ok: boolean }>("/remote-desktop/clipboard", {
       method: "POST",
       body: JSON.stringify({ text }),
+    }),
+  installInputHelper: () =>
+    request<{ ok: boolean; status: RemoteDesktopStatus; error?: string }>("/remote-desktop/input-helper/install", {
+      method: "POST",
     }),
   wsUrl: () => {
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";

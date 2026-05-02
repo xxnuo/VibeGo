@@ -179,6 +179,10 @@ type ClientMessage struct {
 	DeltaX          int      `json:"deltaX,omitempty"`
 	DeltaY          int      `json:"deltaY,omitempty"`
 	Key             string   `json:"key,omitempty"`
+	Code            string   `json:"code,omitempty"`
+	Location        int      `json:"location,omitempty"`
+	KeyCode         int      `json:"keyCode,omitempty"`
+	Char            string   `json:"char,omitempty"`
 	Modifiers       []string `json:"modifiers,omitempty"`
 	Text            string   `json:"text,omitempty"`
 	SpecialKey      string   `json:"specialKey,omitempty"`

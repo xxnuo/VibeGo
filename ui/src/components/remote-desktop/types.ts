@@ -51,6 +51,8 @@ export interface RemoteDesktopRuntime {
   latencyMs: number | null;
   viewConfig: RemoteDesktopViewConfig;
   remoteCursor: { x: number; y: number } | null;
+  installingHelper?: boolean;
+  installInputHelper?: () => void;
 }
 
 export type ConfigPatch = Partial<RemoteDesktopConfig & RemoteDesktopViewConfig> & {

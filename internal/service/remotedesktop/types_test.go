@@ -67,6 +67,25 @@ func TestNormalizeConfig(t *testing.T) {
 	require.Equal(t, 100, cfg.ScalePercent)
 }
 
+func TestParseClientMessageEnhancedKeyFields(t *testing.T) {
+	msg, err := ParseClientMessage([]byte(`{"type":"key","key":"a","code":"KeyA","location":1,"keyCode":65,"char":"a","down":true}`))
+	require.NoError(t, err)
+	require.Equal(t, "KeyA", msg.Code)
+	require.Equal(t, 1, msg.Location)
+	require.Equal(t, 65, msg.KeyCode)
+	require.Equal(t, "a", msg.Char)
+	require.NotNil(t, msg.Down)
+	require.True(t, *msg.Down)
+}
+
+func TestRuntimeStatusIncludesInputBackend(t *testing.T) {
+	status := RuntimeStatus(&fakeCapture{displays: []Display{{ID: 0}}, img: image.NewRGBA(image.Rect(0, 0, 1, 1))}, &fakeStatusInput{}, &fakeClipboard{})
+	require.Equal(t, "test", status.InputBackend)
+	require.Equal(t, []string{"test"}, status.InputBackends)
+	require.Equal(t, "ready", status.InputSetupState)
+	require.True(t, status.InputAvailable)
+}
+
 func TestSessionCaptureFrame(t *testing.T) {
 	capture := &fakeCapture{
 		displays: []Display{{ID: 0, Width: 2, Height: 2}},
@@ -153,6 +172,14 @@ func (f *fakeInput) Click(button string) error                           { retur
 func (f *fakeInput) Wheel(x, y int) error                                { return nil }
 func (f *fakeInput) Key(key string, down bool, modifiers []string) error { return nil }
 func (f *fakeInput) Text(text string) error                              { return nil }
+
+type fakeStatusInput struct {
+	fakeInput
+}
+
+func (f *fakeStatusInput) InputStatus() InputStatus {
+	return InputStatus{Backend: "test", Backends: []string{"test"}, SetupState: "ready"}
+}
 
 type fakeClipboard struct {
 	text string

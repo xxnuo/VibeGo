@@ -122,6 +122,16 @@ export const RemoteDesktopStage: React.FC<StageProps> = ({
               <Power size={22} />
             </div>
             <span>{t("plugin.remoteDesktop.idleHint")}</span>
+            {runtime.status?.inputSetupRequired && (
+              <button
+                type="button"
+                className="border border-ide-border bg-ide-panel px-3 py-1.5 text-xs text-ide-text hover:bg-ide-hover disabled:opacity-60"
+                disabled={runtime.installingHelper}
+                onClick={runtime.installInputHelper}
+              >
+                {runtime.installingHelper ? "Installing input helper..." : "Install Wayland input helper"}
+              </button>
+            )}
           </div>
         </div>
       ) : (
@@ -173,6 +183,17 @@ export const RemoteDesktopStage: React.FC<StageProps> = ({
           {runtime.controlEnabled ? <EyeOff size={12} /> : <Eye size={12} />}
           <span>{t(`plugin.remoteDesktop.state.${runtime.state}`)}</span>
           {runtime.status?.wayland && <span>{t("plugin.remoteDesktop.waylandLimited")}</span>}
+          {runtime.status?.inputBackend && <span>{runtime.status.inputBackend}</span>}
+          {runtime.status?.inputSetupRequired && (
+            <button
+              type="button"
+              className="border border-ide-border px-2 py-0.5 text-ide-text hover:bg-ide-hover disabled:opacity-60"
+              disabled={runtime.installingHelper}
+              onClick={runtime.installInputHelper}
+            >
+              {runtime.installingHelper ? "Installing" : "Install helper"}
+            </button>
+          )}
           {runtime.message && <span className="truncate text-red-400">{runtime.message}</span>}
         </div>
         <div className="shrink-0 flex items-center gap-2">

@@ -93,6 +93,7 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
   const [remoteCursor, setRemoteCursor] = useState<{ x: number; y: number } | null>(null);
   const [toolbar, setToolbar] = useState<ToolbarState>(() => readStored(toolbarStorageKey, defaultToolbar));
   const [activeMenu, setActiveMenu] = useState<ActiveMenu>(null);
+  const [installingHelper, setInstallingHelper] = useState(false);
 
   const selectedDisplay = useMemo(
     () => displays.find((display) => display.id === displayId) ?? displays[0],
@@ -130,6 +131,21 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
       setMessage(err instanceof Error ? err.message : String(err));
     }
   }, []);
+
+  const installInputHelper = useCallback(async () => {
+    setInstallingHelper(true);
+    setMessage("");
+    try {
+      const result = await remoteDesktopApi.installInputHelper();
+      if (result.status) setStatus(result.status);
+      await loadState();
+      setMessage(result.status?.inputAvailable ? "" : result.status?.inputError || result.error || "");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : String(err));
+    } finally {
+      setInstallingHelper(false);
+    }
+  }, [loadState]);
 
   useEffect(() => {
     loadState();
@@ -314,6 +330,7 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
       } else if (msg.type === "status") {
         if (msg.paused === true) setState("paused");
         if (msg.paused === false) setState("connected");
+        if (msg.status) setStatus(msg.status);
         if (msg.config) applyConfig(msg.config);
         if (msg.qos) setQos(msg.qos);
       } else if (msg.type === "qos") {
@@ -545,7 +562,17 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
       if (down && keysDownRef.current.has(keyId)) return;
       if (down) keysDownRef.current.add(keyId);
       else keysDownRef.current.delete(keyId);
-      send({ type: "key", version: 2, key: event.key, down, modifiers: modifierKeys(event) });
+      send({
+        type: "key",
+        version: 2,
+        key: event.key,
+        code: event.code,
+        location: event.location,
+        keyCode: event.keyCode,
+        char: event.key.length === 1 ? event.key : "",
+        down,
+        modifiers: modifierKeys(event),
+      });
     },
     [controlEnabled, send, viewConfig.keyboardMode]
   );
@@ -577,6 +604,8 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
     latencyMs,
     viewConfig,
     remoteCursor,
+    installingHelper,
+    installInputHelper,
   };
 
   return (

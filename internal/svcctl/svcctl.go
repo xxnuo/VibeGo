@@ -15,6 +15,7 @@ import (
 
 	kservice "github.com/kardianos/service"
 	"github.com/xxnuo/vibego/internal/config"
+	"github.com/xxnuo/vibego/internal/service/remotedesktop"
 	"github.com/xxnuo/vibego/internal/version"
 )
 
@@ -26,6 +27,8 @@ var serviceConfigExistsFunc = serviceConfigExists
 
 const ServiceName = "vibego"
 const ServiceDescription = "VibeGo - Vibe Anywhere"
+const InputHelperServiceName = "vibego-input-helper"
+const InputHelperServiceDescription = "VibeGo Remote Desktop Input Helper"
 
 type Runner func(context.Context) error
 
@@ -145,6 +148,23 @@ func handleService(args []string, runner Runner) {
 		return
 	}
 
+	if cmd == "input-helper" {
+		if err := remotedesktop.RunInputHelper(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if cmd == "install-input-helper" {
+		if err := runInputHelperInstall(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Input helper installed")
+		return
+	}
+
 	scope, extraArgs, err := parseServiceFlags(args[3:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -213,6 +233,45 @@ func runServiceCommand(cmd string, userService bool, extraArgs []string) error {
 		return fmt.Errorf("unknown service command: %s", cmd)
 	}
 	return nil
+}
+
+func runInputHelperInstall() error {
+	if runtime.GOOS != "linux" {
+		return fmt.Errorf("input helper is only supported on linux")
+	}
+	if currentUID() != 0 {
+		return fmt.Errorf("input helper install requires root")
+	}
+	binPath := systemBinPath(runtime.GOOS, os.Getenv("ProgramFiles"))
+	if err := installBinaryFunc(binPath); err != nil {
+		return fmt.Errorf("install binary: %w", err)
+	}
+	cfg := newServiceConfig(false, binPath, []string{"service", "input-helper"})
+	cfg.Name = InputHelperServiceName
+	cfg.DisplayName = InputHelperServiceDescription
+	cfg.Description = InputHelperServiceDescription
+	svc, err := kservice.New(&serviceProgram{runner: func(context.Context) error {
+		return remotedesktop.RunInputHelper()
+	}}, cfg)
+	if err != nil {
+		return err
+	}
+	status, installed, err := serviceInstallState(svc)
+	if err != nil {
+		return err
+	}
+	if installed {
+		if err := stopInstalledService(svc, status); err != nil {
+			return err
+		}
+		if err := uninstallInstalledService(svc); err != nil {
+			return err
+		}
+	}
+	if err := svc.Install(); err != nil {
+		return err
+	}
+	return svc.Start()
 }
 
 func reinstallService(svc kservice.Service, binPath string) error {
@@ -625,6 +684,7 @@ func printServiceUsage() {
 	fmt.Fprintf(osStderr, "  stop        Stop service\n")
 	fmt.Fprintf(osStderr, "  restart     Restart service\n")
 	fmt.Fprintf(osStderr, "  status      Show service status\n")
+	fmt.Fprintf(osStderr, "  install-input-helper  Install remote desktop input helper (internal)\n")
 	fmt.Fprintf(osStderr, "\nScope:\n")
 	fmt.Fprintf(osStderr, "  --user      Install/control current user service on Linux/macOS\n")
 	fmt.Fprintf(osStderr, "  --system    Install/control system service\n")

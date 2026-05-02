@@ -40,6 +40,11 @@ type Status struct {
 	CaptureAvailable   bool         `json:"captureAvailable"`
 	InputAvailable     bool         `json:"inputAvailable"`
 	ClipboardAvailable bool         `json:"clipboardAvailable"`
+	InputBackend       string       `json:"inputBackend"`
+	InputBackends      []string     `json:"inputBackends"`
+	InputSetupRequired bool         `json:"inputSetupRequired"`
+	InputSetupState    string       `json:"inputSetupState"`
+	InputError         string       `json:"inputError"`
 	Capabilities       Capabilities `json:"capabilities"`
 	Wayland            bool         `json:"wayland"`
 	Warnings           []string     `json:"warnings"`
@@ -74,6 +79,22 @@ type InputProvider interface {
 	Wheel(x, y int) error
 	Key(key string, down bool, modifiers []string) error
 	Text(text string) error
+}
+
+type InputStatusProvider interface {
+	InputStatus() InputStatus
+}
+
+type InputReleaseProvider interface {
+	Release() error
+}
+
+type InputStatus struct {
+	Backend       string
+	Backends      []string
+	SetupRequired bool
+	SetupState    string
+	Err           error
 }
 
 type ClipboardProvider interface {

@@ -120,6 +120,97 @@ func (p *RobotInputProvider) Text(text string) error {
 	return nil
 }
 
+type CompositeInputProvider struct {
+	robot InputProvider
+}
+
+func NewCompositeInputProvider() *CompositeInputProvider {
+	return &CompositeInputProvider{robot: NewRobotInputProvider()}
+}
+
+func (p *CompositeInputProvider) selected() InputProvider {
+	if runtime.GOOS == "linux" && isWayland() {
+		return NewUInputClientProvider()
+	}
+	return p.robot
+}
+
+func (p *CompositeInputProvider) InputStatus() InputStatus {
+	if runtime.GOOS == "linux" && isWayland() {
+		provider := NewUInputClientProvider()
+		err := provider.Available()
+		status := InputStatus{
+			Backend:       "uinput",
+			Backends:      []string{"uinput"},
+			SetupRequired: err != nil,
+			SetupState:    "ready",
+			Err:           err,
+		}
+		if err != nil {
+			status.Backend = "none"
+			status.SetupState = "required"
+		}
+		return status
+	}
+	err := p.robot.Available()
+	status := InputStatus{
+		Backend:    "robotgo",
+		Backends:   []string{"robotgo"},
+		SetupState: "ready",
+		Err:        err,
+	}
+	if err != nil {
+		status.Backend = "none"
+		status.SetupState = "unavailable"
+	}
+	return status
+}
+
+func (p *CompositeInputProvider) Available() error {
+	return p.selected().Available()
+}
+
+func (p *CompositeInputProvider) Move(x, y int) error {
+	return p.selected().Move(x, y)
+}
+
+func (p *CompositeInputProvider) Position() (int, int, error) {
+	return p.selected().Position()
+}
+
+func (p *CompositeInputProvider) Button(button string, down bool) error {
+	return p.selected().Button(button, down)
+}
+
+func (p *CompositeInputProvider) Click(button string) error {
+	return p.selected().Click(button)
+}
+
+func (p *CompositeInputProvider) Wheel(x, y int) error {
+	return p.selected().Wheel(x, y)
+}
+
+func (p *CompositeInputProvider) Key(key string, down bool, modifiers []string) error {
+	return p.selected().Key(key, down, modifiers)
+}
+
+func (p *CompositeInputProvider) Text(text string) error {
+	return p.selected().Text(text)
+}
+
+func (p *CompositeInputProvider) Release() error {
+	if release, ok := p.selected().(InputReleaseProvider); ok {
+		return release.Release()
+	}
+	for _, key := range []string{"shift", "ctrl", "alt", "cmd"} {
+		_ = p.Key(key, false, nil)
+	}
+	for _, button := range []string{"left", "middle", "right"} {
+		_ = p.Button(button, false)
+	}
+	return nil
+}
+
 type SystemClipboardProvider struct {
 	once    sync.Once
 	initErr error
@@ -176,6 +267,23 @@ func RuntimeStatus(capture CaptureProvider, input InputProvider, clip ClipboardP
 	} else {
 		status.InputAvailable = true
 		status.Capabilities.Input = true
+	}
+	if inputStatus, ok := input.(InputStatusProvider); ok {
+		next := inputStatus.InputStatus()
+		status.InputBackend = next.Backend
+		status.InputBackends = next.Backends
+		status.InputSetupRequired = next.SetupRequired
+		status.InputSetupState = next.SetupState
+		if next.Err != nil {
+			status.InputError = next.Err.Error()
+		}
+	} else if status.InputAvailable {
+		status.InputBackend = "custom"
+		status.InputBackends = []string{"custom"}
+		status.InputSetupState = "ready"
+	} else {
+		status.InputBackend = "none"
+		status.InputSetupState = "unavailable"
 	}
 	if err := clip.Available(); err != nil {
 		status.Warnings = append(status.Warnings, fmt.Sprintf("clipboard unavailable: %s", err.Error()))

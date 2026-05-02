@@ -23,7 +23,7 @@ type RemoteDesktopHandler struct {
 func NewRemoteDesktopHandler() *RemoteDesktopHandler {
 	return NewRemoteDesktopHandlerWithProviders(
 		remotedesktop.NewScreenCaptureProvider(),
-		remotedesktop.NewRobotInputProvider(),
+		remotedesktop.NewCompositeInputProvider(),
 		remotedesktop.NewSystemClipboardProvider(),
 	)
 }
@@ -45,6 +45,7 @@ func (h *RemoteDesktopHandler) Register(g *gin.RouterGroup) {
 	r := g.Group("/remote-desktop")
 	r.GET("/displays", h.Displays)
 	r.GET("/status", h.Status)
+	r.POST("/input-helper/install", h.InstallInputHelper)
 	r.GET("/clipboard", h.GetClipboard)
 	r.POST("/clipboard", h.SetClipboard)
 	r.GET("/ws", h.WebSocket)
@@ -61,6 +62,14 @@ func (h *RemoteDesktopHandler) Displays(c *gin.Context) {
 
 func (h *RemoteDesktopHandler) Status(c *gin.Context) {
 	c.JSON(http.StatusOK, remotedesktop.RuntimeStatus(h.capture, h.input, h.clip))
+}
+
+func (h *RemoteDesktopHandler) InstallInputHelper(c *gin.Context) {
+	if err := remotedesktop.InstallInputHelper(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": err.Error(), "status": remotedesktop.RuntimeStatus(h.capture, h.input, h.clip)})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "status": remotedesktop.RuntimeStatus(h.capture, h.input, h.clip)})
 }
 
 func (h *RemoteDesktopHandler) GetClipboard(c *gin.Context) {
@@ -441,6 +450,11 @@ func (h *RemoteDesktopHandler) specialKey(session *remotedesktop.Session, key st
 }
 
 func (h *RemoteDesktopHandler) releaseInput(session *remotedesktop.Session, send chan wsOutbound) {
+	if release, ok := h.input.(remotedesktop.InputReleaseProvider); ok {
+		if err := release.Release(); err == nil {
+			return
+		}
+	}
 	for _, key := range []string{"shift", "ctrl", "alt", "cmd"} {
 		if err := session.Key(key, false, nil); err != nil {
 			queueRemoteDesktopError(send, "key_release_failed", err.Error(), true)
