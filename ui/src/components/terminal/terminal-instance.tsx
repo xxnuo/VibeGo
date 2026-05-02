@@ -1178,6 +1178,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
         sendInput: sendTerminalInput,
         getSelection: () => terminalRef.current?.getSelection() ?? "",
         paste: (text: string) => {
+          if (callbacksRef.current.isExited || callbacksRef.current.isReadonly) return;
           if (terminalRef.current) terminalRef.current.paste(text);
         },
         pasteFromClipboard: pasteFromClipboardOrPicker,
@@ -1652,14 +1653,14 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
     }, [persistTerminalCache]);
 
     useEffect(() => {
-      if (!isActive || !isFocused || !terminalRef.current) {
+      if (!isActive || !isFocused || isExited || !terminalRef.current) {
         return;
       }
       const timer = setTimeout(() => {
         terminalRef.current?.focus();
       }, 50);
       return () => clearTimeout(timer);
-    }, [isActive, isFocused]);
+    }, [isActive, isFocused, isExited]);
 
     useEffect(() => {
       const container = containerRef.current;
@@ -1814,8 +1815,14 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
           </div>
         )}
         {lifecycleState !== "live" && (
-          <div className="absolute left-2 bottom-2 z-10 rounded bg-ide-panel/90 px-2 py-1 text-[10px] text-ide-mute shadow-sm backdrop-blur-sm">
-            {lifecycleState}
+          <div
+            className={`absolute left-2 bottom-2 z-10 rounded border px-2 py-1 text-[10px] font-medium shadow-sm backdrop-blur-sm ${
+              lifecycleState === "exited"
+                ? "border-amber-500/40 bg-amber-500/15 text-amber-600 dark:text-amber-300"
+                : "border-transparent bg-ide-panel/90 text-ide-mute"
+            }`}
+          >
+            {lifecycleState === "exited" ? t("terminal.closed") : lifecycleState}
           </div>
         )}
         {searchVisible && (

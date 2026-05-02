@@ -450,6 +450,11 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
                   <span className={`max-w-[80px] truncate font-medium ${!terminal.pinned ? "italic" : ""}`}>
                     {terminal.name}
                   </span>
+                  {isClosed && (
+                    <span className="hidden text-[10px] font-medium text-ide-mute/70 sm:inline">
+                      {t("terminal.closed")}
+                    </span>
+                  )}
                   {isActive && terminal.currentCwd && (
                     <span
                       className="hidden max-w-[88px] truncate text-[11px] text-ide-mute md:inline"
