@@ -1,4 +1,4 @@
-import { DefaultLinesDiffComputer } from "monaco-editor/esm/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js";
+import { DefaultLinesDiffComputer } from "monaco-editor/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js";
 
 export type GitSelectionType = "all" | "partial" | "none";
 export type GitDiffRowType = "hunk" | "context" | "added" | "removed";

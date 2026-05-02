@@ -21,7 +21,7 @@ const proxy = {
   },
 };
 
-const sherpaAssetDir = path.resolve(__dirname, "../assets/sherpa");
+const sherpaAssetDir = path.resolve(import.meta.dirname, "../assets/sherpa");
 
 function contentType(filePath: string): string {
   switch (path.extname(filePath)) {
@@ -103,7 +103,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), sherpaAssetPlugin()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(import.meta.dirname, "./src"),
     },
   },
   build: {
@@ -111,8 +111,8 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        main: path.resolve(__dirname, "index.html"),
-        httpUpgrade: path.resolve(__dirname, "http-upgrade.html"),
+        main: path.resolve(import.meta.dirname, "index.html"),
+        httpUpgrade: path.resolve(import.meta.dirname, "http-upgrade.html"),
       },
     },
   },

@@ -213,9 +213,8 @@ export const TaskbarItemMenu: React.FC<TaskbarItemMenuProps> = ({
   useEffect(() => () => clearLongPress(), []);
 
   const menuItems = useMemo(() => {
-    const items: Array<{ icon: React.ReactNode; label: string; variant?: "default" | "danger"; onClick: () => void }> = [
-      { icon: <Check size={16} />, label: t("common.activate"), onClick: onActivate },
-    ];
+    const items: Array<{ icon: React.ReactNode; label: string; variant?: "default" | "danger"; onClick: () => void }> =
+      [{ icon: <Check size={16} />, label: t("common.activate"), onClick: onActivate }];
     if (canClose) {
       items.push({
         icon: <X size={16} />,
@@ -282,7 +281,9 @@ export const TaskbarItemMenu: React.FC<TaskbarItemMenuProps> = ({
       onPointerMove: (event: React.PointerEvent) => {
         element.props.onPointerMove?.(event);
         if (event.pointerType !== "touch" || !longPressTimer.current) return;
-        if (Math.hypot(event.clientX - touchStartRef.current.x, event.clientY - touchStartRef.current.y) > MOVE_THRESHOLD) {
+        if (
+          Math.hypot(event.clientX - touchStartRef.current.x, event.clientY - touchStartRef.current.y) > MOVE_THRESHOLD
+        ) {
           clearLongPress();
         }
       },
@@ -376,7 +377,13 @@ export const TaskbarItemMenu: React.FC<TaskbarItemMenuProps> = ({
   );
 };
 
-export const TaskbarSortDialog: React.FC<TaskbarSortDialogProps> = ({ open, title, entries, onOpenChange, onApply }) => {
+export const TaskbarSortDialog: React.FC<TaskbarSortDialogProps> = ({
+  open,
+  title,
+  entries,
+  onOpenChange,
+  onApply,
+}) => {
   const locale = useAppStore((s) => s.locale);
   const t = useTranslation(locale);
   const [order, setOrder] = useState<string[]>(entries.map((entry) => entry.id));

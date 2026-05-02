@@ -53,8 +53,8 @@ export const RemoteDesktopStage: React.FC<StageProps> = ({
       base.maxWidth = "none";
       base.maxHeight = "none";
     } else if (runtime.viewConfig.fitMode === "custom") {
-      base.width = `${Math.round(size.width * runtime.viewConfig.scalePercent / 100)}px`;
-      base.height = `${Math.round(size.height * runtime.viewConfig.scalePercent / 100)}px`;
+      base.width = `${Math.round((size.width * runtime.viewConfig.scalePercent) / 100)}px`;
+      base.height = `${Math.round((size.height * runtime.viewConfig.scalePercent) / 100)}px`;
       base.maxWidth = "none";
       base.maxHeight = "none";
     } else {
@@ -76,11 +76,15 @@ export const RemoteDesktopStage: React.FC<StageProps> = ({
     if (runtime.state === "connected" && !runtime.frameMeta) return t("plugin.remoteDesktop.waitingFrame");
     if (runtime.state === "paused") return t("plugin.remoteDesktop.pausedOverlay");
     if (runtime.state === "error") return runtime.message || t("plugin.remoteDesktop.connectionError");
-    if (!runtime.status?.captureAvailable && runtime.status) return runtime.status.warnings?.[0] || t("plugin.remoteDesktop.captureUnavailable");
+    if (!runtime.status?.captureAvailable && runtime.status)
+      return runtime.status.warnings?.[0] || t("plugin.remoteDesktop.captureUnavailable");
     return "";
   })();
 
-  const remoteCursor = runtime.controlEnabled && runtime.viewConfig.mobileInputMode === "mouse" && runtime.frameMeta ? runtime.remoteCursor : null;
+  const remoteCursor =
+    runtime.controlEnabled && runtime.viewConfig.mobileInputMode === "mouse" && runtime.frameMeta
+      ? runtime.remoteCursor
+      : null;
 
   const handleEdgeMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
     onPointerMove(event);
@@ -105,9 +109,10 @@ export const RemoteDesktopStage: React.FC<StageProps> = ({
   return (
     <div
       ref={stageRef}
-      className={`relative min-h-0 flex-1 ${
-        runtime.frameMeta ? "bg-black" : "bg-ide-bg"
-      } ${runtime.viewConfig.scrollMode === "scrollbar" || runtime.viewConfig.fitMode !== "contain" ? "overflow-auto" : "overflow-hidden"
+      className={`relative min-h-0 flex-1 ${runtime.frameMeta ? "bg-black" : "bg-ide-bg"} ${
+        runtime.viewConfig.scrollMode === "scrollbar" || runtime.viewConfig.fitMode !== "contain"
+          ? "overflow-auto"
+          : "overflow-hidden"
       }`}
       onPointerLeave={() => {
         onReleaseInput();
@@ -198,7 +203,11 @@ export const RemoteDesktopStage: React.FC<StageProps> = ({
         </div>
         <div className="shrink-0 flex items-center gap-2">
           <MonitorUp size={12} />
-          <span>{runtime.frameMeta ? `${runtime.frameMeta.width}x${runtime.frameMeta.height} #${runtime.frameMeta.seq}` : "-"}</span>
+          <span>
+            {runtime.frameMeta
+              ? `${runtime.frameMeta.width}x${runtime.frameMeta.height} #${runtime.frameMeta.seq}`
+              : "-"}
+          </span>
         </div>
       </div>
     </div>

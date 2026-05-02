@@ -52,7 +52,8 @@ interface ToolbarProps {
 
 const buttonClass =
   "h-8 w-8 grid place-items-center border border-ide-border bg-ide-panel text-ide-text hover:bg-ide-border/50 disabled:opacity-40";
-const menuButtonClass = "h-8 px-2 flex items-center gap-1.5 border border-ide-border bg-ide-panel text-xs hover:bg-ide-border/50";
+const menuButtonClass =
+  "h-8 px-2 flex items-center gap-1.5 border border-ide-border bg-ide-panel text-xs hover:bg-ide-border/50";
 
 const qualityPresets: Record<QualityPreset, { fps: number; quality: number }> = {
   smooth: { fps: 20, quality: 55 },
@@ -85,7 +86,10 @@ export const RemoteDesktopToolbar: React.FC<ToolbarProps> = ({
     const move = (event: PointerEvent) => {
       const drag = dragRef.current;
       if (!drag) return;
-      const next = Math.min(0.95, Math.max(0.05, drag.startToolbarX + (event.clientX - drag.startX) / window.innerWidth));
+      const next = Math.min(
+        0.95,
+        Math.max(0.05, drag.startToolbarX + (event.clientX - drag.startX) / window.innerWidth)
+      );
       onToolbarChange({ x: next });
     };
     const up = () => {
@@ -140,17 +144,47 @@ export const RemoteDesktopToolbar: React.FC<ToolbarProps> = ({
           <button type="button" className={buttonClass} onClick={onPauseToggle} disabled={!isLive}>
             {runtime.state === "paused" ? <Play size={14} /> : <Pause size={14} />}
           </button>
-          <ToolbarMenuButton active={activeMenu === "display"} icon={<Monitor size={14} />} label={t("plugin.remoteDesktop.display")} onClick={() => toggleMenu("display")} />
-          <ToolbarMenuButton active={activeMenu === "quality"} icon={<SlidersHorizontal size={14} />} label={t("plugin.remoteDesktop.quality")} onClick={() => toggleMenu("quality")} />
-          <ToolbarMenuButton active={activeMenu === "input"} icon={<Keyboard size={14} />} label={t("plugin.remoteDesktop.input")} onClick={() => toggleMenu("input")} />
-          <ToolbarMenuButton active={activeMenu === "clipboard"} icon={<Clipboard size={14} />} label={t("plugin.remoteDesktop.clipboard")} onClick={() => toggleMenu("clipboard")} />
-          <button type="button" className={buttonClass} onClick={onFullscreen} title={t("plugin.remoteDesktop.fullscreen")}>
+          <ToolbarMenuButton
+            active={activeMenu === "display"}
+            icon={<Monitor size={14} />}
+            label={t("plugin.remoteDesktop.display")}
+            onClick={() => toggleMenu("display")}
+          />
+          <ToolbarMenuButton
+            active={activeMenu === "quality"}
+            icon={<SlidersHorizontal size={14} />}
+            label={t("plugin.remoteDesktop.quality")}
+            onClick={() => toggleMenu("quality")}
+          />
+          <ToolbarMenuButton
+            active={activeMenu === "input"}
+            icon={<Keyboard size={14} />}
+            label={t("plugin.remoteDesktop.input")}
+            onClick={() => toggleMenu("input")}
+          />
+          <ToolbarMenuButton
+            active={activeMenu === "clipboard"}
+            icon={<Clipboard size={14} />}
+            label={t("plugin.remoteDesktop.clipboard")}
+            onClick={() => toggleMenu("clipboard")}
+          />
+          <button
+            type="button"
+            className={buttonClass}
+            onClick={onFullscreen}
+            title={t("plugin.remoteDesktop.fullscreen")}
+          >
             <Maximize2 size={14} />
           </button>
           <button type="button" className={buttonClass} onClick={onRefresh} title={t("plugin.remoteDesktop.refresh")}>
             <RefreshCw size={14} />
           </button>
-          <button type="button" className={buttonClass} onClick={() => onToolbarChange({ hidden: true })} title={t("plugin.remoteDesktop.hideToolbar")}>
+          <button
+            type="button"
+            className={buttonClass}
+            onClick={() => onToolbarChange({ hidden: true })}
+            title={t("plugin.remoteDesktop.hideToolbar")}
+          >
             <X size={14} />
           </button>
         </div>
@@ -158,13 +192,25 @@ export const RemoteDesktopToolbar: React.FC<ToolbarProps> = ({
       {activeMenu && !toolbar.collapsed && (
         <div className="mt-1 w-[min(520px,calc(100vw-32px))] border border-ide-border bg-ide-panel p-2 text-xs text-ide-text shadow-sm">
           {activeMenu === "display" && (
-            <DisplayMenu runtime={runtime} t={t} onConfigure={onConfigure} onFitMode={setFitMode} onScrollMode={setScrollMode} />
+            <DisplayMenu
+              runtime={runtime}
+              t={t}
+              onConfigure={onConfigure}
+              onFitMode={setFitMode}
+              onScrollMode={setScrollMode}
+            />
           )}
           {activeMenu === "quality" && (
             <QualityMenu runtime={runtime} t={t} onConfigure={onConfigure} onPreset={setQualityPreset} />
           )}
           {activeMenu === "input" && (
-            <InputMenu runtime={runtime} t={t} onConfigure={onConfigure} onKeyboardMode={setKeyboardMode} onSpecialKey={onSpecialKey} />
+            <InputMenu
+              runtime={runtime}
+              t={t}
+              onConfigure={onConfigure}
+              onKeyboardMode={setKeyboardMode}
+              onSpecialKey={onSpecialKey}
+            />
           )}
           {activeMenu === "clipboard" && (
             <ClipboardMenu
@@ -188,7 +234,9 @@ export const RemoteDesktopToolbar: React.FC<ToolbarProps> = ({
       >
         <span className="inline-flex items-center gap-1">
           {toolbar.collapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
-          <span className="text-[11px]">{toolbar.collapsed ? t("plugin.remoteDesktop.showToolbar") : t("plugin.remoteDesktop.dragToolbar")}</span>
+          <span className="text-[11px]">
+            {toolbar.collapsed ? t("plugin.remoteDesktop.showToolbar") : t("plugin.remoteDesktop.dragToolbar")}
+          </span>
         </span>
       </button>
     </div>
@@ -221,7 +269,11 @@ const DisplayMenu: React.FC<{
   onScrollMode: (mode: ScrollMode) => void;
 }> = ({ runtime, t, onConfigure, onFitMode, onScrollMode }) => (
   <div className="grid gap-3">
-    <MonitorLayout displays={runtime.displays} current={runtime.displayId} onSelect={(displayId) => onConfigure({ displayId })} />
+    <MonitorLayout
+      displays={runtime.displays}
+      current={runtime.displayId}
+      onSelect={(displayId) => onConfigure({ displayId })}
+    />
     <Segmented
       label={t("plugin.remoteDesktop.viewMode")}
       value={runtime.viewConfig.fitMode}
@@ -299,7 +351,11 @@ const InputMenu: React.FC<{
 }> = ({ runtime, t, onConfigure, onKeyboardMode, onSpecialKey }) => (
   <div className="grid gap-3">
     <div className="grid grid-cols-2 gap-2">
-      <ToggleButton active={runtime.controlEnabled} disabled={!runtime.status?.capabilities?.input} onClick={() => onConfigure({ controlEnabled: !runtime.controlEnabled })}>
+      <ToggleButton
+        active={runtime.controlEnabled}
+        disabled={!runtime.status?.capabilities?.input}
+        onClick={() => onConfigure({ controlEnabled: !runtime.controlEnabled })}
+      >
         <MousePointer2 size={14} />
         {t("plugin.remoteDesktop.controlOn")}
       </ToggleButton>
@@ -307,13 +363,21 @@ const InputMenu: React.FC<{
         <Eye size={14} />
         {t("plugin.remoteDesktop.viewOnly")}
       </ToggleButton>
-      <ToggleButton active={runtime.viewConfig.showLocalCursor} onClick={() => onConfigure({ showLocalCursor: !runtime.viewConfig.showLocalCursor })}>
+      <ToggleButton
+        active={runtime.viewConfig.showLocalCursor}
+        onClick={() => onConfigure({ showLocalCursor: !runtime.viewConfig.showLocalCursor })}
+      >
         {runtime.viewConfig.showLocalCursor ? <Eye size={14} /> : <EyeOff size={14} />}
         {t("plugin.remoteDesktop.localCursor")}
       </ToggleButton>
-      <ToggleButton active={runtime.viewConfig.keyboardMode === "text"} onClick={() => onKeyboardMode(runtime.viewConfig.keyboardMode === "text" ? "legacy" : "text")}>
+      <ToggleButton
+        active={runtime.viewConfig.keyboardMode === "text"}
+        onClick={() => onKeyboardMode(runtime.viewConfig.keyboardMode === "text" ? "legacy" : "text")}
+      >
         <Keyboard size={14} />
-        {runtime.viewConfig.keyboardMode === "text" ? t("plugin.remoteDesktop.keyboardText") : t("plugin.remoteDesktop.keyboardLegacy")}
+        {runtime.viewConfig.keyboardMode === "text"
+          ? t("plugin.remoteDesktop.keyboardText")
+          : t("plugin.remoteDesktop.keyboardLegacy")}
       </ToggleButton>
     </div>
     <div className="grid grid-cols-3 gap-2">
@@ -328,7 +392,12 @@ const InputMenu: React.FC<{
         ["down", "↓"],
         ["right", "→"],
       ].map(([key, label]) => (
-        <button key={key} type="button" className="h-8 border border-ide-border bg-ide-bg hover:bg-ide-border/50" onClick={() => onSpecialKey(key as SpecialKey)}>
+        <button
+          key={key}
+          type="button"
+          className="h-8 border border-ide-border bg-ide-bg hover:bg-ide-border/50"
+          onClick={() => onSpecialKey(key as SpecialKey)}
+        >
           {label}
         </button>
       ))}
@@ -355,10 +424,19 @@ const ClipboardMenu: React.FC<{
       <button type="button" className={menuButtonClass} onClick={onRead}>
         {t("plugin.remoteDesktop.readClipboard")}
       </button>
-      <button type="button" className={menuButtonClass} onClick={onWrite} disabled={!runtime.status?.capabilities?.clipboard}>
+      <button
+        type="button"
+        className={menuButtonClass}
+        onClick={onWrite}
+        disabled={!runtime.status?.capabilities?.clipboard}
+      >
         {t("plugin.remoteDesktop.writeClipboard")}
       </button>
-      <ToggleButton active={runtime.clipboardSync} disabled={!runtime.status?.capabilities?.clipboardSync} onClick={() => onConfigure({ clipboardSync: !runtime.clipboardSync })}>
+      <ToggleButton
+        active={runtime.clipboardSync}
+        disabled={!runtime.status?.capabilities?.clipboardSync}
+        onClick={() => onConfigure({ clipboardSync: !runtime.clipboardSync })}
+      >
         {t("plugin.remoteDesktop.sync")}
       </ToggleButton>
     </div>
@@ -384,7 +462,9 @@ const MonitorLayout: React.FC<{
             key={display.id}
             type="button"
             className={`absolute grid place-items-center border text-[11px] ${
-              display.id === current ? "border-ide-accent bg-ide-accent text-ide-on-accent" : "border-ide-border bg-ide-panel text-ide-text"
+              display.id === current
+                ? "border-ide-accent bg-ide-accent text-ide-on-accent"
+                : "border-ide-border bg-ide-panel text-ide-text"
             }`}
             style={{
               left: (display.x - minX) * scale + 4,
@@ -398,7 +478,11 @@ const MonitorLayout: React.FC<{
           </button>
         ))}
       </div>
-      <select className="h-8 min-w-0 flex-1 border border-ide-border bg-ide-bg px-2" value={current} onChange={(event) => onSelect(Number(event.target.value))}>
+      <select
+        className="h-8 min-w-0 flex-1 border border-ide-border bg-ide-bg px-2"
+        value={current}
+        onChange={(event) => onSelect(Number(event.target.value))}
+      >
         {displays.map((display) => (
           <option key={display.id} value={display.id}>
             {display.id + 1} - {display.width}x{display.height}

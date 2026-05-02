@@ -6,10 +6,10 @@ import {
   Clock,
   Copy,
   GitCommit as GitCommitIcon,
+  Loader2,
   Plus,
   Tag,
   Trash2,
-  Loader2,
   Undo2,
 } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";

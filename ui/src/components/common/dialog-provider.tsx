@@ -183,7 +183,9 @@ export const DialogProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           >
             <DialogHeader className="gap-2 text-left">
               <DialogTitle className="text-base leading-6 text-ide-text">{dialog.title}</DialogTitle>
-              {dialog.message && <DialogDescription className="text-sm leading-6 text-ide-mute">{dialog.message}</DialogDescription>}
+              {dialog.message && (
+                <DialogDescription className="text-sm leading-6 text-ide-mute">{dialog.message}</DialogDescription>
+              )}
             </DialogHeader>
             {dialog.type === "prompt" && (
               <div>

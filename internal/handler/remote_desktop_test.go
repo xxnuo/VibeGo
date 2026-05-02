@@ -111,12 +111,12 @@ func TestRemoteDesktopWebSocketExtendedConfigAndInputRelease(t *testing.T) {
 
 	require.NoError(t, conn.WriteJSON(map[string]any{"type": "specialKey", "specialKey": "ctrlAltDel"}))
 	require.Eventually(t, func() bool {
-		return input.keyEvents >= 2
+		return input.keyEvents.Load() >= 2
 	}, time.Second, 10*time.Millisecond)
 
 	require.NoError(t, conn.WriteJSON(map[string]any{"type": "releaseInput"}))
 	require.Eventually(t, func() bool {
-		return input.buttonEvents >= 3
+		return input.buttonEvents.Load() >= 3
 	}, time.Second, 10*time.Millisecond)
 }
 
@@ -145,8 +145,8 @@ func TestRemoteDesktopPointerButtonDoesNotMove(t *testing.T) {
 		Y:      0,
 	}, send)
 
-	require.Equal(t, 0, input.moveEvents)
-	require.Equal(t, 1, input.buttonEvents)
+	require.Equal(t, int64(0), input.moveEvents.Load())
+	require.Equal(t, int64(1), input.buttonEvents.Load())
 	require.Equal(t, 40, input.x)
 	require.Equal(t, 30, input.y)
 }
@@ -176,7 +176,7 @@ func TestRemoteDesktopPointerRelativeMove(t *testing.T) {
 		DY:       20,
 	}, send)
 
-	require.Equal(t, 1, input.moveEvents)
+	require.Equal(t, int64(1), input.moveEvents.Load())
 	require.Equal(t, 99, input.x)
 	require.Equal(t, 79, input.y)
 }
@@ -204,7 +204,7 @@ func TestRemoteDesktopDropsStaleRealtimeInput(t *testing.T) {
 		ClientSentAt: time.Now().Add(-2 * time.Second).UnixMilli(),
 	}, send)
 
-	require.Equal(t, 0, input.moveEvents)
+	require.Equal(t, int64(0), input.moveEvents.Load())
 	require.Equal(t, 40, input.x)
 	require.Equal(t, 30, input.y)
 }
@@ -245,16 +245,16 @@ func (f *handlerFakeCapture) Capture(displayID int) (image.Image, remotedesktop.
 }
 
 type handlerFakeInput struct {
-	keyEvents    int
-	buttonEvents int
-	moveEvents   int
+	keyEvents    atomic.Int64
+	buttonEvents atomic.Int64
+	moveEvents   atomic.Int64
 	x            int
 	y            int
 }
 
 func (f *handlerFakeInput) Available() error { return nil }
 func (f *handlerFakeInput) Move(x, y int) error {
-	f.moveEvents++
+	f.moveEvents.Add(1)
 	f.x = x
 	f.y = y
 	return nil
@@ -263,13 +263,13 @@ func (f *handlerFakeInput) Position() (int, int, error) {
 	return f.x, f.y, nil
 }
 func (f *handlerFakeInput) Button(button string, down bool) error {
-	f.buttonEvents++
+	f.buttonEvents.Add(1)
 	return nil
 }
 func (f *handlerFakeInput) Click(button string) error { return nil }
 func (f *handlerFakeInput) Wheel(x, y int) error      { return nil }
 func (f *handlerFakeInput) Key(key string, down bool, modifiers []string) error {
-	f.keyEvents++
+	f.keyEvents.Add(1)
 	return nil
 }
 func (f *handlerFakeInput) Text(text string) error { return nil }

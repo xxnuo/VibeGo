@@ -13,7 +13,6 @@ import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { pageRegistry } from "@/pages/registry";
 import { useAppStore } from "@/stores/app-store";
-import { useSessionStore } from "@/stores/session-store";
 import {
   type BottomBarButton,
   type BottomBarConfig,
@@ -23,6 +22,7 @@ import {
   type ToolGroup,
   useFrameStore,
 } from "@/stores/frame-store";
+import { useSessionStore } from "@/stores/session-store";
 
 interface SideBarProps {
   onMenuClick?: () => void;
@@ -414,7 +414,7 @@ const SideBar: React.FC<SideBarProps> = ({ onMenuClick, onNewPage }) => {
 
   return (
     <>
-      <aside className="hidden md:flex w-16 h-full flex-col items-center py-4 bg-ide-panel border-r border-ide-border z-20 shadow-[5px_0_15px_rgba(0,0,0,0.1)] gap-4">
+      <aside className="hidden md:flex w-14 h-full flex-col items-center py-4 bg-ide-panel border-r border-ide-border z-20 shadow-[5px_0_15px_rgba(0,0,0,0.1)] gap-4">
         <button onClick={onMenuClick} className={actionButtonClass} title={t("common.menu") || "Menu"}>
           <Menu size={24} />
         </button>

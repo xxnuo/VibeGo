@@ -8,13 +8,12 @@ import WorkspaceHintBubble, {
   getWorkspacePath,
   useWorkspaceHint,
 } from "@/components/frame/workspace-hint-bubble";
-import { useReorderableList } from "@/hooks/use-reorderable-list";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useReorderableList } from "@/hooks/use-reorderable-list";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { pageRegistry } from "@/pages/registry";
 import { useAppStore } from "@/stores/app-store";
-import { useSessionStore } from "@/stores/session-store";
 import {
   type BottomBarButton,
   type BottomBarConfig,
@@ -24,6 +23,7 @@ import {
   type ToolGroup,
   useFrameStore,
 } from "@/stores/frame-store";
+import { useSessionStore } from "@/stores/session-store";
 
 interface BottomBarProps {
   onMenuClick?: () => void;

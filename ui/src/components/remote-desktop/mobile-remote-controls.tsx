@@ -1,13 +1,4 @@
-import {
-  ChevronDown,
-  ChevronUp,
-  Hand,
-  Keyboard,
-  Menu,
-  Mouse,
-  MousePointer2,
-  Power,
-} from "lucide-react";
+import { ChevronDown, ChevronUp, Hand, Keyboard, Menu, Mouse, MousePointer2, Power } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { Slider } from "@/components/ui/slider";
 import type { ConfigPatch, MobileInputMode, RemoteDesktopRuntime, SpecialKey } from "./types";
@@ -59,9 +50,7 @@ export const MobileRemoteControls: React.FC<MobileControlsProps> = ({
       )}
       {panel && (
         <div className="absolute inset-x-0 bottom-12 z-40 border-y border-ide-border bg-ide-panel p-3 text-xs text-ide-text shadow-sm">
-          {panel === "gesture" && (
-            <GesturePanel runtime={runtime} t={t} onConfigure={onConfigure} />
-          )}
+          {panel === "gesture" && <GesturePanel runtime={runtime} t={t} onConfigure={onConfigure} />}
           {panel === "keyboard" && (
             <div className="grid gap-2">
               <textarea
@@ -76,7 +65,12 @@ export const MobileRemoteControls: React.FC<MobileControlsProps> = ({
               />
               <div className="grid grid-cols-5 gap-2">
                 {(["esc", "tab", "enter", "left", "right"] as SpecialKey[]).map((key) => (
-                  <button key={key} type="button" className="h-8 border border-ide-border bg-ide-bg" onClick={() => onSpecialKey(key)}>
+                  <button
+                    key={key}
+                    type="button"
+                    className="h-8 border border-ide-border bg-ide-bg"
+                    onClick={() => onSpecialKey(key)}
+                  >
                     {key}
                   </button>
                 ))}
@@ -91,10 +85,18 @@ export const MobileRemoteControls: React.FC<MobileControlsProps> = ({
               <button type="button" className="h-9 border border-ide-border bg-ide-bg" onClick={onClipboardWrite}>
                 {t("plugin.remoteDesktop.writeClipboard")}
               </button>
-              <button type="button" className="h-9 border border-ide-border bg-ide-bg" onClick={() => onSpecialKey("ctrlAltDel")}>
+              <button
+                type="button"
+                className="h-9 border border-ide-border bg-ide-bg"
+                onClick={() => onSpecialKey("ctrlAltDel")}
+              >
                 Ctrl Alt Del
               </button>
-              <button type="button" className="h-9 border border-ide-border bg-ide-bg" onClick={() => onSpecialKey("lock")}>
+              <button
+                type="button"
+                className="h-9 border border-ide-border bg-ide-bg"
+                onClick={() => onSpecialKey("lock")}
+              >
                 {t("plugin.remoteDesktop.lock")}
               </button>
               <button type="button" className="h-9 border border-ide-border bg-ide-bg" onClick={onShowDesktopToolbar}>
