@@ -8,6 +8,7 @@ UI_DIR ?= ui
 RELEASE_TARGETS ?= android/arm64 linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
 CURRENT_GOOS ?= $(shell go env GOOS)
 CURRENT_GOARCH ?= $(shell go env GOARCH)
+CGO_ENABLED ?= 1
 
 generate-docs:
 	@echo "Generating docs..."
@@ -58,7 +59,7 @@ build-backend:
 	@ext=""; \
 	if [ "$(GOOS)" = "windows" ]; then ext=".exe"; fi; \
 	output="$(BINARY_NAME)_$(VERSION)_$(GOOS)_$(GOARCH)$${ext}"; \
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath -ldflags "-s -w -X github.com/xxnuo/vibego/internal/version.Version=$(VERSION)" -o "$(DIST_DIR)/$${output}" ./
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath -ldflags "-s -w -X github.com/xxnuo/vibego/internal/version.Version=$(VERSION)" -o "$(DIST_DIR)/$${output}" ./
 
 package-backend:
 	@if [ -z "$(GOOS)" ] || [ -z "$(GOARCH)" ]; then \
