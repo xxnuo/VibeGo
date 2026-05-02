@@ -585,7 +585,7 @@ info:
   contact: {}
   description: VibeGo 后端服务 API
   title: VibeGo API
-  version: 0.3.4
+  version: 0.3.5
 paths:
   /__heartbeat__:
     get:
