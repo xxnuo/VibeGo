@@ -10,12 +10,14 @@ import (
 )
 
 const (
-	DefaultFPS     = 12
-	DefaultQuality = 70
-	MinFPS         = 1
-	MaxFPS         = 20
-	MinQuality     = 40
-	MaxQuality     = 90
+	DefaultFPS            = 12
+	DefaultQuality        = 70
+	MinFPS                = 1
+	MaxFPS                = 20
+	MinQuality            = 40
+	MaxQuality            = 90
+	MaxClipboardTextBytes = 256 * 1024
+	ProtocolVersion       = 2
 )
 
 var ErrDisplayNotFound = errors.New("display not found")
@@ -31,19 +33,31 @@ type Display struct {
 }
 
 type Status struct {
-	OS                 string   `json:"os"`
-	Available          bool     `json:"available"`
-	CaptureAvailable   bool     `json:"captureAvailable"`
-	InputAvailable     bool     `json:"inputAvailable"`
-	ClipboardAvailable bool     `json:"clipboardAvailable"`
-	Wayland            bool     `json:"wayland"`
-	Warnings           []string `json:"warnings"`
-	DefaultFPS         int      `json:"defaultFps"`
-	DefaultQuality     int      `json:"defaultQuality"`
-	MinFPS             int      `json:"minFps"`
-	MaxFPS             int      `json:"maxFps"`
-	MinQuality         int      `json:"minQuality"`
-	MaxQuality         int      `json:"maxQuality"`
+	OS                 string       `json:"os"`
+	Platform           string       `json:"platform"`
+	SessionType        string       `json:"sessionType"`
+	Available          bool         `json:"available"`
+	CaptureAvailable   bool         `json:"captureAvailable"`
+	InputAvailable     bool         `json:"inputAvailable"`
+	ClipboardAvailable bool         `json:"clipboardAvailable"`
+	Capabilities       Capabilities `json:"capabilities"`
+	Wayland            bool         `json:"wayland"`
+	Warnings           []string     `json:"warnings"`
+	DefaultFPS         int          `json:"defaultFps"`
+	DefaultQuality     int          `json:"defaultQuality"`
+	MinFPS             int          `json:"minFps"`
+	MaxFPS             int          `json:"maxFps"`
+	MinQuality         int          `json:"minQuality"`
+	MaxQuality         int          `json:"maxQuality"`
+}
+
+type Capabilities struct {
+	Capture       bool `json:"capture"`
+	Input         bool `json:"input"`
+	Clipboard     bool `json:"clipboard"`
+	DisplayWatch  bool `json:"displayWatch"`
+	QoS           bool `json:"qos"`
+	ClipboardSync bool `json:"clipboardSync"`
 }
 
 type CaptureProvider interface {
@@ -68,20 +82,28 @@ type ClipboardProvider interface {
 }
 
 type Config struct {
-	DisplayID int
-	FPS       int
-	Quality   int
+	DisplayID     int    `json:"displayId"`
+	FPS           int    `json:"fps"`
+	Quality       int    `json:"quality"`
+	FitMode       string `json:"fitMode"`
+	ControlMode   string `json:"controlMode"`
+	ClipboardSync bool   `json:"clipboardSync"`
 }
 
 type FrameMetadata struct {
-	Type       string `json:"type"`
-	Seq        uint64 `json:"seq"`
-	DisplayID  int    `json:"displayId"`
-	Width      int    `json:"width"`
-	Height     int    `json:"height"`
-	Format     string `json:"format"`
-	Quality    int    `json:"quality"`
-	CapturedAt int64  `json:"capturedAt"`
+	Type         string `json:"type"`
+	Seq          uint64 `json:"seq"`
+	DisplayID    int    `json:"displayId"`
+	Width        int    `json:"width"`
+	Height       int    `json:"height"`
+	Format       string `json:"format"`
+	Quality      int    `json:"quality"`
+	CapturedAt   int64  `json:"capturedAt"`
+	SentAt       int64  `json:"sentAt"`
+	CaptureMs    int64  `json:"captureMs"`
+	EncodeMs     int64  `json:"encodeMs"`
+	SourceWidth  int    `json:"sourceWidth"`
+	SourceHeight int    `json:"sourceHeight"`
 }
 
 type Frame struct {
@@ -98,7 +120,23 @@ func NormalizeConfig(cfg Config) Config {
 		cfg.Quality = DefaultQuality
 	}
 	cfg.Quality = clampInt(cfg.Quality, MinQuality, MaxQuality)
+	if cfg.FitMode == "" {
+		cfg.FitMode = "contain"
+	}
+	if cfg.ControlMode == "" {
+		cfg.ControlMode = "control"
+	}
+	if cfg.ControlMode != "control" && cfg.ControlMode != "view" {
+		cfg.ControlMode = "control"
+	}
 	return cfg
+}
+
+func ValidateClipboardText(text string) error {
+	if len([]byte(text)) > MaxClipboardTextBytes {
+		return errors.New("clipboard text too large")
+	}
+	return nil
 }
 
 func MapNormalizedPoint(display Display, nx, ny float64) (int, int) {

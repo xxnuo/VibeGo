@@ -662,6 +662,8 @@
       "clipboardPlaceholder": "文本剪贴板",
       "readClipboard": "读取剪贴板",
       "writeClipboard": "写入剪贴板",
+      "clipboardSync": "同步剪贴板",
+      "sync": "同步",
       "connectionError": "连接失败",
       "waylandLimited": "Wayland 可能受限",
       "state": {

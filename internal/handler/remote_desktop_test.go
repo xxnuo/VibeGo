@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -41,6 +42,16 @@ func TestRemoteDesktopWebSocketHelloPauseResume(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, websocket.TextMessage, msgType)
 	require.Contains(t, string(data), `"type":"hello"`)
+	require.Contains(t, string(data), `"version":2`)
+	require.Contains(t, string(data), `"qos"`)
+
+	require.NoError(t, conn.WriteJSON(map[string]any{"type": "configure", "fps": 20, "quality": 90, "controlMode": "view", "clipboardSync": true}))
+	data = readTextMessageContaining(t, conn, `"type":"status"`)
+	require.Contains(t, string(data), `"control"`)
+
+	require.NoError(t, conn.WriteJSON(map[string]any{"type": "frameAck", "seq": 1, "receivedAt": timeNowMilli()}))
+	data = readTextMessageContaining(t, conn, `"type":"qos"`)
+	require.Contains(t, string(data), `"effectiveFps"`)
 
 	require.NoError(t, conn.WriteJSON(map[string]any{"type": "pause"}))
 	data = readTextMessageContaining(t, conn, `"paused":true`)
@@ -53,6 +64,10 @@ func TestRemoteDesktopWebSocketHelloPauseResume(t *testing.T) {
 	require.NoError(t, conn.WriteJSON(map[string]any{"type": "clipboardRead"}))
 	data = readTextMessageContaining(t, conn, `"type":"clipboard"`)
 	require.Contains(t, string(data), `"text":"clip"`)
+}
+
+func timeNowMilli() int64 {
+	return time.Now().UnixMilli()
 }
 
 func readTextMessageContaining(t *testing.T, conn *websocket.Conn, needle string) []byte {

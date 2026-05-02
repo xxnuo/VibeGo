@@ -14,10 +14,12 @@ import {
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   decodeRemoteDesktopFrame,
-  remoteDesktopApi,
+  type RemoteDesktopConfig,
   type RemoteDesktopDisplay,
   type RemoteDesktopFrameMetadata,
+  type RemoteDesktopQos,
   type RemoteDesktopStatus,
+  remoteDesktopApi,
 } from "@/api/remote-desktop";
 import { usePageTopBar } from "@/hooks/use-page-top-bar";
 import { useTranslation } from "@/lib/i18n";
@@ -33,8 +35,10 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const imageUrlRef = useRef<string | null>(null);
   const keysDownRef = useRef<Set<string>>(new Set());
+  const lastFrameSeqRef = useRef(0);
+  const pointerThrottleRef = useRef<number | null>(null);
+  const pendingPointerRef = useRef<{ x: number; y: number } | null>(null);
 
   const [status, setStatus] = useState<RemoteDesktopStatus | null>(null);
   const [displays, setDisplays] = useState<RemoteDesktopDisplay[]>([]);
@@ -43,9 +47,12 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
   const [quality, setQuality] = useState(70);
   const [state, setState] = useState<ConnectionState>("idle");
   const [controlEnabled, setControlEnabled] = useState(true);
+  const [clipboardSync, setClipboardSync] = useState(false);
   const [clipboardText, setClipboardText] = useState("");
   const [message, setMessage] = useState("");
   const [frameMeta, setFrameMeta] = useState<RemoteDesktopFrameMetadata | null>(null);
+  const [qos, setQos] = useState<RemoteDesktopQos | null>(null);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
 
   const selectedDisplay = useMemo(
     () => displays.find((display) => display.id === displayId) ?? displays[0],
@@ -87,36 +94,77 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
   }, []);
 
   const configure = useCallback(
-    (next?: { displayId?: number; fps?: number; quality?: number }) => {
+    (next?: {
+      displayId?: number;
+      fps?: number;
+      quality?: number;
+      controlEnabled?: boolean;
+      clipboardSync?: boolean;
+    }) => {
       send({
         type: "configure",
+        version: 2,
         displayId: next?.displayId ?? displayId,
         fps: next?.fps ?? fps,
         quality: next?.quality ?? quality,
+        controlMode: (next?.controlEnabled ?? controlEnabled) ? "control" : "view",
+        clipboardSync: next?.clipboardSync ?? clipboardSync,
       });
     },
-    [displayId, fps, quality, send]
+    [clipboardSync, controlEnabled, displayId, fps, quality, send]
   );
 
-  const drawFrame = useCallback(async (eventData: Blob | ArrayBuffer) => {
-    const buffer = eventData instanceof Blob ? await eventData.arrayBuffer() : eventData;
-    const { metadata, blobUrl } = await decodeRemoteDesktopFrame(buffer);
-    const img = new Image();
-    img.onload = () => {
+  const drawFrame = useCallback(
+    async (eventData: Blob | ArrayBuffer) => {
+      const startedAt = performance.now();
+      const buffer = eventData instanceof Blob ? await eventData.arrayBuffer() : eventData;
+      const { metadata, jpegBlob } = await decodeRemoteDesktopFrame(buffer);
+      if (metadata.seq <= lastFrameSeqRef.current) return;
       const canvas = canvasRef.current;
       if (!canvas) return;
-      canvas.width = metadata.width;
-      canvas.height = metadata.height;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      ctx.drawImage(img, 0, 0, metadata.width, metadata.height);
-      if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current);
-      imageUrlRef.current = blobUrl;
+      const render = async () => {
+        if ("createImageBitmap" in window) {
+          const bitmap = await createImageBitmap(jpegBlob);
+          canvas.width = metadata.width;
+          canvas.height = metadata.height;
+          ctx.drawImage(bitmap, 0, 0, metadata.width, metadata.height);
+          bitmap.close();
+          return;
+        }
+        await new Promise<void>((resolve, reject) => {
+          const url = URL.createObjectURL(jpegBlob);
+          const img = new Image();
+          img.onload = () => {
+            canvas.width = metadata.width;
+            canvas.height = metadata.height;
+            ctx.drawImage(img, 0, 0, metadata.width, metadata.height);
+            URL.revokeObjectURL(url);
+            resolve();
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error("image decode failed"));
+          };
+          img.src = url;
+        });
+      };
+      await render();
+      lastFrameSeqRef.current = metadata.seq;
       setFrameMeta(metadata);
-    };
-    img.onerror = () => URL.revokeObjectURL(blobUrl);
-    img.src = blobUrl;
-  }, []);
+      const now = Date.now();
+      if (metadata.sentAt > 0) setLatencyMs(Math.max(0, now - metadata.sentAt));
+      send({
+        type: "frameAck",
+        version: 2,
+        seq: metadata.seq,
+        renderMs: Math.round(performance.now() - startedAt),
+        receivedAt: now,
+      });
+    },
+    [send]
+  );
 
   const disconnect = useCallback(() => {
     const ws = wsRef.current;
@@ -129,15 +177,9 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
       if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.close();
     }
     keysDownRef.current.clear();
+    lastFrameSeqRef.current = 0;
     setState("idle");
   }, []);
-
-  useEffect(
-    () => () => {
-      if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current);
-    },
-    []
-  );
 
   const connect = useCallback(() => {
     disconnect();
@@ -159,11 +201,8 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
       if (msg.type === "hello") {
         if (Array.isArray(msg.displays)) setDisplays(msg.displays);
         if (msg.status) setStatus(msg.status);
-        if (msg.config) {
-          setDisplayId(msg.config.DisplayID ?? msg.config.displayId ?? displayId);
-          setFps(msg.config.FPS ?? msg.config.fps ?? fps);
-          setQuality(msg.config.Quality ?? msg.config.quality ?? quality);
-        }
+        if (msg.config) applyConfig(msg.config);
+        if (msg.qos) setQos(msg.qos);
       } else if (msg.type === "error") {
         setMessage(msg.message ?? "");
       } else if (msg.type === "clipboard") {
@@ -171,6 +210,13 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
       } else if (msg.type === "status") {
         if (msg.paused === true) setState("paused");
         if (msg.paused === false) setState("connected");
+        if (msg.config) applyConfig(msg.config);
+        if (msg.qos) setQos(msg.qos);
+      } else if (msg.type === "qos") {
+        if (msg.qos) setQos(msg.qos);
+      } else if (msg.type === "displays") {
+        if (Array.isArray(msg.displays)) setDisplays(msg.displays);
+        if (msg.config) applyConfig(msg.config);
       }
     };
     ws.onerror = () => {
@@ -184,6 +230,17 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
       }
     };
   }, [configure, disconnect, displayId, drawFrame, fps, quality, t]);
+
+  const applyConfig = (config: Partial<RemoteDesktopConfig> & Record<string, unknown>) => {
+    const nextDisplayId = Number(config.displayId ?? config.DisplayID);
+    const nextFps = Number(config.fps ?? config.FPS);
+    const nextQuality = Number(config.quality ?? config.Quality);
+    if (Number.isFinite(nextDisplayId)) setDisplayId(nextDisplayId);
+    if (Number.isFinite(nextFps)) setFps(nextFps);
+    if (Number.isFinite(nextQuality)) setQuality(nextQuality);
+    if (typeof config.controlMode === "string") setControlEnabled(config.controlMode !== "view");
+    if (typeof config.clipboardSync === "boolean") setClipboardSync(config.clipboardSync);
+  };
 
   useEffect(() => disconnect, [disconnect]);
 
@@ -207,8 +264,20 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
       event.preventDefault();
       event.currentTarget.focus();
       const point = canvasPoint(event);
+      if (down === undefined) {
+        pendingPointerRef.current = point;
+        if (pointerThrottleRef.current != null) return;
+        pointerThrottleRef.current = window.setTimeout(() => {
+          pointerThrottleRef.current = null;
+          const pending = pendingPointerRef.current;
+          pendingPointerRef.current = null;
+          if (pending) send({ type: "pointer", version: 2, displayId, x: pending.x, y: pending.y });
+        }, 16);
+        return;
+      }
       send({
         type: "pointer",
+        version: 2,
         displayId,
         x: point.x,
         y: point.y,
@@ -240,7 +309,7 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
       if (down && keysDownRef.current.has(keyId)) return;
       if (down) keysDownRef.current.add(keyId);
       else keysDownRef.current.delete(keyId);
-      send({ type: "key", key: event.key, down, modifiers: modifierKeys(event) });
+      send({ type: "key", version: 2, key: event.key, down, modifiers: modifierKeys(event) });
     },
     [controlEnabled, send]
   );
@@ -256,7 +325,22 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
   }, [send, state]);
 
   const readClipboard = useCallback(() => send({ type: "clipboardRead" }), [send]);
-  const writeClipboard = useCallback(() => send({ type: "clipboardWrite", text: clipboardText }), [clipboardText, send]);
+  const writeClipboard = useCallback(
+    () => send({ type: "clipboardWrite", text: clipboardText }),
+    [clipboardText, send]
+  );
+  const toggleControl = useCallback(() => {
+    setControlEnabled((value) => {
+      configure({ controlEnabled: !value });
+      return !value;
+    });
+  }, [configure]);
+  const toggleClipboardSync = useCallback(() => {
+    setClipboardSync((value) => {
+      configure({ clipboardSync: !value });
+      return !value;
+    });
+  }, [configure]);
 
   return (
     <div className="h-full flex flex-col bg-ide-bg text-ide-text overflow-hidden">
@@ -267,7 +351,9 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
           onClick={state === "idle" || state === "error" ? connect : disconnect}
         >
           <Power size={14} />
-          {state === "idle" || state === "error" ? t("plugin.remoteDesktop.connect") : t("plugin.remoteDesktop.disconnect")}
+          {state === "idle" || state === "error"
+            ? t("plugin.remoteDesktop.connect")
+            : t("plugin.remoteDesktop.disconnect")}
         </button>
         <button
           type="button"
@@ -322,8 +408,9 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
         <button
           type="button"
           className="h-8 w-8 grid place-items-center border border-ide-border bg-ide-bg hover:bg-ide-border/50"
-          onClick={() => setControlEnabled((v) => !v)}
+          onClick={toggleControl}
           title={controlEnabled ? t("plugin.remoteDesktop.controlOn") : t("plugin.remoteDesktop.viewOnly")}
+          disabled={!status?.capabilities?.input}
         >
           {controlEnabled ? <MousePointer2 size={14} /> : <Eye size={14} />}
         </button>
@@ -365,8 +452,18 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
           className="h-8 w-8 grid place-items-center border border-ide-border bg-ide-bg hover:bg-ide-border/50"
           onClick={writeClipboard}
           title={t("plugin.remoteDesktop.writeClipboard")}
+          disabled={!status?.capabilities?.clipboard}
         >
           <ClipboardPaste size={14} />
+        </button>
+        <button
+          type="button"
+          className={`h-8 px-2 border border-ide-border text-xs ${clipboardSync ? "bg-ide-border/70 text-ide-text" : "bg-ide-bg text-ide-mute hover:bg-ide-border/50"}`}
+          onClick={toggleClipboardSync}
+          disabled={!status?.capabilities?.clipboardSync}
+          title={t("plugin.remoteDesktop.clipboardSync")}
+        >
+          {t("plugin.remoteDesktop.sync")}
         </button>
       </div>
 
@@ -399,7 +496,11 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
         </div>
         <div className="shrink-0 flex items-center gap-2">
           <MonitorUp size={12} />
-          <span>{frameMeta ? `${frameMeta.width}x${frameMeta.height} #${frameMeta.seq}` : "-"}</span>
+          <span>
+            {frameMeta ? `${frameMeta.width}x${frameMeta.height} #${frameMeta.seq}` : "-"}
+            {qos ? ` ${qos.effectiveFps}fps q${qos.effectiveQuality}` : ""}
+            {latencyMs != null ? ` ${latencyMs}ms` : ""}
+          </span>
         </div>
       </div>
     </div>

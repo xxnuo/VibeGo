@@ -647,6 +647,8 @@
       "clipboardPlaceholder": "Text clipboard",
       "readClipboard": "Read clipboard",
       "writeClipboard": "Write clipboard",
+      "clipboardSync": "Sync clipboard",
+      "sync": "Sync",
       "connectionError": "Connection failed",
       "waylandLimited": "Wayland may be limited",
       "state": {

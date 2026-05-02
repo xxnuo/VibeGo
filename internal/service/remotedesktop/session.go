@@ -55,14 +55,18 @@ func (s *Session) CaptureFrame(ctx context.Context) (Frame, error) {
 		return Frame{}, ctx.Err()
 	default:
 	}
+	captureStarted := time.Now()
 	img, display, err := s.capture.Capture(cfg.DisplayID)
 	if err != nil {
 		return Frame{}, err
 	}
+	captureMs := time.Since(captureStarted).Milliseconds()
+	encodeStarted := time.Now()
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: cfg.Quality}); err != nil {
 		return Frame{}, err
 	}
+	encodeMs := time.Since(encodeStarted).Milliseconds()
 	s.mu.Lock()
 	s.seq++
 	seq := s.seq
@@ -70,14 +74,18 @@ func (s *Session) CaptureFrame(ctx context.Context) (Frame, error) {
 	bounds := img.Bounds()
 	return Frame{
 		Metadata: FrameMetadata{
-			Type:       "frame",
-			Seq:        seq,
-			DisplayID:  display.ID,
-			Width:      bounds.Dx(),
-			Height:     bounds.Dy(),
-			Format:     "jpeg",
-			Quality:    cfg.Quality,
-			CapturedAt: time.Now().UnixMilli(),
+			Type:         "frame",
+			Seq:          seq,
+			DisplayID:    display.ID,
+			Width:        bounds.Dx(),
+			Height:       bounds.Dy(),
+			Format:       "jpeg",
+			Quality:      cfg.Quality,
+			CapturedAt:   time.Now().UnixMilli(),
+			CaptureMs:    captureMs,
+			EncodeMs:     encodeMs,
+			SourceWidth:  display.Width,
+			SourceHeight: display.Height,
 		},
 		JPEG: buf.Bytes(),
 	}, nil
@@ -119,23 +127,33 @@ func (s *Session) ReadClipboard() (string, error) {
 }
 
 func (s *Session) WriteClipboard(text string) error {
+	if err := ValidateClipboardText(text); err != nil {
+		return err
+	}
 	return s.clip.WriteText(text)
 }
 
 type ClientMessage struct {
-	Type      string   `json:"type"`
-	DisplayID *int     `json:"displayId,omitempty"`
-	FPS       int      `json:"fps,omitempty"`
-	Quality   int      `json:"quality,omitempty"`
-	X         float64  `json:"x,omitempty"`
-	Y         float64  `json:"y,omitempty"`
-	Button    string   `json:"button,omitempty"`
-	Down      *bool    `json:"down,omitempty"`
-	DeltaX    int      `json:"deltaX,omitempty"`
-	DeltaY    int      `json:"deltaY,omitempty"`
-	Key       string   `json:"key,omitempty"`
-	Modifiers []string `json:"modifiers,omitempty"`
-	Text      string   `json:"text,omitempty"`
+	Type          string   `json:"type"`
+	Version       int      `json:"version,omitempty"`
+	DisplayID     *int     `json:"displayId,omitempty"`
+	FPS           int      `json:"fps,omitempty"`
+	Quality       int      `json:"quality,omitempty"`
+	FitMode       string   `json:"fitMode,omitempty"`
+	ControlMode   string   `json:"controlMode,omitempty"`
+	ClipboardSync *bool    `json:"clipboardSync,omitempty"`
+	X             float64  `json:"x,omitempty"`
+	Y             float64  `json:"y,omitempty"`
+	Button        string   `json:"button,omitempty"`
+	Down          *bool    `json:"down,omitempty"`
+	DeltaX        int      `json:"deltaX,omitempty"`
+	DeltaY        int      `json:"deltaY,omitempty"`
+	Key           string   `json:"key,omitempty"`
+	Modifiers     []string `json:"modifiers,omitempty"`
+	Text          string   `json:"text,omitempty"`
+	Seq           uint64   `json:"seq,omitempty"`
+	RenderMs      int64    `json:"renderMs,omitempty"`
+	ReceivedAt    int64    `json:"receivedAt,omitempty"`
 }
 
 func ParseClientMessage(data []byte) (ClientMessage, error) {

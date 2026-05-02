@@ -82,6 +82,10 @@ func (h *RemoteDesktopHandler) SetClipboard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if err := remotedesktop.ValidateClipboardText(req.Text); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	if err := h.clip.WriteText(req.Text); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -111,36 +115,45 @@ func (h *RemoteDesktopHandler) WebSocket(c *gin.Context) {
 		FPS:       remotedesktop.DefaultFPS,
 		Quality:   remotedesktop.DefaultQuality,
 	})
+	qos := remotedesktop.NewQoS(session.Config())
+	displayManager := remotedesktop.NewDisplayManager(h.capture)
 	ctx, cancel := context.WithCancel(c.Request.Context())
 	defer cancel()
 
 	paused := atomic.Bool{}
 	latest := make(chan remotedesktop.Frame, 1)
 	send := make(chan wsOutbound, 8)
+	clipboardSync := atomic.Bool{}
 
 	writeRemoteDesktopJSON(conn, "hello", gin.H{
+		"version":  remotedesktop.ProtocolVersion,
 		"displays": displays,
 		"status":   remotedesktop.RuntimeStatus(h.capture, h.input, h.clip),
 		"config":   session.Config(),
+		"qos":      qos.Snapshot(),
 	})
 
-	go h.captureLoop(ctx, session, &paused, latest, send)
-	go h.readLoop(ctx, cancel, conn, session, &paused, send)
+	go h.captureLoop(ctx, session, qos, &paused, latest, send)
+	go h.displayLoop(ctx, session, displayManager, send)
+	go h.clipboardLoop(ctx, &clipboardSync, send)
+	go h.readLoop(ctx, cancel, conn, session, qos, &paused, &clipboardSync, send)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case frame := <-latest:
+			frame.Metadata.SentAt = time.Now().UnixMilli()
 			data, err := remotedesktop.EncodeFrame(frame.Metadata, frame.JPEG)
 			if err != nil {
-				writeRemoteDesktopJSON(conn, "error", gin.H{"message": err.Error()})
+				writeRemoteDesktopError(conn, "encode_failed", err.Error(), true)
 				continue
 			}
 			if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
 				cancel()
 				return
 			}
+			qos.FrameSent(frame.Metadata.Seq)
 		case msg := <-send:
 			if err := conn.WriteMessage(msg.messageType, msg.data); err != nil {
 				cancel()
@@ -155,7 +168,7 @@ type wsOutbound struct {
 	data        []byte
 }
 
-func (h *RemoteDesktopHandler) captureLoop(ctx context.Context, session *remotedesktop.Session, paused *atomic.Bool, latest chan remotedesktop.Frame, send chan wsOutbound) {
+func (h *RemoteDesktopHandler) captureLoop(ctx context.Context, session *remotedesktop.Session, qos *remotedesktop.QoS, paused *atomic.Bool, latest chan remotedesktop.Frame, send chan wsOutbound) {
 	timer := time.NewTimer(0)
 	defer timer.Stop()
 	for {
@@ -165,9 +178,10 @@ func (h *RemoteDesktopHandler) captureLoop(ctx context.Context, session *remoted
 		case <-timer.C:
 			cfg := session.Config()
 			if !paused.Load() {
+				session.Configure(qos.Config(cfg))
 				frame, err := session.CaptureFrame(ctx)
 				if err != nil {
-					queueRemoteDesktopJSON(send, "error", gin.H{"message": err.Error()})
+					queueRemoteDesktopError(send, "capture_failed", err.Error(), true)
 				} else {
 					select {
 					case latest <- frame:
@@ -180,13 +194,71 @@ func (h *RemoteDesktopHandler) captureLoop(ctx context.Context, session *remoted
 					}
 				}
 			}
-			timer.Reset(remotedesktop.FrameInterval(cfg.FPS))
+			qos.Tick()
+			timer.Reset(remotedesktop.FrameInterval(qos.Config(session.Config()).FPS))
 		}
 	}
 }
 
-func (h *RemoteDesktopHandler) readLoop(ctx context.Context, cancel context.CancelFunc, conn *websocket.Conn, session *remotedesktop.Session, paused *atomic.Bool, send chan wsOutbound) {
+func (h *RemoteDesktopHandler) displayLoop(ctx context.Context, session *remotedesktop.Session, displayManager *remotedesktop.DisplayManager, send chan wsOutbound) {
+	ticker := time.NewTicker(800 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			snapshot, err := displayManager.Refresh()
+			if err != nil {
+				queueRemoteDesktopError(send, "display_unavailable", err.Error(), true)
+				continue
+			}
+			if !snapshot.Changed {
+				continue
+			}
+			cfg := session.Config()
+			nextDisplayID := remotedesktop.SelectDisplay(snapshot.Displays, cfg.DisplayID)
+			if nextDisplayID != cfg.DisplayID {
+				cfg.DisplayID = nextDisplayID
+				session.Configure(cfg)
+			}
+			queueRemoteDesktopJSON(send, "displays", gin.H{"displays": snapshot.Displays, "config": session.Config()})
+		}
+	}
+}
+
+func (h *RemoteDesktopHandler) clipboardLoop(ctx context.Context, enabled *atomic.Bool, send chan wsOutbound) {
+	ticker := time.NewTicker(1200 * time.Millisecond)
+	defer ticker.Stop()
+	last := ""
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if !enabled.Load() {
+				continue
+			}
+			text, err := h.clip.ReadText()
+			if err != nil {
+				queueRemoteDesktopError(send, "clipboard_read_failed", err.Error(), true)
+				continue
+			}
+			if err := remotedesktop.ValidateClipboardText(text); err != nil {
+				queueRemoteDesktopError(send, "clipboard_too_large", err.Error(), true)
+				continue
+			}
+			if text != last {
+				last = text
+				queueRemoteDesktopJSON(send, "clipboard", gin.H{"text": text, "sync": true})
+			}
+		}
+	}
+}
+
+func (h *RemoteDesktopHandler) readLoop(ctx context.Context, cancel context.CancelFunc, conn *websocket.Conn, session *remotedesktop.Session, qos *remotedesktop.QoS, paused *atomic.Bool, clipboardSync *atomic.Bool, send chan wsOutbound) {
 	defer cancel()
+	defer h.releaseInput(session, send)
 	for {
 		select {
 		case <-ctx.Done():
@@ -202,14 +274,14 @@ func (h *RemoteDesktopHandler) readLoop(ctx context.Context, cancel context.Canc
 		}
 		msg, err := remotedesktop.ParseClientMessage(data)
 		if err != nil {
-			queueRemoteDesktopJSON(send, "error", gin.H{"message": err.Error()})
+			queueRemoteDesktopError(send, "bad_message", err.Error(), true)
 			continue
 		}
-		h.handleClientMessage(session, paused, msg, send)
+		h.handleClientMessage(session, qos, paused, clipboardSync, msg, send)
 	}
 }
 
-func (h *RemoteDesktopHandler) handleClientMessage(session *remotedesktop.Session, paused *atomic.Bool, msg remotedesktop.ClientMessage, send chan wsOutbound) {
+func (h *RemoteDesktopHandler) handleClientMessage(session *remotedesktop.Session, qos *remotedesktop.QoS, paused *atomic.Bool, clipboardSync *atomic.Bool, msg remotedesktop.ClientMessage, send chan wsOutbound) {
 	switch msg.Type {
 	case "configure":
 		cfg := session.Config()
@@ -222,44 +294,73 @@ func (h *RemoteDesktopHandler) handleClientMessage(session *remotedesktop.Sessio
 		if msg.Quality > 0 {
 			cfg.Quality = msg.Quality
 		}
+		if msg.FitMode != "" {
+			cfg.FitMode = msg.FitMode
+		}
+		if msg.ControlMode != "" {
+			cfg.ControlMode = msg.ControlMode
+		}
+		if msg.ClipboardSync != nil {
+			cfg.ClipboardSync = *msg.ClipboardSync
+			clipboardSync.Store(*msg.ClipboardSync)
+		}
 		cfg = session.Configure(cfg)
-		queueRemoteDesktopJSON(send, "status", gin.H{"config": cfg})
+		qos.Configure(cfg)
+		queueRemoteDesktopJSON(send, "status", gin.H{"config": session.Config(), "qos": qos.Snapshot()})
 	case "pointer":
+		if session.Config().ControlMode == "view" {
+			return
+		}
 		displayID := session.Config().DisplayID
 		if msg.DisplayID != nil {
 			displayID = *msg.DisplayID
 		}
 		if err := session.Pointer(displayID, msg.X, msg.Y, true); err != nil {
-			queueRemoteDesktopJSON(send, "error", gin.H{"message": err.Error()})
+			queueRemoteDesktopError(send, "pointer_failed", err.Error(), true)
 		}
 		if msg.Button != "" {
 			if err := session.Button(msg.Button, msg.Down); err != nil {
-				queueRemoteDesktopJSON(send, "error", gin.H{"message": err.Error()})
+				queueRemoteDesktopError(send, "button_failed", err.Error(), true)
 			}
 		}
 	case "wheel":
+		if session.Config().ControlMode == "view" {
+			return
+		}
 		if err := session.Wheel(msg.DeltaX, msg.DeltaY); err != nil {
-			queueRemoteDesktopJSON(send, "error", gin.H{"message": err.Error()})
+			queueRemoteDesktopError(send, "wheel_failed", err.Error(), true)
 		}
 	case "key":
+		if session.Config().ControlMode == "view" {
+			return
+		}
 		down := msg.Down != nil && *msg.Down
 		if err := session.Key(msg.Key, down, msg.Modifiers); err != nil {
-			queueRemoteDesktopJSON(send, "error", gin.H{"message": err.Error()})
+			queueRemoteDesktopError(send, "key_failed", err.Error(), true)
 		}
 	case "text":
-		if err := session.Text(msg.Text); err != nil {
-			queueRemoteDesktopJSON(send, "error", gin.H{"message": err.Error()})
+		if session.Config().ControlMode == "view" {
+			return
 		}
+		if err := session.Text(msg.Text); err != nil {
+			queueRemoteDesktopError(send, "text_failed", err.Error(), true)
+		}
+	case "frameAck":
+		delayMs := time.Now().UnixMilli() - msg.ReceivedAt
+		if msg.ReceivedAt <= 0 {
+			delayMs = msg.RenderMs
+		}
+		queueRemoteDesktopJSON(send, "qos", gin.H{"qos": qos.Ack(msg.Seq, delayMs)})
 	case "clipboardRead":
 		text, err := session.ReadClipboard()
 		if err != nil {
-			queueRemoteDesktopJSON(send, "error", gin.H{"message": err.Error()})
+			queueRemoteDesktopError(send, "clipboard_read_failed", err.Error(), true)
 			return
 		}
 		queueRemoteDesktopJSON(send, "clipboard", gin.H{"text": text})
 	case "clipboardWrite":
 		if err := session.WriteClipboard(msg.Text); err != nil {
-			queueRemoteDesktopJSON(send, "error", gin.H{"message": err.Error()})
+			queueRemoteDesktopError(send, "clipboard_write_failed", err.Error(), true)
 			return
 		}
 		queueRemoteDesktopJSON(send, "clipboard", gin.H{"ok": true})
@@ -272,6 +373,18 @@ func (h *RemoteDesktopHandler) handleClientMessage(session *remotedesktop.Sessio
 	}
 }
 
+func (h *RemoteDesktopHandler) releaseInput(session *remotedesktop.Session, send chan wsOutbound) {
+	for _, key := range []string{"shift", "ctrl", "alt", "cmd"} {
+		if err := session.Key(key, false, nil); err != nil {
+			queueRemoteDesktopError(send, "key_release_failed", err.Error(), true)
+		}
+	}
+	for _, button := range []string{"left", "middle", "right"} {
+		down := false
+		_ = session.Button(button, &down)
+	}
+}
+
 func writeRemoteDesktopJSON(conn *websocket.Conn, typ string, payload gin.H) {
 	data, err := remoteDesktopJSON(typ, payload)
 	if err != nil {
@@ -279,6 +392,10 @@ func writeRemoteDesktopJSON(conn *websocket.Conn, typ string, payload gin.H) {
 		return
 	}
 	_ = conn.WriteMessage(websocket.TextMessage, data)
+}
+
+func writeRemoteDesktopError(conn *websocket.Conn, code, message string, recoverable bool) {
+	writeRemoteDesktopJSON(conn, "error", gin.H{"code": code, "message": message, "recoverable": recoverable})
 }
 
 func queueRemoteDesktopJSON(send chan wsOutbound, typ string, payload gin.H) {
@@ -291,6 +408,10 @@ func queueRemoteDesktopJSON(send chan wsOutbound, typ string, payload gin.H) {
 	case send <- msg:
 	default:
 	}
+}
+
+func queueRemoteDesktopError(send chan wsOutbound, code, message string, recoverable bool) {
+	queueRemoteDesktopJSON(send, "error", gin.H{"code": code, "message": message, "recoverable": recoverable})
 }
 
 func remoteDesktopJSON(typ string, payload gin.H) ([]byte, error) {

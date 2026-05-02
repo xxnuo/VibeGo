@@ -12,10 +12,20 @@ export interface RemoteDesktopDisplay {
 
 export interface RemoteDesktopStatus {
   os: string;
+  platform: string;
+  sessionType: string;
   available: boolean;
   captureAvailable: boolean;
   inputAvailable: boolean;
   clipboardAvailable: boolean;
+  capabilities: {
+    capture: boolean;
+    input: boolean;
+    clipboard: boolean;
+    displayWatch: boolean;
+    qos: boolean;
+    clipboardSync: boolean;
+  };
   wayland: boolean;
   warnings: string[];
   defaultFps: number;
@@ -35,6 +45,29 @@ export interface RemoteDesktopFrameMetadata {
   format: "jpeg";
   quality: number;
   capturedAt: number;
+  sentAt: number;
+  captureMs: number;
+  encodeMs: number;
+  sourceWidth: number;
+  sourceHeight: number;
+}
+
+export interface RemoteDesktopConfig {
+  displayId: number;
+  fps: number;
+  quality: number;
+  fitMode: "contain" | "cover" | string;
+  controlMode: "control" | "view" | string;
+  clipboardSync: boolean;
+}
+
+export interface RemoteDesktopQos {
+  targetFps: number;
+  targetQuality: number;
+  effectiveFps: number;
+  effectiveQuality: number;
+  lastAckSeq: number;
+  pendingFrames: number;
 }
 
 export const remoteDesktopApi = {
@@ -58,7 +91,7 @@ export const remoteDesktopApi = {
 
 export async function decodeRemoteDesktopFrame(data: ArrayBuffer): Promise<{
   metadata: RemoteDesktopFrameMetadata;
-  blobUrl: string;
+  jpegBlob: Blob;
 }> {
   const view = new DataView(data);
   if (view.byteLength < 4) throw new Error("Invalid frame");
@@ -67,6 +100,5 @@ export async function decodeRemoteDesktopFrame(data: ArrayBuffer): Promise<{
   const metaBytes = new Uint8Array(data, 4, metaLength);
   const metadata = JSON.parse(new TextDecoder().decode(metaBytes)) as RemoteDesktopFrameMetadata;
   const jpegBytes = data.slice(4 + metaLength);
-  const blobUrl = URL.createObjectURL(new Blob([jpegBytes], { type: "image/jpeg" }));
-  return { metadata, blobUrl };
+  return { metadata, jpegBlob: new Blob([jpegBytes], { type: "image/jpeg" }) };
 }

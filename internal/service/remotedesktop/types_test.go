@@ -25,14 +25,19 @@ func TestMapNormalizedPointClampsToDisplayBounds(t *testing.T) {
 
 func TestEncodeDecodeFrame(t *testing.T) {
 	meta := FrameMetadata{
-		Type:       "frame",
-		Seq:        9,
-		DisplayID:  1,
-		Width:      800,
-		Height:     600,
-		Format:     "jpeg",
-		Quality:    70,
-		CapturedAt: 123,
+		Type:         "frame",
+		Seq:          9,
+		DisplayID:    1,
+		Width:        800,
+		Height:       600,
+		Format:       "jpeg",
+		Quality:      70,
+		CapturedAt:   123,
+		SentAt:       456,
+		CaptureMs:    7,
+		EncodeMs:     8,
+		SourceWidth:  800,
+		SourceHeight: 600,
 	}
 	jpegBytes := []byte{1, 2, 3}
 
@@ -49,6 +54,8 @@ func TestNormalizeConfig(t *testing.T) {
 	cfg := NormalizeConfig(Config{FPS: 200, Quality: 1})
 	require.Equal(t, MaxFPS, cfg.FPS)
 	require.Equal(t, MinQuality, cfg.Quality)
+	require.Equal(t, "contain", cfg.FitMode)
+	require.Equal(t, "control", cfg.ControlMode)
 
 	cfg = NormalizeConfig(Config{})
 	require.Equal(t, DefaultFPS, cfg.FPS)
@@ -78,6 +85,32 @@ func TestSessionClipboardError(t *testing.T) {
 
 	err = session.WriteClipboard("x")
 	require.Error(t, err)
+}
+
+func TestClipboardTextLimit(t *testing.T) {
+	require.NoError(t, ValidateClipboardText("ok"))
+	require.Error(t, ValidateClipboardText(string(bytes.Repeat([]byte("x"), MaxClipboardTextBytes+1))))
+}
+
+func TestQoSAdjustsEffectiveConfig(t *testing.T) {
+	qos := NewQoS(Config{FPS: 12, Quality: 70})
+	qos.FrameSent(5)
+	snapshot := qos.Ack(1, 320)
+	require.Less(t, snapshot.EffectiveFPS, 12)
+	require.Less(t, snapshot.EffectiveQuality, 70)
+
+	for i := 0; i < 10; i++ {
+		snapshot = qos.Ack(5, 30)
+	}
+	require.LessOrEqual(t, snapshot.EffectiveFPS, 12)
+	require.LessOrEqual(t, snapshot.EffectiveQuality, 70)
+	require.Greater(t, snapshot.EffectiveFPS, MinFPS)
+}
+
+func TestSelectDisplayFallback(t *testing.T) {
+	displays := []Display{{ID: 2}, {ID: 4, Primary: true}}
+	require.Equal(t, 2, SelectDisplay(displays, 2))
+	require.Equal(t, 4, SelectDisplay(displays, 9))
 }
 
 type fakeCapture struct {

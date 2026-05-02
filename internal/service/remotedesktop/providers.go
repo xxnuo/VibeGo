@@ -147,8 +147,11 @@ func (p *SystemClipboardProvider) WriteText(text string) error {
 }
 
 func RuntimeStatus(capture CaptureProvider, input InputProvider, clip ClipboardProvider) Status {
+	sessionType := currentSessionType()
 	status := Status{
 		OS:             runtime.GOOS,
+		Platform:       runtime.GOOS,
+		SessionType:    sessionType,
 		DefaultFPS:     DefaultFPS,
 		DefaultQuality: DefaultQuality,
 		MinFPS:         MinFPS,
@@ -161,23 +164,62 @@ func RuntimeStatus(capture CaptureProvider, input InputProvider, clip ClipboardP
 		status.Warnings = append(status.Warnings, fmt.Sprintf("screen capture unavailable: %s", err.Error()))
 	} else {
 		status.CaptureAvailable = true
+		status.Capabilities.Capture = true
 	}
 	if err := input.Available(); err != nil {
 		status.Warnings = append(status.Warnings, fmt.Sprintf("input unavailable: %s", err.Error()))
 	} else {
 		status.InputAvailable = true
+		status.Capabilities.Input = true
 	}
 	if err := clip.Available(); err != nil {
 		status.Warnings = append(status.Warnings, fmt.Sprintf("clipboard unavailable: %s", err.Error()))
 	} else {
 		status.ClipboardAvailable = true
+		status.Capabilities.Clipboard = true
+		status.Capabilities.ClipboardSync = true
 	}
+	status.Capabilities.DisplayWatch = true
+	status.Capabilities.QoS = true
+	appendPlatformWarnings(&status)
 	status.Available = status.CaptureAvailable
 	return status
 }
 
 func isWayland() bool {
 	return strings.EqualFold(os.Getenv("XDG_SESSION_TYPE"), "wayland") || os.Getenv("WAYLAND_DISPLAY") != ""
+}
+
+func currentSessionType() string {
+	if runtime.GOOS == "linux" {
+		if session := strings.TrimSpace(os.Getenv("XDG_SESSION_TYPE")); session != "" {
+			return strings.ToLower(session)
+		}
+		if isWayland() {
+			return "wayland"
+		}
+		if os.Getenv("DISPLAY") != "" {
+			return "x11"
+		}
+	}
+	return runtime.GOOS
+}
+
+func appendPlatformWarnings(status *Status) {
+	switch runtime.GOOS {
+	case "linux":
+		if status.Wayland {
+			status.Warnings = append(status.Warnings, "wayland may restrict screen capture, input injection, and clipboard access")
+		}
+	case "darwin":
+		if !status.CaptureAvailable || !status.InputAvailable {
+			status.Warnings = append(status.Warnings, "macOS may require Screen Recording and Accessibility permissions")
+		}
+	case "windows":
+		if !status.CaptureAvailable || !status.InputAvailable {
+			status.Warnings = append(status.Warnings, "Windows capture or input may be blocked by system permissions or elevated windows")
+		}
+	}
 }
 
 func normalizeButton(button string) string {
