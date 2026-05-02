@@ -109,17 +109,28 @@
   --ide-diff-del: #991b1b;
   --ide-diff-del-bg: #fee2e2;
   --ide-on-accent: #ffffff;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
+  --font-mono:
+    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, "Cascadia Mono",
+    "Cascadia Code", Consolas, "Roboto Mono", "Noto Sans Mono",
+    "DejaVu Sans Mono", "Liberation Mono", "Ubuntu Mono", "Courier New",
+    "Noto Sans Mono CJK SC", "Noto Sans CJK SC", "Microsoft YaHei", monospace;
   --ide-shadow: none;
 }
 
 [data-font="jetbrains-mono"] {
   --font-sans:
     "JetBrains Mono Variable", ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    "PingFang SC", "Microsoft YaHei", "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
   --font-mono:
-    "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco,
-    Consolas, monospace;
+    "JetBrains Mono Variable", ui-monospace, "SF Mono", SFMono-Regular, Menlo,
+    Monaco, "Cascadia Mono", Consolas, "Noto Sans Mono CJK SC",
+    "Noto Sans CJK SC", "Microsoft YaHei", monospace;
   font-family: var(--font-sans);
 }
 
@@ -198,7 +209,10 @@
   --ide-diff-del: #ff0055;
   --ide-diff-del-bg: rgba(255, 0, 85, 0.1);
   --ide-on-accent: #000000;
-  --font-mono: "JetBrains Mono", monospace;
+  --font-mono:
+    "JetBrains Mono Variable", ui-monospace, "SF Mono", SFMono-Regular, Menlo,
+    Monaco, "Cascadia Mono", Consolas, "Noto Sans Mono CJK SC",
+    "Noto Sans CJK SC", "Microsoft YaHei", monospace;
   --radius: 0px;
   --ide-shadow: 0 0 10px var(--ide-accent);
 }

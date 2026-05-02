@@ -55,7 +55,7 @@ export const SETTINGS_SCHEMA: SettingSchema[] = [
     category: "appearance",
     labelKey: "settings.fontFamily.label",
     descriptionKey: "settings.fontFamily.description",
-    defaultValue: "jetbrains-mono",
+    defaultValue: "default",
     options: [
       { value: "default", label: "settings.fontFamily.optionDefault" },
       { value: "jetbrains-mono", label: "JetBrains Mono" },
