@@ -162,6 +162,29 @@ func TestServiceConfig(t *testing.T) {
 	}
 }
 
+func TestSystemdScriptUsesKardianosTemplateKeys(t *testing.T) {
+	script := systemdScript(true)
+
+	for _, bad := range []string{".Description", ".Path", ".Arguments", ".WorkingDirectory", ".Dependencies"} {
+		if strings.Contains(script, bad) {
+			t.Fatalf("systemd script contains unsupported template key %q:\n%s", bad, script)
+		}
+	}
+
+	for _, want := range []string{
+		"Description={{Description}}",
+		"ConditionFileIsExecutable={{Path | cmdEscape}}",
+		"{{range Dependencies}}{{.}}",
+		"ExecStart={{Path | cmdEscape}}{{range Arguments}} {{. | cmd}}{{end}}",
+		"{{if WorkingDirectory}}WorkingDirectory={{WorkingDirectory | cmdEscape}}{{end}}",
+		"WantedBy=default.target",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("systemd script missing %q:\n%s", want, script)
+		}
+	}
+}
+
 func TestPrintServiceStatus(t *testing.T) {
 	tests := []struct {
 		name      string

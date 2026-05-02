@@ -634,15 +634,15 @@ func systemdScript(userService bool) string {
 		target = "default.target"
 	}
 	return strings.ReplaceAll(`[Unit]
-Description={{.Description}}
-ConditionFileIsExecutable={{.Path|cmdEscape}}
-{{range $i, $dep := .Dependencies}}
-{{$dep}}{{end}}
+Description={{Description}}
+ConditionFileIsExecutable={{Path | cmdEscape}}
+{{range Dependencies}}{{.}}
+{{end}}
 
 [Service]
 Type=simple
-ExecStart={{.Path|cmdEscape}}{{range .Arguments}} {{.|cmd}}{{end}}
-{{if .WorkingDirectory}}WorkingDirectory={{.WorkingDirectory|cmdEscape}}{{end}}
+ExecStart={{Path | cmdEscape}}{{range Arguments}} {{. | cmd}}{{end}}
+{{if WorkingDirectory}}WorkingDirectory={{WorkingDirectory | cmdEscape}}{{end}}
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65536
