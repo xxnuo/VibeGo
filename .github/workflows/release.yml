@@ -34,6 +34,11 @@ jobs:
         with:
           version: 10
 
+      - name: Install Go test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxtst-dev libxkbcommon-x11-dev
+
       - name: Frontend checks
         run: |
           cd ui
@@ -46,25 +51,49 @@ jobs:
 
   build:
     needs: verify
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - goos: android
+          - runner: ubuntu-latest
+            goos: android
             goarch: arm64
-          - goos: linux
+            cgo_enabled: 0
+          - runner: ubuntu-latest
+            goos: linux
             goarch: amd64
-          - goos: linux
+            cgo_enabled: 1
+            cc: gcc
+          - runner: ubuntu-24.04-arm
+            goos: linux
             goarch: arm64
-          - goos: darwin
+            cgo_enabled: 1
+            cc: gcc
+          - runner: macos-15-intel
+            goos: darwin
             goarch: amd64
-          - goos: darwin
+            cgo_enabled: 1
+            cc: clang
+          - runner: macos-15
+            goos: darwin
             goarch: arm64
-          - goos: windows
+            cgo_enabled: 1
+            cc: clang
+          - runner: windows-latest
+            goos: windows
             goarch: amd64
-          - goos: windows
+            cgo_enabled: 1
+            msystem: UCRT64
+            msys_packages: mingw-w64-ucrt-x86_64-gcc
+            cc: gcc
+          - runner: windows-11-arm
+            goos: windows
             goarch: arm64
+            cgo_enabled: 1
+            msystem: CLANGARM64
+            msys_packages: mingw-w64-clang-aarch64-clang
+            cc: clang
 
     steps:
       - uses: actions/checkout@v6
@@ -84,6 +113,20 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Install Linux build dependencies
+        if: ${{ matrix.goos == 'linux' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxtst-dev libxkbcommon-x11-dev
+
+      - uses: msys2/setup-msys2@v2
+        if: ${{ matrix.goos == 'windows' }}
+        with:
+          msystem: ${{ matrix.msystem }}
+          update: true
+          install: ${{ matrix.msys_packages }}
+          path-type: inherit
+
       - name: Build frontend
         run: |
           cd ui
@@ -91,8 +134,10 @@ jobs:
           pnpm run build
 
       - name: Build backend
+        shell: bash
         env:
-          CGO_ENABLED: 0
+          CGO_ENABLED: ${{ matrix.cgo_enabled }}
+          CC: ${{ matrix.cc }}
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           VERSION_TAG: ${{ github.event.inputs.tag || github.ref_name }}
@@ -104,6 +149,7 @@ jobs:
           go build -trimpath -ldflags "-s -w -X github.com/xxnuo/vibego/internal/version.Version=${VERSION_TAG}" -o "dist/${output}" ./
 
       - name: Package artifact
+        shell: bash
         env:
           VERSION_TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
