@@ -22,7 +22,10 @@ export interface WorkspaceState {
     id: string;
     pageId: string;
     name: string;
+    tabs?: GroupPage["tabs"];
+    activeTabId?: string | null;
   }>;
+  taskbarOrder: string[];
   terminalsByGroup: Record<string, TerminalSession[]>;
   activeTerminalByGroup: Record<string, string | null>;
   listManagerOpenByGroup: Record<string, boolean>;
@@ -87,6 +90,7 @@ export const sessionApi = {
         WorkspaceState,
         | "openGroups"
         | "openTools"
+        | "taskbarOrder"
         | "terminalsByGroup"
         | "activeTerminalByGroup"
         | "listManagerOpenByGroup"

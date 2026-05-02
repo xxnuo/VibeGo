@@ -1,25 +1,23 @@
-import {
-  Box,
-  FolderOpen,
-  Home,
-  Maximize,
-  Menu,
-  Minimize,
-  Plus,
-  Settings,
-} from "lucide-react";
+import { Box, FolderOpen, Home, Maximize, Menu, Minimize, Plus, Settings } from "lucide-react";
+import { motion } from "motion/react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import NavIcon from "@/components/frame/nav-icon";
+import { TaskbarItemMenu, TaskbarSortDialog, type TaskbarSortEntry } from "@/components/frame/taskbar-item-menu";
 import WorkspaceHintBubble, {
   getWorkspaceGroupTitle,
   getWorkspacePath,
   useWorkspaceHint,
 } from "@/components/frame/workspace-hint-bubble";
+import { useReorderableList } from "@/hooks/use-reorderable-list";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useTranslation } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import { pageRegistry } from "@/pages/registry";
 import { useAppStore } from "@/stores/app-store";
+import { useSessionStore } from "@/stores/session-store";
 import {
   type BottomBarButton,
+  type BottomBarConfig,
   type GenericGroup,
   type PageGroup,
   type PageType,
@@ -38,6 +36,12 @@ const GROUP_TYPE_ICONS = {
   tool: <Box size={18} />,
   settings: <Settings size={18} />,
 };
+
+const REORDER_TRANSITION = { type: "spring", stiffness: 520, damping: 42, mass: 0.7 } as const;
+
+type TaskbarItem =
+  | { id: string; type: "group"; group: PageGroup }
+  | { id: string; type: "custom"; item: NonNullable<BottomBarConfig["customItems"]>[number] };
 
 interface GroupButtonProps {
   group: PageGroup;
@@ -148,9 +152,16 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick, onNewPage }) => {
   const setActiveGroup = useFrameStore((s) => s.setActiveGroup);
   const setActivePage = useFrameStore((s) => s.setActivePage);
   const setCurrentActiveTab = useFrameStore((s) => s.setCurrentActiveTab);
+  const taskbarOrder = useFrameStore((s) => s.taskbarOrder);
+  const reorderTaskbarItems = useFrameStore((s) => s.reorderTaskbarItems);
+  const setTaskbarOrder = useFrameStore((s) => s.setTaskbarOrder);
+  const removeGroup = useFrameStore((s) => s.removeGroup);
+  const closeFolderGroup = useSessionStore((s) => s.closeFolderGroup);
+  const isMobile = useIsMobile();
   const { hint: workspaceHint, showWorkspaceHint } = useWorkspaceHint("top");
 
   const [compactMode] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastClickTime = useRef<Record<string, number>>({});
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -251,73 +262,178 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick, onNewPage }) => {
     [t]
   );
 
-  if (!bottomBarConfig.show) {
-    return null;
-  }
-
   const useCustomItems = bottomBarConfig.customItems && bottomBarConfig.customItems.length > 0;
   const hasMultipleGroups = groups.length > 1;
   const isOnlyHome = groups.length === 1 && groups[0].type === "home";
   const showGroupBar = groups.length > 0 && !useCustomItems && !isOnlyHome;
+  const visibleItems: TaskbarItem[] = [
+    ...(showGroupBar ? groups.map((group): TaskbarItem => ({ id: `group:${group.id}`, type: "group", group })) : []),
+    ...(useCustomItems
+      ? bottomBarConfig.customItems!.map((item): TaskbarItem => ({ id: `custom:${item.id}`, type: "custom", item }))
+      : []),
+  ];
+  const visibleIds = visibleItems.map((item) => item.id);
+  const orderedItems = [
+    ...taskbarOrder
+      .map((id) => visibleItems.find((item) => item.id === id))
+      .filter((item): item is TaskbarItem => Boolean(item)),
+    ...visibleItems.filter((item) => !taskbarOrder.includes(item.id)),
+  ];
+  const taskbarReorder = useReorderableList({
+    ids: visibleIds,
+    axis: "x",
+    onReorder: (fromId, toId) => reorderTaskbarItems(fromId, toId, visibleIds),
+    disabled: isMobile || visibleIds.length < 2,
+  });
+
+  if (!bottomBarConfig.show) {
+    return null;
+  }
+
+  const getDragProps = (id: string) => ({
+    ...taskbarReorder.bindItem(id),
+    style: taskbarReorder.getItemStyle(id),
+    className: cn(
+      "shrink-0 relative transition-transform",
+      taskbarReorder.activeId === id && "z-50 opacity-95 shadow-lg cursor-grabbing",
+      taskbarReorder.overId === id && "ring-1 ring-ide-accent rounded-lg"
+    ),
+  });
+
+  const activateItem = (taskbarItem: TaskbarItem) => {
+    if (taskbarItem.type === "custom") {
+      taskbarItem.item.onClick?.();
+      return;
+    }
+    setActiveGroup(taskbarItem.group.id);
+  };
+
+  const closeGroup = async (group: PageGroup) => {
+    if (group.type === "home" && groups.length <= 1) return;
+    if (group.type === "group") {
+      await closeFolderGroup(group.id);
+      return;
+    }
+    removeGroup(group.id);
+  };
+
+  const closeAllGroups = async (keepId?: string) => {
+    const targets = groups.filter((group) => group.id !== keepId && !(group.type === "home" && groups.length <= 1));
+    for (const group of targets) {
+      await closeGroup(group);
+    }
+  };
+
+  const sortEntries: TaskbarSortEntry[] = orderedItems.map((item) => {
+    if (item.type === "custom") {
+      return { id: item.id, title: item.item.label, icon: item.item.icon, badge: item.item.badge };
+    }
+    const group = item.group;
+    const icon =
+      group.type === "tool"
+        ? getToolIcon(group.pageId)
+        : group.type === "group"
+          ? GROUP_TYPE_ICONS.group
+          : GROUP_TYPE_ICONS[group.type] || GROUP_TYPE_ICONS.tool;
+    return { id: item.id, title: getGroupTitle(group), icon };
+  });
+
+  const wrapTaskbarItem = (taskbarItem: TaskbarItem, element: React.ReactElement) => {
+    const isGroup = taskbarItem.type === "group";
+    const canClose = isGroup && !(taskbarItem.group.type === "home" && groups.length <= 1);
+    const canCloseOthers = isGroup && groups.some((group) => group.id !== taskbarItem.group.id);
+    const canCloseAll = isGroup && groups.some((group) => !(group.type === "home" && groups.length <= 1));
+    return (
+      <TaskbarItemMenu
+        title={taskbarItem.type === "custom" ? taskbarItem.item.label : getGroupTitle(taskbarItem.group)}
+        onActivate={() => activateItem(taskbarItem)}
+        onClose={isGroup ? () => closeGroup(taskbarItem.group) : undefined}
+        onCloseOthers={isGroup ? () => closeAllGroups(taskbarItem.group.id) : undefined}
+        onCloseAll={isGroup ? () => closeAllGroups() : undefined}
+        onSort={() => setSortOpen(true)}
+        canClose={canClose}
+        canCloseOthers={canCloseOthers}
+        canCloseAll={canCloseAll}
+      >
+        {element}
+      </TaskbarItemMenu>
+    );
+  };
+
+  const renderItem = (taskbarItem: TaskbarItem) => {
+    if (taskbarItem.type === "group") {
+      const group = taskbarItem.group;
+      return wrapTaskbarItem(
+        taskbarItem,
+        <motion.div
+          key={taskbarItem.id}
+          layout={taskbarReorder.activeId !== taskbarItem.id}
+          transition={REORDER_TRANSITION}
+          {...getDragProps(taskbarItem.id)}
+        >
+          <GroupButton
+            group={group}
+            isActive={activeGroupId === group.id}
+            isExpanded={shouldExpand(group)}
+            hasMultipleGroups={hasMultipleGroups}
+            getTitle={getGroupTitle}
+            getPageTitle={getPageTitle}
+            onGroupClick={handleGroupClick}
+            onPageClick={handlePageClick}
+          />
+        </motion.div>
+      );
+    }
+
+    if (taskbarItem.type === "custom") {
+      const item = taskbarItem.item;
+      return wrapTaskbarItem(
+        taskbarItem,
+        <motion.div
+          key={taskbarItem.id}
+          layout={taskbarReorder.activeId !== taskbarItem.id}
+          transition={REORDER_TRANSITION}
+          {...getDragProps(taskbarItem.id)}
+        >
+          <button
+            onClick={item.onClick}
+            className={`px-3 h-10 rounded flex items-center gap-2 transition-all relative ${
+              bottomBarConfig.activeItemId === item.id
+                ? "bg-ide-panel text-ide-accent shadow-sm"
+                : "text-ide-mute hover:text-ide-text"
+            }`}
+            title={item.label}
+          >
+            {item.icon}
+            {item.badge && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full px-1 min-w-[16px] h-4 flex items-center justify-center">
+                {item.badge}
+              </span>
+            )}
+          </button>
+        </motion.div>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <>
-      <footer className="md:hidden h-14 pb-safe bg-ide-panel border-t border-ide-border flex items-center justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.1)]">
+      <footer className="md:hidden h-14 pb-safe bg-ide-panel border-t border-ide-border flex items-center justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.1)] overflow-hidden">
         <button onClick={onMenuClick} className="h-full px-4 flex items-center gap-3">
           <div className={cornerButtonClass}>
             <Menu size={18} />
           </div>
         </button>
 
-        {showGroupBar ? (
-          <div
-            ref={containerRef}
-            className="flex h-10 bg-ide-bg rounded-lg p-1 border border-ide-border gap-1 overflow-x-auto custom-scrollbar max-w-[70vw]"
-          >
-            {groups.map((group) => (
-              <GroupButton
-                key={group.id}
-                group={group}
-                isActive={activeGroupId === group.id}
-                isExpanded={shouldExpand(group)}
-                hasMultipleGroups={hasMultipleGroups}
-                getTitle={getGroupTitle}
-                getPageTitle={getPageTitle}
-                onGroupClick={handleGroupClick}
-                onPageClick={handlePageClick}
-              />
-            ))}
-          </div>
-        ) : useCustomItems ? (
-          <div
-            ref={containerRef}
-            className="flex h-10 bg-ide-bg rounded-lg p-1 border border-ide-border gap-1 overflow-x-auto custom-scrollbar max-w-[70vw]"
-          >
-            {bottomBarConfig.customItems!.map((item) => (
-              <button
-                key={item.id}
-                onClick={item.onClick}
-                className={`px-3 h-full rounded flex items-center gap-2 transition-all relative ${
-                  bottomBarConfig.activeItemId === item.id
-                    ? "bg-ide-panel text-ide-accent shadow-sm"
-                    : "text-ide-mute hover:text-ide-text"
-                }`}
-                title={item.label}
-              >
-                {item.icon}
-                {item.badge && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full px-1 min-w-[16px] h-4 flex items-center justify-center">
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        ) : isOnlyHome && onNewPage ? (
-          <div
-            ref={containerRef}
-            className="flex h-10 bg-ide-bg rounded-lg p-1 border border-ide-border gap-1 overflow-x-auto custom-scrollbar"
-          >
+        <div
+          ref={containerRef}
+          className="flex h-10 bg-ide-bg rounded-lg p-1 border border-ide-border gap-1 overflow-x-auto custom-scrollbar touch-pan-x max-w-[70vw]"
+        >
+          {orderedItems.length > 0 ? (
+            orderedItems.map(renderItem)
+          ) : isOnlyHome && onNewPage ? (
             <button
               onClick={onNewPage}
               className="px-3 h-full rounded flex items-center gap-2 transition-all text-ide-mute hover:text-ide-accent"
@@ -325,10 +441,19 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick, onNewPage }) => {
             >
               <Plus size={18} />
             </button>
-          </div>
-        ) : (
-          <div className="flex-1" />
-        )}
+          ) : (
+            <div className="w-8" />
+          )}
+          {orderedItems.length > 0 && onNewPage && !useCustomItems && (
+            <button
+              onClick={onNewPage}
+              className="px-3 h-full rounded flex items-center gap-2 transition-all text-ide-mute hover:text-ide-accent shrink-0"
+              title={t("common.newPage")}
+            >
+              <Plus size={18} />
+            </button>
+          )}
+        </div>
 
         <div className="flex items-center gap-2 px-4">
           {rightButtons.map((button, index) => (
@@ -344,6 +469,13 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick, onNewPage }) => {
           ))}
         </div>
       </footer>
+      <TaskbarSortDialog
+        open={sortOpen}
+        title={t("common.sort")}
+        entries={sortEntries}
+        onOpenChange={setSortOpen}
+        onApply={(order) => setTaskbarOrder(order)}
+      />
       <WorkspaceHintBubble hint={workspaceHint} />
     </>
   );

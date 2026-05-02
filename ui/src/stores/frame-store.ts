@@ -110,6 +110,7 @@ export type ViewType = PageType;
 interface FrameState {
   groups: PageGroup[];
   activeGroupId: string | null;
+  taskbarOrder: string[];
   topBarConfig: TopBarConfig;
   bottomBarConfig: BottomBarConfig;
   pageMenuItems: PageMenuItem[];
@@ -134,6 +135,9 @@ interface FrameState {
   openSettingsCategory: (category: string) => void;
   setSettingsActiveCategory: (category: string | undefined) => void;
   removeGroup: (id: string) => void;
+  reorderGroups: (fromId: string, toId: string) => void;
+  setTaskbarOrder: (order: string[]) => void;
+  reorderTaskbarItems: (fromId: string, toId: string, visibleIds: string[]) => void;
   setActiveGroup: (id: string) => void;
   getActiveGroup: () => PageGroup | undefined;
 
@@ -153,6 +157,7 @@ interface FrameState {
   setCurrentActiveTab: (tabId: string | null) => void;
   addCurrentTab: (tab: TabItem) => void;
   removeCurrentTab: (tabId: string) => void;
+  reorderCurrentTabs: (fromId: string, toId: string) => void;
 
   pinTab: (tabId: string) => void;
   openPreviewTab: (tab: TabItem) => void;
@@ -229,9 +234,29 @@ const getActivePage = (group: PageGroup): GroupPage | null => {
   return group.pages.find((p) => p.id === group.activePageId) || null;
 };
 
+const reorderById = <T extends { id: string }>(items: T[], fromId: string, toId: string): T[] => {
+  if (fromId === toId) return items;
+  const fromIndex = items.findIndex((item) => item.id === fromId);
+  const toIndex = items.findIndex((item) => item.id === toId);
+  if (fromIndex === -1 || toIndex === -1) return items;
+  const next = [...items];
+  const [item] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, item);
+  return next;
+};
+
+const reorderIds = (ids: string[], fromId: string, toId: string): string[] => {
+  return reorderById(
+    ids.map((id) => ({ id })),
+    fromId,
+    toId
+  ).map((item) => item.id);
+};
+
 export const useFrameStore = create<FrameState>((set, get) => ({
   groups: [],
   activeGroupId: null,
+  taskbarOrder: [],
   topBarConfig: { show: false },
   bottomBarConfig: { show: true },
   pageMenuItems: [],
@@ -242,7 +267,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
 
   initDefaultGroups: () => {
     const homeGroup = createHomeGroup();
-    set({ groups: [homeGroup], activeGroupId: homeGroup.id });
+    set({ groups: [homeGroup], activeGroupId: homeGroup.id, taskbarOrder: [] });
   },
 
   showHomePage: () => {
@@ -365,7 +390,32 @@ export const useFrameStore = create<FrameState>((set, get) => ({
       if (s.activeGroupId === id) {
         activeGroupId = remainingGroups[0].id;
       }
-      return { groups: remainingGroups, activeGroupId };
+      return {
+        groups: remainingGroups,
+        activeGroupId,
+        taskbarOrder: s.taskbarOrder.filter((itemId) => itemId !== `group:${id}`),
+      };
+    }),
+
+  reorderGroups: (fromId, toId) =>
+    set((s) => ({
+      groups: reorderById(s.groups, fromId, toId),
+    })),
+
+  setTaskbarOrder: (order) => set({ taskbarOrder: order }),
+
+  reorderTaskbarItems: (fromId, toId, visibleIds) =>
+    set((s) => {
+      const current = s.taskbarOrder.length > 0 ? s.taskbarOrder : visibleIds;
+      const known = current.filter((id) => visibleIds.includes(id));
+      const appended = visibleIds.filter((id) => !known.includes(id));
+      const taskbarOrder = reorderIds([...known, ...appended], fromId, toId);
+      const fromGroup = fromId.startsWith("group:") ? fromId.slice(6) : null;
+      const toGroup = toId.startsWith("group:") ? toId.slice(6) : null;
+      return {
+        taskbarOrder,
+        groups: fromGroup && toGroup ? reorderById(s.groups, fromGroup, toGroup) : s.groups,
+      };
     }),
 
   setActiveGroup: (id) => set({ activeGroupId: id }),
@@ -548,6 +598,23 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     const { activeGroupId, removeTab } = get();
     if (activeGroupId) removeTab(activeGroupId, tabId);
   },
+
+  reorderCurrentTabs: (fromId, toId) =>
+    set((s) => ({
+      groups: s.groups.map((g) => {
+        if (g.id !== s.activeGroupId) return g;
+        if (g.type === "group") {
+          return {
+            ...g,
+            pages: g.pages.map((p) =>
+              p.id === g.activePageId ? { ...p, tabs: reorderById(p.tabs, fromId, toId) } : p
+            ),
+          };
+        }
+        if (g.type === "settings" || g.type === "home") return g;
+        return { ...g, tabs: reorderById(g.tabs, fromId, toId) };
+      }),
+    })),
 
   pinTab: (tabId) =>
     set((s) => ({

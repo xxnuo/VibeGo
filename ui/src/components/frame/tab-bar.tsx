@@ -1,7 +1,10 @@
 import { Box, Edit, Eye, FileDiff, FileText, FolderOpen, GitGraph, RefreshCw, Terminal, X } from "lucide-react";
+import { motion } from "motion/react";
 import React, { useCallback, useEffect, useRef } from "react";
 import { useDefaultPageCloseButton } from "@/hooks/use-default-page-close-button";
+import { useReorderableList } from "@/hooks/use-reorderable-list";
 import { useTranslation } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
 import { type TabItem, useFrameStore, type ViewType } from "@/stores/frame-store";
 import { getPreviewType, usePreviewStore } from "@/stores/preview-store";
@@ -31,6 +34,7 @@ const TabBar: React.FC<TabBarProps> = ({ onRefresh, onBackToList }) => {
   const activeTabId = useFrameStore((s) => s.getCurrentActiveTabId());
   const setCurrentActiveTab = useFrameStore((s) => s.setCurrentActiveTab);
   const removeCurrentTab = useFrameStore((s) => s.removeCurrentTab);
+  const reorderCurrentTabs = useFrameStore((s) => s.reorderCurrentTabs);
   const pinTab = useFrameStore((s) => s.pinTab);
   const currentView = useFrameStore((s) => s.getCurrentView());
   const defaultCloseButton = useDefaultPageCloseButton();
@@ -41,6 +45,13 @@ const TabBar: React.FC<TabBarProps> = ({ onRefresh, onBackToList }) => {
 
   const lastClickTime = useRef<Record<string, number>>({});
   const tabsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  const tabIds = tabs.map((tab) => tab.id);
+  const tabReorder = useReorderableList({
+    ids: tabIds,
+    axis: "x",
+    onReorder: reorderCurrentTabs,
+    disabled: tabs.length < 2,
+  });
 
   useEffect(() => {
     if (activeTabId) {
@@ -148,30 +159,38 @@ const TabBar: React.FC<TabBarProps> = ({ onRefresh, onBackToList }) => {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar touch-pan-x h-full">
           {tabs.map((tab) => (
-            <div
+            <motion.div
               key={tab.id}
+              layout={tabReorder.activeId !== tab.id}
+              transition={{ type: "spring", stiffness: 520, damping: 42, mass: 0.7 }}
+              {...tabReorder.bindItem(tab.id)}
               ref={(el) => {
                 if (el) tabsRef.current.set(tab.id, el);
                 else tabsRef.current.delete(tab.id);
               }}
               onClick={() => handleTabClick(tab.id)}
-              className={`shrink-0 px-2 h-7 rounded-md flex items-center gap-1 text-xs border transition-all cursor-pointer ${
+              style={tabReorder.getItemStyle(tab.id)}
+              className={cn(
+                "shrink-0 px-2 h-7 rounded-md flex items-center gap-1 text-xs border transition-all cursor-pointer relative",
+                tabReorder.activeId === tab.id && "opacity-95 shadow-lg cursor-grabbing",
+                tabReorder.activeId && tabReorder.overId === tab.id && "ring-1 ring-ide-accent",
                 activeTabId === tab.id
                   ? "bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm"
                   : "bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text"
-              }`}
+              )}
             >
               {getTabIcon(tab)}
               <span className={`max-w-[80px] truncate font-medium ${!tab.pinned ? "italic" : ""}`}>{tab.title}</span>
               {tab.closable !== false && (
                 <button
+                  data-drag-ignore
                   onClick={(e) => handleCloseTab(e, tab.id)}
                   className="hover:text-red-500 rounded-full p-0.5 hover:bg-ide-bg"
                 >
                   <X size={12} />
                 </button>
               )}
-            </div>
+            </motion.div>
           ))}
         </div>
       </div>

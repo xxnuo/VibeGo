@@ -190,7 +190,7 @@ func TestSessionSaveWorkspaceState(t *testing.T) {
 
 	h.db.Create(&model.UserSession{ID: "save-workspace", Name: "Original", State: "{}", CreatedAt: 100, UpdatedAt: 100})
 
-	body := `{"openGroups":[{"id":"group-1","name":"Project","pages":[{"id":"group-1-files","type":"files","label":"Files","tabs":[],"activeTabId":null}],"activePageId":"group-1-files"}],"openTools":[],"settingsOpen":false,"activeGroupId":"group-1","fileManagerByGroup":{}}`
+	body := `{"openGroups":[{"id":"group-1","name":"Project","pages":[{"id":"group-1-files","type":"files","label":"Files","tabs":[],"activeTabId":null}],"activePageId":"group-1-files"}],"openTools":[{"id":"tool-1","pageId":"ai-session-manager","name":"AI","tabs":[{"id":"tab-1","title":"Tab"}],"activeTabId":"tab-1"}],"taskbarOrder":["group:group-1","custom:ai"],"settingsOpen":false,"activeGroupId":"group-1","fileManagerByGroup":{}}`
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("PATCH", "/api/session/save-workspace/workspace", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -202,6 +202,10 @@ func TestSessionSaveWorkspaceState(t *testing.T) {
 	h.db.First(&session, "id = ?", "save-workspace")
 	assert.Contains(t, session.State, `"openGroups"`)
 	assert.Contains(t, session.State, `"group-1"`)
+	assert.Contains(t, session.State, `"taskbarOrder"`)
+	assert.Contains(t, session.State, `"custom:ai"`)
+	assert.Contains(t, session.State, `"tabs"`)
+	assert.Contains(t, session.State, `"tab-1"`)
 }
 
 func TestSessionRejectInvalidWorkspaceState(t *testing.T) {

@@ -73,6 +73,7 @@ function createEmptySessionState(): SessionState {
   return {
     openGroups: [],
     openTools: [],
+    taskbarOrder: [],
     terminalsByGroup: {},
     activeTerminalByGroup: {},
     listManagerOpenByGroup: {},
@@ -390,6 +391,7 @@ function buildSessionWorkspacePatch(state: SessionState) {
   return {
     openGroups: state.openGroups,
     openTools: state.openTools,
+    taskbarOrder: state.taskbarOrder,
     settingsOpen: state.settingsOpen,
     activeGroupId: state.activeGroupId,
     fileManagerByGroup: state.fileManagerByGroup,
@@ -495,7 +497,10 @@ function buildSessionState(): SessionState {
       id: group.id,
       pageId: group.pageId,
       name: group.name,
+      tabs: group.tabs,
+      activeTabId: group.activeTabId,
     })),
+    taskbarOrder: frameState.taskbarOrder,
     terminalsByGroup: sanitizedTerminalState.terminalsByGroup,
     activeTerminalByGroup: sanitizedTerminalState.activeTerminalByGroup,
     listManagerOpenByGroup: sanitizedTerminalState.listManagerOpenByGroup,
@@ -536,6 +541,20 @@ function restoreSessionState(state: SessionState): void {
   state.openTools.forEach((tool) => {
     frameStore.addToolGroup(tool.pageId, tool.name, tool.id);
   });
+
+  useFrameStore.setState((frameState) => ({
+    groups: frameState.groups.map((group) => {
+      if (group.type !== "tool") return group;
+      const tool = state.openTools.find((item) => item.id === group.id);
+      if (!tool) return group;
+      return {
+        ...group,
+        tabs: tool.tabs || [],
+        activeTabId: tool.activeTabId || null,
+      };
+    }),
+    taskbarOrder: state.taskbarOrder || [],
+  }));
 
   if (state.settingsOpen || state.activeGroupId === "settings") {
     frameStore.addSettingsGroup();

@@ -12,6 +12,7 @@ import (
 type WorkspaceState struct {
 	OpenGroups             []WorkspaceGroup                      `json:"openGroups"`
 	OpenTools              []WorkspaceTool                       `json:"openTools"`
+	TaskbarOrder           []string                              `json:"taskbarOrder"`
 	TerminalsByGroup       map[string][]WorkspaceTerminalSession `json:"terminalsByGroup"`
 	ActiveTerminalByGroup  map[string]*string                    `json:"activeTerminalByGroup"`
 	ListManagerOpenByGroup map[string]bool                       `json:"listManagerOpenByGroup"`
@@ -48,9 +49,11 @@ type WorkspaceTab struct {
 }
 
 type WorkspaceTool struct {
-	ID     string `json:"id"`
-	PageID string `json:"pageId"`
-	Name   string `json:"name"`
+	ID          string         `json:"id"`
+	PageID      string         `json:"pageId"`
+	Name        string         `json:"name"`
+	Tabs        []WorkspaceTab `json:"tabs,omitempty"`
+	ActiveTabID *string        `json:"activeTabId,omitempty"`
 }
 
 type WorkspaceTerminalSession struct {
@@ -86,6 +89,7 @@ type WorkspaceFileManagerState struct {
 type WorkspaceStatePatch struct {
 	OpenGroups             *[]WorkspaceGroup                      `json:"openGroups,omitempty"`
 	OpenTools              *[]WorkspaceTool                       `json:"openTools,omitempty"`
+	TaskbarOrder           *[]string                              `json:"taskbarOrder,omitempty"`
 	TerminalsByGroup       *map[string][]WorkspaceTerminalSession `json:"terminalsByGroup,omitempty"`
 	ActiveTerminalByGroup  *map[string]*string                    `json:"activeTerminalByGroup,omitempty"`
 	ListManagerOpenByGroup *map[string]bool                       `json:"listManagerOpenByGroup,omitempty"`
@@ -119,6 +123,7 @@ func emptyWorkspaceState() WorkspaceState {
 	return WorkspaceState{
 		OpenGroups:             []WorkspaceGroup{},
 		OpenTools:              []WorkspaceTool{},
+		TaskbarOrder:           []string{},
 		TerminalsByGroup:       map[string][]WorkspaceTerminalSession{},
 		ActiveTerminalByGroup:  map[string]*string{},
 		ListManagerOpenByGroup: map[string]bool{},
@@ -173,6 +178,9 @@ func normalizeWorkspaceState(state *WorkspaceState) {
 	if state.OpenTools == nil {
 		state.OpenTools = []WorkspaceTool{}
 	}
+	if state.TaskbarOrder == nil {
+		state.TaskbarOrder = []string{}
+	}
 	if state.TerminalsByGroup == nil {
 		state.TerminalsByGroup = map[string][]WorkspaceTerminalSession{}
 	}
@@ -200,6 +208,12 @@ func normalizeWorkspaceState(state *WorkspaceState) {
 			if state.OpenGroups[i].Pages[j].Tabs == nil {
 				state.OpenGroups[i].Pages[j].Tabs = []WorkspaceTab{}
 			}
+		}
+	}
+
+	for i := range state.OpenTools {
+		if state.OpenTools[i].Tabs == nil {
+			state.OpenTools[i].Tabs = []WorkspaceTab{}
 		}
 	}
 
@@ -274,6 +288,11 @@ func validateWorkspaceState(state WorkspaceState) error {
 		if tool.ID == "" || tool.PageID == "" {
 			return fmt.Errorf("openTools.id and openTools.pageId are required")
 		}
+		for _, tab := range tool.Tabs {
+			if tab.ID == "" {
+				return fmt.Errorf("openTools.tabs.id is required")
+			}
+		}
 	}
 
 	for _, terminals := range state.TerminalsByGroup {
@@ -343,6 +362,9 @@ func applyWorkspaceStatePatch(state *WorkspaceState, patch WorkspaceStatePatch) 
 	}
 	if patch.OpenTools != nil {
 		state.OpenTools = *patch.OpenTools
+	}
+	if patch.TaskbarOrder != nil {
+		state.TaskbarOrder = *patch.TaskbarOrder
 	}
 	if patch.TerminalsByGroup != nil {
 		state.TerminalsByGroup = *patch.TerminalsByGroup
