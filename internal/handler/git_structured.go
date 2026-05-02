@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"net/http"
@@ -14,13 +15,14 @@ import (
 )
 
 type StructuredFile struct {
-	Path           string `json:"path"`
-	Name           string `json:"name"`
-	IndexStatus    string `json:"indexStatus"`
-	WorktreeStatus string `json:"worktreeStatus"`
-	ChangeType     string `json:"changeType"`
-	IncludedState  string `json:"includedState"`
-	Conflicted     bool   `json:"conflicted"`
+	Path           string              `json:"path"`
+	Name           string              `json:"name"`
+	IndexStatus    string              `json:"indexStatus"`
+	WorktreeStatus string              `json:"worktreeStatus"`
+	ChangeType     string              `json:"changeType"`
+	IncludedState  string              `json:"includedState"`
+	Conflicted     bool                `json:"conflicted"`
+	Submodule      *GitSubmoduleStatus `json:"submodule,omitempty"`
 }
 
 type StatusSummary struct {
@@ -192,7 +194,7 @@ func (h *GitHandler) collectStructuredStatus(repoRoot string) ([]StructuredFile,
 }
 
 func (h *GitHandler) collectStructuredStatusWithScope(repoRoot string, scopeKey string) ([]StructuredFile, StatusSummary) {
-	cmd := newGitCommand("status", "--porcelain=v1", "-z")
+	cmd := newGitCommand("status", "--porcelain=v1", "-z", "--ignore-submodules=none")
 	cmd.Dir = repoRoot
 	output, err := cmd.Output()
 	if err != nil {
@@ -201,6 +203,7 @@ func (h *GitHandler) collectStructuredStatusWithScope(repoRoot string, scopeKey 
 
 	var files []StructuredFile
 	summary := StatusSummary{}
+	submoduleStatuses := submoduleStatusCodeMap(repoRoot)
 	seen := map[string]bool{}
 	validPaths := map[string]struct{}{}
 	entries := strings.Split(string(output), "\x00")
@@ -280,6 +283,7 @@ func (h *GitHandler) collectStructuredStatusWithScope(repoRoot string, scopeKey 
 			ChangeType:     changeType,
 			IncludedState:  includedState,
 			Conflicted:     conflicted,
+			Submodule:      submoduleStatusValue(submoduleStatuses, path),
 		})
 
 		summary.Changed++
@@ -338,17 +342,29 @@ type DiffCapability struct {
 }
 
 type InteractiveDiff struct {
-	Path          string         `json:"path"`
-	Mode          string         `json:"mode"`
-	Patch         string         `json:"patch"`
-	PatchHash     string         `json:"patchHash"`
-	Hunks         []DiffHunk     `json:"hunks"`
-	Stats         DiffStats      `json:"stats"`
-	Capability    DiffCapability `json:"capability"`
-	Old           string         `json:"old"`
-	New           string         `json:"new"`
-	Binary        bool           `json:"binary"`
-	IncludedState string         `json:"includedState"`
+	Path           string            `json:"path"`
+	Mode           string            `json:"mode"`
+	Kind           string            `json:"kind,omitempty"`
+	Patch          string            `json:"patch"`
+	PatchHash      string            `json:"patchHash"`
+	PatchSize      int64             `json:"patchSize"`
+	PatchTruncated bool              `json:"patchTruncated"`
+	Hunks          []DiffHunk        `json:"hunks"`
+	Stats          DiffStats         `json:"stats"`
+	Capability     DiffCapability    `json:"capability"`
+	Old            string            `json:"old"`
+	New            string            `json:"new"`
+	OldSize        int64             `json:"oldSize"`
+	NewSize        int64             `json:"newSize"`
+	OldBinary      bool              `json:"oldBinary"`
+	NewBinary      bool              `json:"newBinary"`
+	OldTruncated   bool              `json:"oldTruncated"`
+	NewTruncated   bool              `json:"newTruncated"`
+	Binary         bool              `json:"binary"`
+	Large          bool              `json:"large"`
+	IncludedState  string            `json:"includedState"`
+	Submodule      *GitSubmoduleDiff `json:"submodule,omitempty"`
+	Image          *GitImageDiff     `json:"image,omitempty"`
 }
 
 func computePatchHash(patch string) string {
@@ -711,24 +727,67 @@ func buildNextSelectionState(currentState fileSelectionState, diff *InteractiveD
 }
 
 func getGitDiff(repoRoot, filePath, mode string) (*InteractiveDiff, error) {
+	previewLimit := gitDiffPreviewLimitForPath(filePath)
 	var args []string
 	switch mode {
 	case "staged":
-		args = []string{"diff", "--cached", "--", filePath}
+		args = []string{"diff", "--cached", "--no-ext-diff", "--no-textconv", "--", filePath}
 	default:
-		args = []string{"diff", "HEAD", "--", filePath}
+		args = []string{"diff", "HEAD", "--no-ext-diff", "--no-textconv", "--", filePath}
+	}
+
+	oldPreview := gitContentPreview{}
+	if old, oldErr := readGitObjectPreviewWithLimit(repoRoot, "HEAD:"+filePath, previewLimit); oldErr == nil {
+		oldPreview = old
+	}
+	newPreview := gitContentPreview{}
+	if mode == "staged" {
+		if staged, stagedErr := readGitObjectPreviewWithLimit(repoRoot, ":"+filePath, previewLimit); stagedErr == nil {
+			newPreview = staged
+		}
+	} else {
+		if working, workingErr := readWorkingGitPreviewWithLimit(filepath.Join(repoRoot, filePath), previewLimit); workingErr == nil {
+			newPreview = working
+		}
 	}
 
 	cmd := newGitCommand(args...)
 	cmd.Dir = repoRoot
-	output, err := cmd.Output()
-	headErr := error(nil)
-	if mode == "working" {
-		headCmd := newGitCommand("show", "HEAD:"+filePath)
-		headCmd.Dir = repoRoot
-		_, headErr = headCmd.Output()
+	patchCapture, _, err := runGitBoundedOutput(cmd, gitDiffPatchLimit)
+	patchAvailable := err == nil
+	if err != nil && !(mode == "working" && !oldPreview.exists && newPreview.exists) {
+		return &InteractiveDiff{
+			Path:       filePath,
+			Mode:       mode,
+			Hunks:      []DiffHunk{},
+			Stats:      DiffStats{},
+			Capability: DiffCapability{LineSelectable: true},
+		}, nil
 	}
-	if err != nil {
+	output := []byte{}
+	patchTruncated := false
+	if patchAvailable {
+		output = patchCapture.Bytes()
+		patchTruncated = patchCapture.truncated
+	}
+
+	if mode == "working" && len(output) == 0 && !oldPreview.exists && newPreview.exists {
+		noIndexCmd := newGitCommand("diff", "--no-index", "--no-ext-diff", "--no-textconv", "--", "/dev/null", filePath)
+		noIndexCmd.Dir = repoRoot
+		noIndexCapture, _, noIndexErr := runGitBoundedOutput(noIndexCmd, gitDiffPatchLimit)
+		if noIndexErr == nil {
+			output = noIndexCapture.Bytes()
+			patchTruncated = noIndexCapture.truncated
+			patchCapture = noIndexCapture
+			patchAvailable = true
+		} else if exitErr, ok := noIndexErr.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			output = noIndexCapture.Bytes()
+			patchTruncated = noIndexCapture.truncated
+			patchCapture = noIndexCapture
+			patchAvailable = true
+		}
+	}
+	if !patchAvailable {
 		return &InteractiveDiff{
 			Path:       filePath,
 			Mode:       mode,
@@ -738,19 +797,21 @@ func getGitDiff(repoRoot, filePath, mode string) (*InteractiveDiff, error) {
 		}, nil
 	}
 
-	if mode == "working" && len(output) == 0 && headErr != nil {
-		noIndexCmd := newGitCommand("diff", "--no-index", "--", "/dev/null", filePath)
-		noIndexCmd.Dir = repoRoot
-		noIndexOutput, noIndexErr := noIndexCmd.CombinedOutput()
-		if noIndexErr == nil {
-			output = noIndexOutput
-		} else if exitErr, ok := noIndexErr.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
-			output = noIndexOutput
-		}
-	}
-
 	patch := string(output)
-	hunks := parseUnifiedDiff(patch)
+	if submodule := buildGitSubmoduleDiff(repoRoot, filePath, mode, output); submodule != nil {
+		return &InteractiveDiff{
+			Path: filePath, Mode: mode, Kind: "submodule", Patch: patch,
+			PatchHash: patchCapture.Digest(), PatchSize: patchCapture.Size(),
+			PatchTruncated: patchTruncated, Capability: DiffCapability{LineSelectable: false},
+			Submodule: submodule, IncludedState: "all",
+		}, nil
+	}
+	binary := oldPreview.binary || newPreview.binary || bytes.Contains(output, []byte("Binary files ")) || bytes.Contains(output, []byte("GIT binary patch"))
+	imagePreview := buildGitImagePreview(filePath, oldPreview, newPreview)
+	hunks := []DiffHunk{}
+	if !patchTruncated && !binary {
+		hunks = parseUnifiedDiff(patch)
+	}
 
 	stats := DiffStats{Hunks: len(hunks)}
 	for _, h := range hunks {
@@ -764,39 +825,36 @@ func getGitDiff(repoRoot, filePath, mode string) (*InteractiveDiff, error) {
 		}
 	}
 
-	oldOutput := []byte{}
-	newOutput := []byte{}
-
-	switch mode {
-	case "staged":
-		oldCmd := newGitCommand("show", "HEAD:"+filePath)
-		oldCmd.Dir = repoRoot
-		oldOutput, _ = oldCmd.Output()
-
-		newCmd := newGitCommand("show", ":"+filePath)
-		newCmd.Dir = repoRoot
-		newOutput, _ = newCmd.Output()
-	default:
-		oldCmd := newGitCommand("show", "HEAD:"+filePath)
-		oldCmd.Dir = repoRoot
-		oldOutput, _ = oldCmd.Output()
-
-		absPath := filepath.Join(repoRoot, filePath)
-		if out, fileErr := os.ReadFile(absPath); fileErr == nil {
-			newOutput = out
-		}
+	if binary {
+		// Binary contents are intentionally not serialized as JSON strings. The
+		// exact byte sizes and binary marker remain available to the caller.
+		oldPreview.content = nil
+		newPreview.content = nil
 	}
+	large := patchTruncated || oldPreview.truncated || newPreview.truncated
+	lineSelectable := !binary && !patchTruncated
 
 	return &InteractiveDiff{
-		Path:       filePath,
-		Mode:       mode,
-		Patch:      patch,
-		PatchHash:  computePatchHash(patch),
-		Hunks:      hunks,
-		Stats:      stats,
-		Capability: DiffCapability{LineSelectable: true},
-		Old:        string(oldOutput),
-		New:        string(newOutput),
+		Path:           filePath,
+		Mode:           mode,
+		Patch:          patch,
+		PatchHash:      patchCapture.Digest(),
+		PatchSize:      patchCapture.Size(),
+		PatchTruncated: patchTruncated,
+		Hunks:          hunks,
+		Stats:          stats,
+		Capability:     DiffCapability{LineSelectable: lineSelectable},
+		Old:            gitPreviewText(oldPreview),
+		New:            gitPreviewText(newPreview),
+		OldSize:        oldPreview.size,
+		NewSize:        newPreview.size,
+		OldBinary:      oldPreview.binary,
+		NewBinary:      newPreview.binary,
+		OldTruncated:   oldPreview.truncated,
+		NewTruncated:   newPreview.truncated,
+		Binary:         binary,
+		Large:          large,
+		Image:          imagePreview.response(),
 	}, nil
 }
 
@@ -817,9 +875,17 @@ func (h *GitHandler) FileDiff(c *gin.Context) {
 	if req.Mode == "" {
 		req.Mode = "working"
 	}
+	if req.Mode != "working" && req.Mode != "staged" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "mode must be working or staged"})
+		return
+	}
 
 	repoRoot, err := h.getRepoRoot(req.Path)
 	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := validateRepoRelativePath(repoRoot, req.FilePath); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -867,6 +933,12 @@ func (h *GitHandler) ApplySelection(c *gin.Context) {
 
 	repoRoot, err := h.getRepoRoot(req.Path)
 	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	unlockRepo := lockGitOperationRepo(repoRoot)
+	defer unlockRepo()
+	if err := validateRepoRelativePath(repoRoot, req.FilePath); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -944,17 +1016,8 @@ func (h *GitHandler) ApplySelection(c *gin.Context) {
 				return
 			}
 
-			resetCmd := newGitCommand("reset", "HEAD", "--", req.FilePath)
-			resetCmd.Dir = repoRoot
-			if out, cmdErr := resetCmd.CombinedOutput(); cmdErr != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": gitCommandError(cmdErr, out).Error()})
-				return
-			}
-
-			checkoutCmd := newGitCommand("checkout", "--", req.FilePath)
-			checkoutCmd.Dir = repoRoot
-			if out, cmdErr := checkoutCmd.CombinedOutput(); cmdErr != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": gitCommandError(cmdErr, out).Error()})
+			if err := discardStagedGitPath(repoRoot, req.FilePath); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 		default:
@@ -968,6 +1031,7 @@ func (h *GitHandler) ApplySelection(c *gin.Context) {
 		if nextDiff != nil && len(nextDiff.Hunks) > 0 {
 			result["diff"] = nextDiff
 		}
+		unlockRepo()
 		h.broadcastStatus(req.Path)
 		c.JSON(http.StatusOK, result)
 		return
@@ -993,10 +1057,8 @@ func (h *GitHandler) ApplySelection(c *gin.Context) {
 		persistSelectionState(h.selectionStore, scopeKey, req.FilePath, nextState)
 	case "discard":
 		if req.Target == "file" {
-			cmd := newGitCommand("checkout", "--", req.FilePath)
-			cmd.Dir = repoRoot
-			if out, cmdErr := cmd.CombinedOutput(); cmdErr != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": gitCommandError(cmdErr, out).Error()})
+			if err := discardGitPath(repoRoot, req.FilePath); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 			h.selectionStore.delete(scopeKey, req.FilePath)
@@ -1027,6 +1089,7 @@ func (h *GitHandler) ApplySelection(c *gin.Context) {
 	if diff != nil && len(diff.Hunks) > 0 {
 		result["diff"] = diff
 	}
+	unlockRepo()
 	h.broadcastStatusScoped(req.Path, req.WorkspaceSessionID, req.GroupID)
 	h.broadcastRepoSyncNeededScoped(req.Path, req.WorkspaceSessionID, req.GroupID, gin.H{"status": true, "draft": true})
 	c.JSON(http.StatusOK, result)
@@ -1053,6 +1116,12 @@ func (h *GitHandler) ApplySelectionBatch(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	unlockRepo := lockGitOperationRepo(repoRoot)
+	defer unlockRepo()
+	if err := validateRepoRelativePaths(repoRoot, req.FilePaths); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	scopeKey := buildGitScopeKey(req.WorkspaceSessionID, req.GroupID, repoRoot)
 
 	for _, filePath := range req.FilePaths {
@@ -1067,6 +1136,7 @@ func (h *GitHandler) ApplySelectionBatch(c *gin.Context) {
 	}
 
 	files, summary := h.collectStructuredStatusWithScope(repoRoot, scopeKey)
+	unlockRepo()
 	h.broadcastStatusScoped(req.Path, req.WorkspaceSessionID, req.GroupID)
 	h.broadcastRepoSyncNeededScoped(req.Path, req.WorkspaceSessionID, req.GroupID, gin.H{"status": true, "draft": true})
 	c.JSON(http.StatusOK, gin.H{"ok": true, "status": gin.H{"files": files, "summary": summary}})
@@ -1075,6 +1145,7 @@ func (h *GitHandler) ApplySelectionBatch(c *gin.Context) {
 type StashFilesRequest struct {
 	Path  string `json:"path" binding:"required"`
 	Index int    `json:"index"`
+	OID   string `json:"oid"`
 }
 
 type StashFileInfo struct {
@@ -1094,8 +1165,14 @@ func (h *GitHandler) StashFiles(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	cmd := newGitCommand("stash", "show", "--name-status", fmt.Sprintf("stash@{%d}", req.Index))
+	unlockRepo := lockGitOperationRepo(repoRoot)
+	defer unlockRepo()
+	_, stashOID, err := resolveGitStashReference(repoRoot, req.Index, req.OID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	cmd := newGitCommand("stash", "show", "--name-status", "--include-untracked", "-z", stashOID)
 	cmd.Dir = repoRoot
 	output, err := cmd.Output()
 	if err != nil {
@@ -1104,26 +1181,36 @@ func (h *GitHandler) StashFiles(c *gin.Context) {
 	}
 
 	var files []StashFileInfo
-	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
-		if line == "" {
-			continue
-		}
-		parts := strings.SplitN(line, "\t", 2)
-		if len(parts) < 2 {
-			continue
+	parts := strings.Split(string(output), "\x00")
+	for i := 0; i < len(parts); {
+		statusCode := parts[i]
+		i++
+		if statusCode == "" || i >= len(parts) {
+			break
 		}
 		status := "modified"
-		switch parts[0] {
-		case "A":
-			status = "added"
-		case "D":
-			status = "deleted"
-		case "R":
-			status = "renamed"
-		case "C":
-			status = "copied"
+		if len(statusCode) > 0 {
+			switch statusCode[0] {
+			case 'A':
+				status = "added"
+			case 'D':
+				status = "deleted"
+			case 'R':
+				status = "renamed"
+			case 'C':
+				status = "copied"
+			}
 		}
-		files = append(files, StashFileInfo{Path: parts[1], Status: status})
+		filePath := parts[i]
+		i++
+		if len(statusCode) > 0 && (statusCode[0] == 'R' || statusCode[0] == 'C') {
+			if i >= len(parts) {
+				break
+			}
+			filePath = parts[i]
+			i++
+		}
+		files = append(files, StashFileInfo{Path: filePath, Status: status})
 	}
 
 	c.JSON(http.StatusOK, gin.H{"files": files})
@@ -1132,6 +1219,7 @@ func (h *GitHandler) StashFiles(c *gin.Context) {
 type StashDiffRequest struct {
 	Path     string `json:"path" binding:"required"`
 	Index    int    `json:"index"`
+	OID      string `json:"oid"`
 	FilePath string `json:"filePath" binding:"required"`
 }
 
@@ -1147,19 +1235,58 @@ func (h *GitHandler) StashDiff(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	unlockRepo := lockGitOperationRepo(repoRoot)
+	defer unlockRepo()
+	_, stashOID, err := resolveGitStashReference(repoRoot, req.Index, req.OID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := validateRepoRelativeLiteralPath(repoRoot, req.FilePath); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-	stashRef := fmt.Sprintf("stash@{%d}", req.Index)
+	stashRef := stashOID
+	oldRef := stashRef + "^"
+	newRef := stashRef
+	oldSpec := oldRef + ":" + req.FilePath
+	newSpec := newRef + ":" + req.FilePath
 
-	cmd := newGitCommand("diff", stashRef+"^.."+stashRef, "--", req.FilePath)
+	// `stash push --include-untracked` stores untracked files in a third
+	// parent rather than the stash tree itself. Use that parent as the new
+	// side, reversing the diff range, so an untracked file is rendered as an
+	// addition instead of disappearing from the detail view.
+	if _, err := readGitObjectPreview(repoRoot, newSpec); err != nil {
+		untrackedSpec := stashRef + "^3:" + req.FilePath
+		if _, untrackedErr := readGitObjectPreview(repoRoot, untrackedSpec); untrackedErr == nil {
+			oldRef = stashRef
+			newRef = stashRef + "^3"
+			oldSpec = stashRef + ":" + req.FilePath
+			newSpec = untrackedSpec
+		}
+	}
+
+	cmd := newGitCommand("--literal-pathspecs", "diff", oldRef+".."+newRef, "--no-ext-diff", "--no-textconv", "--", req.FilePath)
 	cmd.Dir = repoRoot
-	output, err := cmd.Output()
+	patchCapture, _, err := runGitBoundedOutput(cmd, gitDiffPatchLimit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get stash diff"})
 		return
 	}
 
+	output := patchCapture.Bytes()
+	patchTruncated := patchCapture.truncated
 	patch := string(output)
-	hunks := parseUnifiedDiff(patch)
+	previewLimit := gitDiffPreviewLimitForPath(req.FilePath)
+	parentPreview, _ := readGitObjectPreviewWithLimit(repoRoot, oldSpec, previewLimit)
+	stashPreview, _ := readGitObjectPreviewWithLimit(repoRoot, newSpec, previewLimit)
+	binary := parentPreview.binary || stashPreview.binary || bytes.Contains(output, []byte("Binary files ")) || bytes.Contains(output, []byte("GIT binary patch"))
+	imagePreview := buildGitImagePreview(req.FilePath, parentPreview, stashPreview)
+	hunks := []DiffHunk{}
+	if !patchTruncated && !binary {
+		hunks = parseUnifiedDiff(patch)
+	}
 
 	stats := DiffStats{Hunks: len(hunks)}
 	for _, h := range hunks {
@@ -1173,24 +1300,32 @@ func (h *GitHandler) StashDiff(c *gin.Context) {
 		}
 	}
 
-	parentCmd := newGitCommand("show", stashRef+"^:"+req.FilePath)
-	parentCmd.Dir = repoRoot
-	oldContent, _ := parentCmd.Output()
-
-	stashCmd := newGitCommand("show", stashRef+":"+req.FilePath)
-	stashCmd.Dir = repoRoot
-	newContent, _ := stashCmd.Output()
+	if binary {
+		parentPreview.content = nil
+		stashPreview.content = nil
+	}
 
 	c.JSON(http.StatusOK, InteractiveDiff{
-		Path:       req.FilePath,
-		Mode:       "stash",
-		Patch:      patch,
-		PatchHash:  computePatchHash(patch),
-		Hunks:      hunks,
-		Stats:      stats,
-		Capability: DiffCapability{LineSelectable: false},
-		Old:        string(oldContent),
-		New:        string(newContent),
+		Path:           req.FilePath,
+		Mode:           "stash",
+		Patch:          patch,
+		PatchHash:      patchCapture.Digest(),
+		PatchSize:      patchCapture.Size(),
+		PatchTruncated: patchTruncated,
+		Hunks:          hunks,
+		Stats:          stats,
+		Capability:     DiffCapability{LineSelectable: false},
+		Old:            gitPreviewText(parentPreview),
+		New:            gitPreviewText(stashPreview),
+		OldSize:        parentPreview.size,
+		NewSize:        stashPreview.size,
+		OldBinary:      parentPreview.binary,
+		NewBinary:      stashPreview.binary,
+		OldTruncated:   parentPreview.truncated,
+		NewTruncated:   stashPreview.truncated,
+		Binary:         binary,
+		Large:          patchTruncated || parentPreview.truncated || stashPreview.truncated,
+		Image:          imagePreview.response(),
 	})
 }
 
@@ -1203,11 +1338,167 @@ type ConflictSegment struct {
 	Theirs  []string `json:"theirs,omitempty"`
 }
 
+type ConflictStageDetails struct {
+	Present bool `json:"present"`
+	Deleted bool `json:"deleted"`
+}
+
+type ConflictStages struct {
+	Base   ConflictStageDetails `json:"base"`
+	Ours   ConflictStageDetails `json:"ours"`
+	Theirs ConflictStageDetails `json:"theirs"`
+}
+
 type ConflictDetailsResponse struct {
 	Path        string            `json:"path"`
 	Hash        string            `json:"hash"`
 	Segments    []ConflictSegment `json:"segments"`
 	BlocksTotal int               `json:"blocksTotal"`
+	Stages      ConflictStages    `json:"stages"`
+}
+
+type conflictStageSnapshot struct {
+	mode     string
+	objectID string
+	present  bool
+}
+
+type conflictStagesSnapshot struct {
+	base   conflictStageSnapshot
+	ours   conflictStageSnapshot
+	theirs conflictStageSnapshot
+}
+
+func (stages conflictStagesSnapshot) hasEntries() bool {
+	return stages.base.present || stages.ours.present || stages.theirs.present
+}
+
+func (stages conflictStagesSnapshot) details() ConflictStages {
+	basePresent := stages.base.present
+	sidePresent := stages.ours.present || stages.theirs.present
+	return ConflictStages{
+		Base: ConflictStageDetails{Present: basePresent},
+		Ours: ConflictStageDetails{
+			Present: stages.ours.present,
+			Deleted: sidePresent && !stages.ours.present,
+		},
+		Theirs: ConflictStageDetails{
+			Present: stages.theirs.present,
+			Deleted: sidePresent && !stages.theirs.present,
+		},
+	}
+}
+
+func readConflictStages(repoRoot, filePath string) (conflictStagesSnapshot, error) {
+	cmd := newGitCommand("--literal-pathspecs", "ls-files", "--unmerged", "-z", "--", filePath)
+	cmd.Dir = repoRoot
+	output, err := cmd.Output()
+	if err != nil {
+		return conflictStagesSnapshot{}, err
+	}
+
+	var stages conflictStagesSnapshot
+	for _, record := range bytes.Split(output, []byte{0}) {
+		if len(record) == 0 {
+			continue
+		}
+		header, _, ok := bytes.Cut(record, []byte{'\t'})
+		if !ok {
+			return conflictStagesSnapshot{}, fmt.Errorf("invalid unmerged index entry")
+		}
+		fields := strings.Fields(string(header))
+		if len(fields) != 3 {
+			return conflictStagesSnapshot{}, fmt.Errorf("invalid unmerged index entry")
+		}
+		stage := conflictStageSnapshot{mode: fields[0], objectID: fields[1], present: true}
+		switch fields[2] {
+		case "1":
+			stages.base = stage
+		case "2":
+			stages.ours = stage
+		case "3":
+			stages.theirs = stage
+		default:
+			return conflictStagesSnapshot{}, fmt.Errorf("invalid unmerged index stage")
+		}
+	}
+	return stages, nil
+}
+
+func computeConflictSnapshotHash(content []byte, worktreePresent bool, stages conflictStagesSnapshot) string {
+	var snapshot strings.Builder
+	fmt.Fprintf(&snapshot, "worktree:%t:%d:", worktreePresent, len(content))
+	snapshot.Write(content)
+	for _, stage := range []conflictStageSnapshot{stages.base, stages.ours, stages.theirs} {
+		fmt.Fprintf(&snapshot, "\x00stage:%t:%s:%s", stage.present, stage.mode, stage.objectID)
+	}
+	return computePatchHash(snapshot.String())
+}
+
+func conflictSnapshotHashMatches(content []byte, worktreePresent bool, stages conflictStagesSnapshot, hash string) bool {
+	if hash == "" {
+		return true
+	}
+	// Accept the pre-structured resolver's content-only hash for clients that
+	// loaded details before stage metadata was added. New details still return
+	// the stronger snapshot hash above, which also protects the unmerged index.
+	return hash == computeConflictSnapshotHash(content, worktreePresent, stages) ||
+		(worktreePresent && hash == computePatchHash(string(content)))
+}
+
+func readConflictWorktree(path string) ([]byte, bool, bool, error) {
+	content, truncated, err := readGitFileBounded(path, gitConflictContentLimit)
+	if os.IsNotExist(err) {
+		return nil, false, false, nil
+	}
+	return content, true, truncated, err
+}
+
+func readConflictStageLines(repoRoot string, stage conflictStageSnapshot) ([]string, error) {
+	content, err := readConflictStageContent(repoRoot, stage)
+	if err != nil {
+		return nil, err
+	}
+	if !stage.present {
+		return nil, nil
+	}
+	return strings.Split(string(content), "\n"), nil
+}
+
+func readConflictStageContent(repoRoot string, stage conflictStageSnapshot) ([]byte, error) {
+	if !stage.present {
+		return nil, nil
+	}
+	preview, err := readGitObjectPreviewWithLimit(repoRoot, stage.objectID, gitConflictContentLimit)
+	if err != nil {
+		return nil, err
+	}
+	if preview.truncated {
+		return nil, fmt.Errorf("conflict stage is too large")
+	}
+	return append([]byte(nil), preview.content...), nil
+}
+
+func buildModifyDeleteConflictSegment(repoRoot string, stages conflictStagesSnapshot) (ConflictSegment, error) {
+	ours, err := readConflictStageLines(repoRoot, stages.ours)
+	if err != nil {
+		return ConflictSegment{}, err
+	}
+	base, err := readConflictStageLines(repoRoot, stages.base)
+	if err != nil {
+		return ConflictSegment{}, err
+	}
+	theirs, err := readConflictStageLines(repoRoot, stages.theirs)
+	if err != nil {
+		return ConflictSegment{}, err
+	}
+	return ConflictSegment{
+		Type:    "conflict",
+		BlockID: "block-1",
+		Ours:    ours,
+		Base:    base,
+		Theirs:  theirs,
+	}, nil
 }
 
 func (h *GitHandler) ConflictDetails(c *gin.Context) {
@@ -1222,23 +1513,54 @@ func (h *GitHandler) ConflictDetails(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if err := validateRepoRelativePath(repoRoot, req.FilePath); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := rejectGitWritePath(repoRoot, req.FilePath); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	absPath := filepath.Join(repoRoot, req.FilePath)
-
-	contentBytes, err := os.ReadFile(absPath)
+	stages, err := readConflictStages(repoRoot, req.FilePath)
 	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "cannot read conflict stages"})
+		return
+	}
+	contentBytes, worktreePresent, contentTruncated, err := readConflictWorktree(absPath)
+	if err != nil || (!worktreePresent && !stages.hasEntries()) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "cannot read file"})
 		return
 	}
+	if contentTruncated {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "conflict file is too large"})
+		return
+	}
 	content := string(contentBytes)
+	stageDetails := stages.details()
 
 	segments, blocks := parseConflictMarkers(content)
-	hash := computePatchHash(content)
+	if stageDetails.Ours.Deleted || stageDetails.Theirs.Deleted {
+		segment, segmentErr := buildModifyDeleteConflictSegment(repoRoot, stages)
+		if segmentErr != nil {
+			if strings.Contains(segmentErr.Error(), "too large") {
+				c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": segmentErr.Error()})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "cannot read conflict stages"})
+			}
+			return
+		}
+		segments = []ConflictSegment{segment}
+		blocks = 1
+	}
+	hash := computeConflictSnapshotHash(contentBytes, worktreePresent, stages)
 
 	c.JSON(http.StatusOK, ConflictDetailsResponse{
 		Path:        req.FilePath,
 		Hash:        hash,
 		Segments:    segments,
 		BlocksTotal: blocks,
+		Stages:      stageDetails,
 	})
 }
 
@@ -1310,12 +1632,12 @@ func parseConflictMarkers(content string) ([]ConflictSegment, int) {
 }
 
 type ConflictResolveRequest struct {
-	Path            string `json:"path" binding:"required"`
-	FilePath        string `json:"filePath" binding:"required"`
-	Mode            string `json:"mode" binding:"required"`
-	Hash            string `json:"hash"`
-	ResolvedContent string `json:"resolvedContent"`
-	ManualContent   string `json:"manualContent"`
+	Path            string  `json:"path" binding:"required"`
+	FilePath        string  `json:"filePath" binding:"required"`
+	Mode            string  `json:"mode" binding:"required"`
+	Hash            string  `json:"hash"`
+	ResolvedContent *string `json:"resolvedContent"`
+	ManualContent   *string `json:"manualContent"`
 }
 
 func (h *GitHandler) ConflictResolve(c *gin.Context) {
@@ -1330,33 +1652,78 @@ func (h *GitHandler) ConflictResolve(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	unlockRepo := lockGitOperationRepo(repoRoot)
+	defer unlockRepo()
+	if err := validateRepoRelativePath(repoRoot, req.FilePath); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := rejectGitWritePath(repoRoot, req.FilePath); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	absPath := filepath.Join(repoRoot, req.FilePath)
+	stages, stagesErr := readConflictStages(repoRoot, req.FilePath)
+	currentBytes, worktreePresent, truncated, readErr := readConflictWorktree(absPath)
+	if req.Hash != "" {
+		if readErr != nil || stagesErr != nil || truncated ||
+			!conflictSnapshotHashMatches(currentBytes, worktreePresent, stages, req.Hash) {
+			// The details response is an optimistic snapshot. Refuse to replace a
+			// file or unmerged index that changed after it was displayed.
+			c.JSON(http.StatusConflict, gin.H{"error": "conflict file changed, please refresh"})
+			return
+		}
+	}
+	if readErr != nil || (!worktreePresent && !stages.hasEntries()) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "cannot read file"})
+		return
+	}
+	if truncated {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "conflict file is too large"})
+		return
+	}
+	if stagesErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "cannot read conflict stages"})
+		return
+	}
 
 	var resolvedContent string
+	deleteResolution := false
 	switch req.Mode {
 	case "ours":
-		cmd := newGitCommand("show", ":2:"+req.FilePath)
-		cmd.Dir = repoRoot
-		out, err := cmd.Output()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get ours version"})
+		if stages.details().Ours.Deleted {
+			deleteResolution = true
+			break
+		}
+		stageContent, err := readConflictStageContent(repoRoot, stages.ours)
+		if err != nil || !stages.ours.present {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "ours version is unavailable"})
 			return
 		}
-		resolvedContent = string(out)
+		resolvedContent = string(stageContent)
 	case "theirs":
-		cmd := newGitCommand("show", ":3:"+req.FilePath)
-		cmd.Dir = repoRoot
-		out, err := cmd.Output()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get theirs version"})
+		if stages.details().Theirs.Deleted {
+			deleteResolution = true
+			break
+		}
+		stageContent, err := readConflictStageContent(repoRoot, stages.theirs)
+		if err != nil || !stages.theirs.present {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "theirs version is unavailable"})
 			return
 		}
-		resolvedContent = string(out)
+		resolvedContent = string(stageContent)
+	case "delete":
+		stageDetails := stages.details()
+		if !stageDetails.Ours.Deleted && !stageDetails.Theirs.Deleted {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "conflict does not have a deleted side"})
+			return
+		}
+		deleteResolution = true
 	case "manual", "line-map":
-		if req.ManualContent != "" {
-			resolvedContent = req.ManualContent
-		} else if req.ResolvedContent != "" {
-			resolvedContent = req.ResolvedContent
+		if req.ManualContent != nil {
+			resolvedContent = *req.ManualContent
+		} else if req.ResolvedContent != nil {
+			resolvedContent = *req.ResolvedContent
 		} else {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "manual content required"})
 			return
@@ -1365,22 +1732,36 @@ func (h *GitHandler) ConflictResolve(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mode"})
 		return
 	}
-
-	if err := os.WriteFile(absPath, []byte(resolvedContent), 0644); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if !deleteResolution && int64(len(resolvedContent)) > gitConflictContentLimit {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "resolved content is too large"})
 		return
 	}
 
-	addCmd := newGitCommand("add", "--", req.FilePath)
-	addCmd.Dir = repoRoot
-	if out, err := addCmd.CombinedOutput(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": gitCommandError(err, out).Error()})
-		return
+	if deleteResolution {
+		rmCmd := newGitCommand("--literal-pathspecs", "rm", "--", req.FilePath)
+		rmCmd.Dir = repoRoot
+		if out, err := rmCmd.CombinedOutput(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": gitCommandError(err, out).Error()})
+			return
+		}
+	} else {
+		if err := os.WriteFile(absPath, []byte(resolvedContent), 0644); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		addCmd := newGitCommand("add", "--", req.FilePath)
+		addCmd.Dir = repoRoot
+		if out, err := addCmd.CombinedOutput(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": gitCommandError(err, out).Error()})
+			return
+		}
 	}
 
 	conflicts := collectConflictFiles(repoRoot)
 	files, summary := h.collectStructuredStatus(repoRoot)
 
+	unlockRepo()
 	h.broadcastStatus(req.Path)
 	h.broadcastRepoSyncNeeded(req.Path, gin.H{"conflicts": true})
 	c.JSON(http.StatusOK, gin.H{

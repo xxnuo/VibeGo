@@ -32,7 +32,12 @@ const NewGroupMenu: React.FC<NewGroupMenuProps> = ({
   return (
     <>
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
-      <div className="fixed bottom-0 left-0 right-0 md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[400px] z-50 bg-ide-panel border-t md:border border-ide-border rounded-t-2xl md:rounded-2xl shadow-lg animate-in slide-in-from-bottom md:fade-in md:zoom-in-95 md:slide-in-from-bottom-0 duration-200">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("common.newGroup")}
+        className="fixed bottom-0 left-0 right-0 md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[400px] z-50 bg-ide-panel border-t md:border border-ide-border rounded-t-2xl md:rounded-2xl shadow-lg animate-in slide-in-from-bottom md:fade-in md:zoom-in-95 md:slide-in-from-bottom-0 duration-200"
+      >
         <div className="flex items-center justify-between px-4 py-3 border-b border-ide-border">
           <span className="text-sm font-bold text-ide-text">{t("common.newGroup")}</span>
           <button onClick={onClose} className="p-1.5 rounded-md text-ide-mute hover:text-ide-text hover:bg-ide-bg">
@@ -58,7 +63,7 @@ const NewGroupMenu: React.FC<NewGroupMenuProps> = ({
           <button
             onClick={() => {
               if (activeGroupId) {
-                if (activeGroup?.type === "group") {
+                if (activeGroup?.type === "group" && activeGroup.pages.some((page) => page.path)) {
                   void closeFolderGroup(activeGroupId);
                 } else {
                   removeGroup(activeGroupId);

@@ -3,17 +3,21 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xxnuo/vibego/internal/middleware"
 )
 
 func setupTestFileHandler(t *testing.T) (*FileHandler, *gin.Engine, string) {
@@ -25,6 +29,13 @@ func setupTestFileHandler(t *testing.T) (*FileHandler, *gin.Engine, string) {
 	g := r.Group("/api")
 	h.Register(g)
 	return h, r, tmpDir
+}
+
+func requireTestSymlink(t *testing.T, oldname, newname string) {
+	t.Helper()
+	if err := os.Symlink(oldname, newname); err != nil {
+		t.Skipf("symbolic links unavailable: %v", err)
+	}
 }
 
 func TestFileNew(t *testing.T) {
@@ -389,7 +400,31 @@ func TestPathTraversalBlocked(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-func TestFileWriteCreatesDir(t *testing.T) {
+func TestResolvePathRejectsSiblingPrefix(t *testing.T) {
+	root := t.TempDir()
+	baseDir := filepath.Join(root, "workspace")
+	siblingDir := filepath.Join(root, "workspace-other")
+	require.NoError(t, os.Mkdir(baseDir, 0755))
+	require.NoError(t, os.Mkdir(siblingDir, 0755))
+
+	h := NewFileHandler()
+	h.SetBaseDir(baseDir)
+	_, err := h.resolvePath(filepath.Join(siblingDir, "file.txt"))
+	assert.ErrorIs(t, err, os.ErrPermission)
+}
+
+func TestResolvePathExpandsHome(t *testing.T) {
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+	h := NewFileHandler()
+	h.SetBaseDir(home)
+
+	path, err := h.resolvePath("~/vibego-home-test.txt")
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(home, "vibego-home-test.txt"), path)
+}
+
+func TestFileWriteRejectsMissingParent(t *testing.T) {
 	_, r, tmpDir := setupTestFileHandler(t)
 
 	body := `{"path":"deep/nested/file.txt","content":"nested"}`
@@ -398,10 +433,83 @@ func TestFileWriteCreatesDir(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusOK, w.Code)
-	content, err := os.ReadFile(filepath.Join(tmpDir, "deep", "nested", "file.txt"))
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	_, err := os.Stat(filepath.Join(tmpDir, "deep"))
+	assert.True(t, os.IsNotExist(err))
+}
+
+func TestFileWriteRejectsDirectoryAndSymlink(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+	require.NoError(t, os.Mkdir(filepath.Join(tmpDir, "dir"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "target.txt"), []byte("original"), 0644))
+	requireTestSymlink(t, "target.txt", filepath.Join(tmpDir, "link.txt"))
+
+	for _, path := range []string{"dir", "link.txt"} {
+		body, err := json.Marshal(FileEdit{Path: path, Content: "changed"})
+		require.NoError(t, err)
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodPost, "/api/file/write", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code, path)
+	}
+
+	content, err := os.ReadFile(filepath.Join(tmpDir, "target.txt"))
 	require.NoError(t, err)
-	assert.Equal(t, "nested", string(content))
+	assert.Equal(t, "original", string(content))
+}
+
+func TestFileWriteRejectsEscapingParentSymlink(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+	outsideDir := t.TempDir()
+	requireTestSymlink(t, outsideDir, filepath.Join(tmpDir, "outside"))
+
+	body := `{"path":"outside/new.txt","content":"escaped"}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/file/write", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	_, err := os.Stat(filepath.Join(outsideDir, "new.txt"))
+	assert.True(t, os.IsNotExist(err))
+}
+
+func TestFileSaveUsesSafeWriteContract(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "target.txt"), []byte("original"), 0644))
+	requireTestSymlink(t, "target.txt", filepath.Join(tmpDir, "link.txt"))
+
+	body := `{"path":"link.txt","content":"changed"}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/file/save", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	content, err := os.ReadFile(filepath.Join(tmpDir, "target.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, "original", string(content))
+}
+
+func TestFileWriteRejectsNoWriteBits(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX mode bits are not portable to Windows")
+	}
+	_, r, tmpDir := setupTestFileHandler(t)
+	path := filepath.Join(tmpDir, "readonly.txt")
+	require.NoError(t, os.WriteFile(path, []byte("original"), 0444))
+
+	body := `{"path":"readonly.txt","content":"changed"}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/file/write", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	content, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, "original", string(content))
 }
 
 func TestAbs(t *testing.T) {
@@ -607,6 +715,26 @@ func TestFileGetContentIsDir(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
+func TestFileGetContentUsesSymlinkTargetSizeLimit(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+	targetPath := filepath.Join(tmpDir, "large-target.txt")
+	require.NoError(t, os.WriteFile(targetPath, nil, 0644))
+	require.NoError(t, os.Truncate(targetPath, 10*1024*1024+1))
+	requireTestSymlink(t, "large-target.txt", filepath.Join(tmpDir, "small-link.txt"))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(
+		http.MethodPost,
+		"/api/file/content",
+		bytes.NewBufferString(`{"path":"small-link.txt"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "file too large")
+}
+
 func TestFileSaveContent(t *testing.T) {
 	_, r, tmpDir := setupTestFileHandler(t)
 
@@ -651,6 +779,52 @@ func TestFileCheckExistNotFound(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "false")
 }
 
+func TestFileCheckExistTreatsDanglingSymlinkAsOccupied(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+	requireTestSymlink(t, "missing.txt", filepath.Join(tmpDir, "dangling.txt"))
+
+	body := `{"path":"dangling.txt"}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/file/check", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "true")
+}
+
+func TestFileCheckExistReturnsErrorForInvalidPath(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+	requireTestSymlink(t, "loop-b", filepath.Join(tmpDir, "loop-a"))
+	requireTestSymlink(t, "loop-a", filepath.Join(tmpDir, "loop-b"))
+
+	body := `{"path":"loop-a"}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/file/check", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.NotContains(t, w.Body.String(), `"exist":false`)
+}
+
+func TestFileWriteRejectsDanglingSymlink(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+	outsideDir := t.TempDir()
+	outsidePath := filepath.Join(outsideDir, "created.txt")
+	requireTestSymlink(t, outsidePath, filepath.Join(tmpDir, "dangling.txt"))
+
+	body := `{"path":"dangling.txt","content":"escaped"}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/file/write", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	_, err := os.Stat(outsidePath)
+	assert.True(t, os.IsNotExist(err))
+}
+
 func TestFileBatchCheckExist(t *testing.T) {
 	_, r, tmpDir := setupTestFileHandler(t)
 
@@ -676,6 +850,198 @@ func TestFileDownload(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "download content", w.Body.String())
+	assert.Contains(t, w.Header().Get("Content-Disposition"), "attachment")
+}
+
+func TestFileDownloadInline(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "view.pdf"), []byte("pdf content"), 0644))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/api/file/download?path=view.pdf&inline=1", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Header().Get("Content-Disposition"), "inline")
+	assert.Equal(t, "application/pdf", w.Header().Get("Content-Type"))
+	assert.Equal(t, "pdf content", w.Body.String())
+}
+
+func TestFileDownloadInlinePinsSafeTargetMIME(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "payload.png"), []byte("<script>alert(1)</script>"), 0644))
+	requireTestSymlink(t, "payload.png", filepath.Join(tmpDir, "page.html"))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/api/file/download?path=page.html&inline=1", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Header().Get("Content-Disposition"), "inline")
+	assert.Equal(t, "image/png", w.Header().Get("Content-Type"))
+	assert.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"))
+}
+
+func TestFileDownloadRejectsUnsafeInlineMIME(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+	for _, name := range []string{"page.html", "vector.svg"} {
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, name), []byte("content"), 0644))
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodGet, "/api/file/download?path="+url.QueryEscape(name)+"&inline=1", nil)
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code, name)
+		assert.Contains(t, w.Header().Get("Content-Disposition"), "attachment", name)
+		assert.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"), name)
+	}
+}
+
+func TestFileDownloadRange(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "media.bin"), []byte("0123456789"), 0644))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/api/file/download?path=media.bin&inline=1", nil)
+	req.Header.Set("Range", "bytes=2-5")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusPartialContent, w.Code)
+	assert.Equal(t, "2345", w.Body.String())
+	assert.Equal(t, "bytes 2-5/10", w.Header().Get("Content-Range"))
+	assert.Equal(t, "4", w.Header().Get("Content-Length"))
+	assert.Equal(t, "bytes", w.Header().Get("Accept-Ranges"))
+}
+
+func TestFileDownloadInvalidRange(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "media.bin"), []byte("0123456789"), 0644))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/api/file/download?path=media.bin&inline=1", nil)
+	req.Header.Set("Range", "bytes=20-30")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusRequestedRangeNotSatisfiable, w.Code)
+	assert.Equal(t, "bytes */10", w.Header().Get("Content-Range"))
+}
+
+func TestFileDownloadRejectsDirectory(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+	require.NoError(t, os.Mkdir(filepath.Join(tmpDir, "dir"), 0755))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/api/file/download?path=dir&inline=1", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestFileViewURLUsesStableCookieBoundSession(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const key = "test-key"
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "media.mp4"), []byte("0123456789"), 0644))
+	fileViews, err := middleware.NewFileViewAuthorizer()
+	require.NoError(t, err)
+	h := NewFileHandler(fileViews)
+	h.SetBaseDir(tmpDir)
+	r := gin.New()
+	r.Use(middleware.Auth(key, fileViews))
+	h.Register(r.Group("/api"))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/api/file/view-url?path=media.mp4", nil)
+	req.Header.Set("Authorization", "Bearer "+key)
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	var response struct {
+		URL           string `json:"url"`
+		ExpiresAt     int64  `json:"expires_at"`
+		HardExpiresAt int64  `json:"hard_expires_at"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	assert.NotContains(t, response.URL, "key=")
+	assert.Contains(t, response.URL, "sig=")
+	assert.NotContains(t, response.URL, "expires=")
+	assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+	assert.WithinDuration(t, time.Now().Add(middleware.SignedFileViewTTL), time.Unix(response.ExpiresAt, 0), 2*time.Second)
+	assert.WithinDuration(t, time.Now().Add(middleware.FileViewSessionHardTTL), time.Unix(response.HardExpiresAt, 0), 2*time.Second)
+	cookies := w.Result().Cookies()
+	require.Len(t, cookies, 1)
+	cookie := cookies[0]
+	assert.Equal(t, middleware.FileViewSessionCookie, cookie.Name)
+	assert.Equal(t, middleware.FileViewSessionPath, cookie.Path)
+	assert.Empty(t, cookie.Domain)
+	assert.True(t, cookie.HttpOnly)
+	assert.False(t, cookie.Secure)
+	assert.Equal(t, http.SameSiteStrictMode, cookie.SameSite)
+	assert.Equal(t, response.HardExpiresAt, cookie.Expires.Unix())
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, "/api/file/view-url?path=media.mp4", nil)
+	req.Header.Set("Authorization", "Bearer "+key)
+	req.AddCookie(cookie)
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	var renewed struct {
+		URL           string `json:"url"`
+		ExpiresAt     int64  `json:"expires_at"`
+		HardExpiresAt int64  `json:"hard_expires_at"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &renewed))
+	assert.Equal(t, response.URL, renewed.URL)
+	assert.Equal(t, response.HardExpiresAt, renewed.HardExpiresAt)
+	renewedCookies := w.Result().Cookies()
+	require.Len(t, renewedCookies, 1)
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, response.URL, nil)
+	req.AddCookie(renewedCookies[0])
+	req.Header.Set("Range", "bytes=4-7")
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusPartialContent, w.Code)
+	assert.Equal(t, "4567", w.Body.String())
+	assert.Contains(t, w.Header().Get("Content-Disposition"), "inline")
+	assert.Equal(t, "private, max-age=0, must-revalidate", w.Header().Get("Cache-Control"))
+	assert.Equal(t, "no-referrer", w.Header().Get("Referrer-Policy"))
+}
+
+func TestFileViewURLRequiresBearerHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const key = "test-key"
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "image.png"), []byte("image"), 0644))
+	fileViews, err := middleware.NewFileViewAuthorizer()
+	require.NoError(t, err)
+	h := NewFileHandler(fileViews)
+	h.SetBaseDir(tmpDir)
+	r := gin.New()
+	r.Use(middleware.Auth(key, fileViews))
+	h.Register(r.Group("/api"))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/api/file/view-url?path=image.png&key="+url.QueryEscape(key), nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestFileViewURLRejectsUnverifiedBearerWithoutAuthMiddleware(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "image.png"), []byte("image"), 0644))
+	fileViews, err := middleware.NewFileViewAuthorizer()
+	require.NoError(t, err)
+	h := NewFileHandler(fileViews)
+	h.SetBaseDir(tmpDir)
+	r := gin.New()
+	h.Register(r.Group("/api"))
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/file/view-url?path=image.png", nil)
+	req.Header.Set("Authorization", "Bearer arbitrary-key")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestFileDownloadMissingPath(t *testing.T) {
@@ -724,6 +1090,187 @@ func TestFileInfo(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), "info.txt")
+}
+
+func TestFileAccessSafeSymlinkUsesTargetMetadata(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+	targetPath := filepath.Join(tmpDir, "target.txt")
+	require.NoError(t, os.WriteFile(targetPath, []byte("renderer content"), 0640))
+	targetInfo, err := os.Stat(targetPath)
+	require.NoError(t, err)
+	requireTestSymlink(t, "target.txt", filepath.Join(tmpDir, "link.txt"))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/api/file/read?path=link.txt", nil)
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "renderer content")
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, "/api/file/info?path=link.txt", nil)
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	var info FileInfo
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &info))
+	assert.True(t, info.IsSymlink)
+	assert.Equal(t, int64(len("renderer content")), info.Size)
+	assert.Equal(t, fmt.Sprintf("%04o", targetInfo.Mode().Perm()), info.Mode)
+
+	w = httptest.NewRecorder()
+	reqBody := `{"path":"link.txt"}`
+	req, _ = http.NewRequest(http.MethodPost, "/api/file/content", bytes.NewBufferString(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &info))
+	assert.Equal(t, int64(len("renderer content")), info.Size)
+	assert.Equal(t, "renderer content", info.Content)
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, "/api/file/download?path=link.txt&inline=1", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "renderer content", w.Body.String())
+}
+
+func TestFileAccessRejectsSymlinkOutsideBase(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+	outsideDir := t.TempDir()
+	targetPath := filepath.Join(outsideDir, "secret.txt")
+	require.NoError(t, os.WriteFile(targetPath, []byte("secret"), 0644))
+	requireTestSymlink(t, targetPath, filepath.Join(tmpDir, "escape.txt"))
+
+	for _, endpoint := range []string{"read", "info", "download"} {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodGet, "/api/file/"+endpoint+"?path=escape.txt", nil)
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code, endpoint)
+	}
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/file/check", bytes.NewBufferString(`{"path":"escape.txt"}`))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.FileExists(t, targetPath)
+}
+
+func TestFileEntryOperationsDoNotFollowEscapingSymlink(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+	outsideDir := t.TempDir()
+	targetPath := filepath.Join(outsideDir, "secret.txt")
+	require.NoError(t, os.WriteFile(targetPath, []byte("secret"), 0644))
+
+	deleteLink := filepath.Join(tmpDir, "delete-link.txt")
+	requireTestSymlink(t, targetPath, deleteLink)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/file/del", bytes.NewBufferString(`{"path":"delete-link.txt"}`))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	_, err := os.Lstat(deleteLink)
+	assert.True(t, os.IsNotExist(err))
+	assert.FileExists(t, targetPath)
+
+	removeLink := filepath.Join(tmpDir, "remove-link.txt")
+	requireTestSymlink(t, targetPath, removeLink)
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodDelete, "/api/file?path=remove-link.txt", nil)
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	_, err = os.Lstat(removeLink)
+	assert.True(t, os.IsNotExist(err))
+	assert.FileExists(t, targetPath)
+
+	renameLink := filepath.Join(tmpDir, "rename-link.txt")
+	renamedLink := filepath.Join(tmpDir, "renamed-link.txt")
+	requireTestSymlink(t, targetPath, renameLink)
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(
+		http.MethodPost,
+		"/api/file/rename",
+		bytes.NewBufferString(`{"oldName":"rename-link.txt","newName":"renamed-link.txt"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	linkTarget, err := os.Readlink(renamedLink)
+	require.NoError(t, err)
+	assert.Equal(t, targetPath, linkTarget)
+	assert.FileExists(t, targetPath)
+
+	require.NoError(t, os.Mkdir(filepath.Join(tmpDir, "moved"), 0755))
+	moveLink := filepath.Join(tmpDir, "move-link.txt")
+	requireTestSymlink(t, targetPath, moveLink)
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(
+		http.MethodPost,
+		"/api/file/move",
+		bytes.NewBufferString(`{"type":"move","oldPaths":["move-link.txt"],"newPath":"moved"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	linkTarget, err = os.Readlink(filepath.Join(tmpDir, "moved", "move-link.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, targetPath, linkTarget)
+	assert.FileExists(t, targetPath)
+}
+
+func TestFileEntryOperationsRejectEscapingParentSymlink(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+	outsideDir := t.TempDir()
+	targetPath := filepath.Join(outsideDir, "secret.txt")
+	require.NoError(t, os.WriteFile(targetPath, []byte("secret"), 0644))
+	requireTestSymlink(t, outsideDir, filepath.Join(tmpDir, "outside"))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/file/del", bytes.NewBufferString(`{"path":"outside/secret.txt"}`))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodPost, "/api/file/rename", bytes.NewBufferString(`{"oldName":"outside/secret.txt","newName":"renamed.txt"}`))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.FileExists(t, targetPath)
+}
+
+func TestFileRenameRejectsEscapingDestinationSymlink(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+	outDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "source.txt"), []byte("source"), 0644))
+	requireTestSymlink(t, outDir, filepath.Join(tmpDir, "outside"))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/file/rename", bytes.NewBufferString(`{"oldName":"source.txt","newName":"outside/renamed.txt"}`))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.FileExists(t, filepath.Join(tmpDir, "source.txt"))
+	_, err := os.Stat(filepath.Join(outDir, "renamed.txt"))
+	assert.True(t, os.IsNotExist(err))
+}
+
+func TestFileAccessRejectsSymlinkToBlacklist(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("system blacklist target differs on Windows")
+	}
+	gin.SetMode(gin.TestMode)
+	linkPath := filepath.Join(t.TempDir(), "passwd-link")
+	requireTestSymlink(t, "/etc/passwd", linkPath)
+	h := NewFileHandler()
+	r := gin.New()
+	h.Register(r.Group("/api"))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/api/file/read?path="+url.QueryEscape(linkPath), nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestFileInfoMissingPath(t *testing.T) {

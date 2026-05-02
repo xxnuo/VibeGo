@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/xxnuo/vibego/internal/middleware"
 )
 
 var systemPrefixes []string
@@ -43,15 +44,25 @@ func init() {
 }
 
 type FileHandler struct {
-	baseDir string
+	baseDir   string
+	fileViews *middleware.FileViewAuthorizer
+	remote    RemoteFileProvider
 }
 
-func NewFileHandler() *FileHandler {
-	return &FileHandler{}
+func NewFileHandler(fileViews ...*middleware.FileViewAuthorizer) *FileHandler {
+	h := &FileHandler{}
+	if len(fileViews) > 0 {
+		h.fileViews = fileViews[0]
+	}
+	return h
 }
 
 func (h *FileHandler) SetBaseDir(dir string) {
 	h.baseDir = dir
+}
+
+func (h *FileHandler) SetRemoteFileProvider(provider RemoteFileProvider) {
+	h.remote = provider
 }
 
 func (h *FileHandler) Register(r *gin.RouterGroup) {
@@ -72,6 +83,8 @@ func (h *FileHandler) Register(r *gin.RouterGroup) {
 	g.POST("/batch/check", h.BatchCheckExist)
 	g.POST("/rename", h.Rename)
 	g.POST("/move", h.Move)
+	g.GET("/view-url", h.ViewURL)
+	g.POST("/view-session/logout", h.LogoutViewSession)
 	g.GET("/download", h.Download)
 	g.POST("/size", h.GetSize)
 	g.POST("/batch/role", h.BatchChangeModeAndOwner)
@@ -84,6 +97,52 @@ func (h *FileHandler) Register(r *gin.RouterGroup) {
 	g.GET("/abs", h.Abs)
 	g.POST("/copy", h.Copy)
 	g.GET("/info", h.Info)
+	g.GET("/remote/info", h.RemoteInfo)
+	g.GET("/remote/read", h.RemoteRead)
+	g.POST("/remote/check", h.RemoteCheckExist)
+	g.POST("/remote/save", h.RemoteSaveContent)
+	g.GET("/remote/view-url", h.RemoteViewURL)
+}
+
+func (h *FileHandler) LogoutViewSession(c *gin.Context) {
+	if h.fileViews == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "file view authorizer unavailable"})
+		return
+	}
+	h.fileViews.ClearSessionCookie(c)
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (h *FileHandler) ViewURL(c *gin.Context) {
+	path := c.Query("path")
+	if path == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "path required"})
+		return
+	}
+	if _, _, err := h.resolvePathTarget(path); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if h.fileViews == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "file view authorizer unavailable"})
+		return
+	}
+	key, ok := middleware.BearerAccessKey(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authenticated Bearer authorization required"})
+		return
+	}
+	grant, err := h.fileViews.Issue(c, key, path)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.JSON(http.StatusOK, gin.H{
+		"url":             grant.URL,
+		"expires_at":      grant.ExpiresAt,
+		"hard_expires_at": grant.HardExpiresAt,
+	})
 }
 
 type FileInfo struct {
@@ -234,54 +293,205 @@ type FileCopy struct {
 }
 
 func (h *FileHandler) resolvePath(p string) (string, error) {
+	path, _, err := h.resolvePathTarget(p)
+	return path, err
+}
+
+func (h *FileHandler) resolvePathBase(p string) (string, string, error) {
+	if p == "~" || strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", "", err
+		}
+		if p == "~" {
+			p = home
+		} else {
+			p = filepath.Join(home, p[2:])
+		}
+	}
 	p = filepath.Clean(p)
 	var absPath string
 	var err error
+	var resolvedBase string
 	if h.baseDir != "" {
 		if !filepath.IsAbs(p) {
 			p = filepath.Join(h.baseDir, p)
 		}
 		absBase, err := filepath.Abs(h.baseDir)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 		absPath, err = filepath.Abs(p)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
-		if !strings.HasPrefix(absPath, absBase) {
-			return "", os.ErrPermission
+		if !pathWithin(absBase, absPath) {
+			return "", "", os.ErrPermission
+		}
+		resolvedBase, err = filepath.EvalSymlinks(absBase)
+		if err != nil {
+			return "", "", err
 		}
 	} else {
 		absPath, err = filepath.Abs(p)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 	}
 	if err := h.checkBlacklist(absPath); err != nil {
+		return "", "", err
+	}
+	return absPath, resolvedBase, nil
+}
+
+func (h *FileHandler) validateResolvedPath(resolvedBase, resolvedPath string) error {
+	if resolvedBase != "" && !pathWithin(resolvedBase, resolvedPath) {
+		return os.ErrPermission
+	}
+	return h.checkBlacklist(resolvedPath)
+}
+
+func (h *FileHandler) resolvePathTarget(p string) (string, string, error) {
+	absPath, resolvedBase, err := h.resolvePathBase(p)
+	if err != nil {
+		return "", "", err
+	}
+	resolvedPath, err := resolveExistingPath(absPath)
+	if err != nil {
+		return "", "", err
+	}
+	if err := h.validateResolvedPath(resolvedBase, resolvedPath); err != nil {
+		return "", "", err
+	}
+	return absPath, resolvedPath, nil
+}
+
+func (h *FileHandler) resolvePathEntry(p string) (string, error) {
+	absPath, resolvedBase, err := h.resolvePathBase(p)
+	if err != nil {
+		return "", err
+	}
+	resolvedParent, err := resolveExistingPath(filepath.Dir(absPath))
+	if err != nil {
+		return "", err
+	}
+	if err := h.validateResolvedPath(resolvedBase, resolvedParent); err != nil {
 		return "", err
 	}
 	return absPath, nil
 }
 
+func resolveExistingPath(path string) (string, error) {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err == nil {
+		return resolved, nil
+	}
+	if !os.IsNotExist(err) {
+		return "", err
+	}
+
+	probe := filepath.Dir(path)
+	suffix := []string{filepath.Base(path)}
+	for {
+		resolved, err = filepath.EvalSymlinks(probe)
+		if err == nil {
+			for i := len(suffix) - 1; i >= 0; i-- {
+				resolved = filepath.Join(resolved, suffix[i])
+			}
+			return resolved, nil
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		parent := filepath.Dir(probe)
+		if parent == probe {
+			return "", err
+		}
+		suffix = append(suffix, filepath.Base(probe))
+		probe = parent
+	}
+}
+
+func pathWithin(base, path string) bool {
+	rel, err := filepath.Rel(base, path)
+	if err != nil || filepath.IsAbs(rel) {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func (h *FileHandler) writeContent(path, content string) (string, int, error) {
+	p, target, err := h.resolvePathTarget(path)
+	if err != nil {
+		return "", http.StatusBadRequest, err
+	}
+	info, err := os.Lstat(p)
+	if err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return "", http.StatusBadRequest, fmt.Errorf("writing through a symbolic link is not supported")
+		}
+		if info.IsDir() {
+			return "", http.StatusBadRequest, fmt.Errorf("path is a directory")
+		}
+		if !info.Mode().IsRegular() {
+			return "", http.StatusBadRequest, fmt.Errorf("path is not a regular file")
+		}
+		if info.Mode().Perm()&0222 == 0 {
+			return "", http.StatusBadRequest, fmt.Errorf("file is not writable")
+		}
+	} else if os.IsNotExist(err) {
+		parentInfo, parentErr := os.Stat(filepath.Dir(target))
+		if parentErr != nil {
+			if os.IsNotExist(parentErr) {
+				return "", http.StatusBadRequest, fmt.Errorf("parent directory does not exist")
+			}
+			return "", http.StatusInternalServerError, parentErr
+		}
+		if !parentInfo.IsDir() {
+			return "", http.StatusBadRequest, fmt.Errorf("parent path is not a directory")
+		}
+	} else {
+		return "", http.StatusInternalServerError, err
+	}
+	if err := os.WriteFile(target, []byte(content), 0666); err != nil {
+		return "", http.StatusInternalServerError, err
+	}
+	return p, http.StatusOK, nil
+}
+
 func (h *FileHandler) checkBlacklist(p string) error {
-	if exePath != "" && p == exePath {
+	if exePath != "" && pathEqual(p, exePath) {
 		return os.ErrPermission
 	}
 	for _, prefix := range systemPrefixes {
 		cleanPrefix := filepath.Clean(prefix)
-		if p == cleanPrefix || strings.HasPrefix(p, cleanPrefix+string(filepath.Separator)) {
-			if h.baseDir != "" {
-				if absBase, err := filepath.Abs(h.baseDir); err == nil {
-					if absBase == cleanPrefix || strings.HasPrefix(absBase, cleanPrefix+string(filepath.Separator)) {
-						continue
-					}
-				}
+		if pathWithin(cleanPrefix, p) {
+			if h.baseDir != "" && h.baseWithin(cleanPrefix) {
+				continue
 			}
 			return os.ErrPermission
 		}
 	}
 	return nil
+}
+
+func (h *FileHandler) baseWithin(path string) bool {
+	absBase, err := filepath.Abs(h.baseDir)
+	if err != nil {
+		return false
+	}
+	if pathWithin(path, absBase) {
+		return true
+	}
+	resolvedBase, err := filepath.EvalSymlinks(absBase)
+	return err == nil && pathWithin(path, resolvedBase)
+}
+
+func pathEqual(left, right string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(left, right)
+	}
+	return left == right
 }
 
 var mimeTypes = map[string]string{
@@ -330,6 +540,23 @@ func getMimeType(path string, isDir bool) string {
 	return http.DetectContentType(buf[:n])
 }
 
+func inlineFileMimeType(path string) string {
+	return safeInlineMimeType(getMimeType(path, false))
+}
+
+func safeInlineMimeType(mimeType string) string {
+	if mimeType == "application/pdf" {
+		return mimeType
+	}
+	if strings.HasPrefix(mimeType, "audio/") || strings.HasPrefix(mimeType, "video/") {
+		return mimeType
+	}
+	if strings.HasPrefix(mimeType, "image/") && mimeType != "image/svg+xml" {
+		return mimeType
+	}
+	return ""
+}
+
 func getFileInfo(path string) (*FileInfo, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
@@ -357,6 +584,34 @@ func getFileInfo(path string) (*FileInfo, error) {
 		} else {
 			fi.Type = "invalid_link"
 		}
+	}
+	return fi, nil
+}
+
+func getTargetFileInfo(path, target string) (*FileInfo, error) {
+	linkInfo, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	targetInfo, err := os.Stat(target)
+	if err != nil {
+		return nil, err
+	}
+	fi := &FileInfo{
+		Path:      path,
+		Name:      linkInfo.Name(),
+		Size:      targetInfo.Size(),
+		IsDir:     targetInfo.IsDir(),
+		IsSymlink: linkInfo.Mode()&os.ModeSymlink != 0,
+		IsHidden:  strings.HasPrefix(linkInfo.Name(), "."),
+		Extension: filepath.Ext(linkInfo.Name()),
+		Mode:      fmt.Sprintf("%04o", targetInfo.Mode().Perm()),
+		ModTime:   targetInfo.ModTime(),
+		MimeType:  getMimeType(target, targetInfo.IsDir()),
+	}
+	fillFileOwnership(fi, targetInfo)
+	if fi.IsSymlink {
+		fi.LinkPath, _ = os.Readlink(path)
 	}
 	return fi, nil
 }
@@ -605,7 +860,7 @@ func (h *FileHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	p, err := h.resolvePath(req.Path)
+	p, err := h.resolvePathEntry(req.Path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -632,7 +887,7 @@ func (h *FileHandler) BatchDelete(c *gin.Context) {
 	}
 	var errs []string
 	for _, path := range req.Paths {
-		p, err := h.resolvePath(path)
+		p, err := h.resolvePathEntry(path)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("%s: %s", path, err.Error()))
 			continue
@@ -786,12 +1041,12 @@ func (h *FileHandler) GetContent(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	p, err := h.resolvePath(req.Path)
+	p, target, err := h.resolvePathTarget(req.Path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	fi, err := getFileInfo(p)
+	fi, err := getTargetFileInfo(p, target)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -804,7 +1059,7 @@ func (h *FileHandler) GetContent(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "file too large (>10MB)"})
 		return
 	}
-	content, err := os.ReadFile(p)
+	content, err := os.ReadFile(target)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -826,18 +1081,9 @@ func (h *FileHandler) SaveContent(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	p, err := h.resolvePath(req.Path)
+	_, status, err := h.writeContent(req.Path, req.Content)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	info, err := os.Stat(p)
-	mode := os.FileMode(0644)
-	if err == nil {
-		mode = info.Mode()
-	}
-	if err := os.WriteFile(p, []byte(req.Content), mode); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
@@ -926,13 +1172,17 @@ func (h *FileHandler) CheckExist(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	p, err := h.resolvePath(req.Path)
+	p, _, err := h.resolvePathTarget(req.Path)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"exist": false})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if _, err := os.Stat(p); os.IsNotExist(err) {
-		c.JSON(http.StatusOK, gin.H{"exist": false})
+	if _, err := os.Lstat(p); err != nil {
+		if os.IsNotExist(err) {
+			c.JSON(http.StatusOK, gin.H{"exist": false})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"exist": true, "path": p})
@@ -985,22 +1235,29 @@ func (h *FileHandler) Rename(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	oldP, err := h.resolvePath(req.OldName)
+	oldP, err := h.resolvePathEntry(req.OldName)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	newP, err := h.resolvePath(req.NewName)
+	newP, err := h.resolvePathEntry(req.NewName)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if _, err := os.Stat(oldP); os.IsNotExist(err) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "source not found"})
+	if _, err := os.Lstat(oldP); err != nil {
+		if os.IsNotExist(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "source not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if _, err := os.Stat(newP); err == nil {
+	if _, err := os.Lstat(newP); err == nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "destination already exists"})
+		return
+	} else if !os.IsNotExist(err) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	if err := os.Rename(oldP, newP); err != nil {
@@ -1030,7 +1287,13 @@ func (h *FileHandler) Move(c *gin.Context) {
 	}
 	var errs []string
 	for _, oldPath := range req.OldPaths {
-		srcPath, err := h.resolvePath(oldPath)
+		var srcPath string
+		var err error
+		if req.Type == "copy" {
+			srcPath, err = h.resolvePath(oldPath)
+		} else {
+			srcPath, err = h.resolvePathEntry(oldPath)
+		}
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("%s: %s", oldPath, err.Error()))
 			continue
@@ -1040,7 +1303,7 @@ func (h *FileHandler) Move(c *gin.Context) {
 			dstPath = filepath.Join(newPath, req.Name)
 		}
 		if !req.Cover {
-			if _, err := os.Stat(dstPath); err == nil {
+			if _, err := os.Lstat(dstPath); err == nil {
 				errs = append(errs, fmt.Sprintf("%s: destination exists", oldPath))
 				continue
 			}
@@ -1134,21 +1397,46 @@ func (h *FileHandler) Download(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "path required"})
 		return
 	}
-	p, err := h.resolvePath(path)
+	descriptor, remote, err := decodeRemoteFileDescriptor(h.fileViews, path)
+	if remote {
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "invalid_remote_file_descriptor"})
+			return
+		}
+		h.downloadRemote(c, descriptor)
+		return
+	}
+	p, target, err := h.resolvePathTarget(path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	file, err := os.Open(p)
+	file, err := os.Open(target)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
 		return
 	}
 	defer file.Close()
-	info, _ := file.Stat()
-	c.Header("Content-Length", strconv.FormatInt(info.Size(), 10))
-	c.Header("Content-Disposition", "attachment; filename*=utf-8''"+url.PathEscape(info.Name()))
-	http.ServeContent(c.Writer, c.Request, info.Name(), info.ModTime(), file)
+	info, err := file.Stat()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if info.IsDir() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "path is a directory"})
+		return
+	}
+	disposition := "attachment"
+	if inlineMimeType := inlineFileMimeType(target); c.Query("inline") == "1" && inlineMimeType != "" {
+		disposition = "inline"
+		c.Header("Content-Type", inlineMimeType)
+	}
+	name := filepath.Base(p)
+	c.Header("Cache-Control", "private, max-age=0, must-revalidate")
+	c.Header("Referrer-Policy", "no-referrer")
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Header("Content-Disposition", disposition+"; filename*=utf-8''"+url.PathEscape(name))
+	http.ServeContent(c.Writer, c.Request, name, info.ModTime(), file)
 }
 
 // @Summary Get directory size
@@ -1194,12 +1482,12 @@ func (h *FileHandler) Read(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "path required"})
 		return
 	}
-	p, err := h.resolvePath(path)
+	p, target, err := h.resolvePathTarget(path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	info, err := os.Stat(p)
+	info, err := os.Stat(target)
 	if err != nil {
 		if os.IsNotExist(err) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
@@ -1212,7 +1500,7 @@ func (h *FileHandler) Read(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "path is a directory"})
 		return
 	}
-	content, err := os.ReadFile(p)
+	content, err := os.ReadFile(target)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -1233,14 +1521,9 @@ func (h *FileHandler) Write(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	p, err := h.resolvePath(req.Path)
+	p, status, err := h.writeContent(req.Path, req.Content)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	os.MkdirAll(filepath.Dir(p), 0755)
-	if err := os.WriteFile(p, []byte(req.Content), 0644); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true, "path": p})
@@ -1354,13 +1637,17 @@ func (h *FileHandler) Remove(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "path required"})
 		return
 	}
-	p, err := h.resolvePath(path)
+	p, err := h.resolvePathEntry(path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if _, err := os.Stat(p); os.IsNotExist(err) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+	if _, err := os.Lstat(p); err != nil {
+		if os.IsNotExist(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	if err := os.RemoveAll(p); err != nil {
@@ -1473,12 +1760,12 @@ func (h *FileHandler) Info(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "path required"})
 		return
 	}
-	p, err := h.resolvePath(path)
+	p, target, err := h.resolvePathTarget(path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	info, err := getFileInfo(p)
+	info, err := getTargetFileInfo(p, target)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return

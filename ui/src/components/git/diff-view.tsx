@@ -1,9 +1,12 @@
-import { Loader2, Square, SquareCheck, SquareMinus } from "lucide-react";
+import { GitBranch, Loader2, Square, SquareCheck, SquareMinus } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
-import type { GitInteractiveDiff } from "@/api/git";
+import type { GitImageDiff, GitInteractiveDiff, GitSubmoduleDiff, GitSubmoduleStatus } from "@/api/git";
+import GitImageDiffPreview from "@/components/git/git-image-diff";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { type GitParsedDiff, type GitSelectionType, parseGitDiff } from "@/lib/git-diff";
+import { getTranslation } from "@/lib/i18n";
 import { useGitStore } from "@/stores";
+import { useAppStore } from "@/stores/app-store";
 
 interface DiffViewProps {
   groupId: string;
@@ -14,6 +17,25 @@ interface DiffViewProps {
   repoPath?: string;
   language?: string;
   allowSelection?: boolean;
+  submodule?: GitSubmoduleStatus;
+  metadata?: GitDiffMetadata;
+}
+
+export interface GitDiffMetadata {
+  kind?: string;
+  patch?: string;
+  capability?: { lineSelectable: boolean };
+  submodule?: GitSubmoduleDiff;
+  oldSize?: number;
+  newSize?: number;
+  oldBinary?: boolean;
+  newBinary?: boolean;
+  oldTruncated?: boolean;
+  newTruncated?: boolean;
+  binary?: boolean;
+  large?: boolean;
+  patchTruncated?: boolean;
+  image?: GitImageDiff;
 }
 
 interface DisplayRow {
@@ -179,7 +201,11 @@ const DiffView: React.FC<DiffViewProps> = ({
   filePath,
   language,
   allowSelection = false,
+  submodule,
+  metadata,
 }) => {
+  const locale = useAppStore((state) => state.locale);
+  const t = (key: string) => getTranslation(locale, key);
   const getInteractiveDiff = useGitStore(groupId, (state) => state.getInteractiveDiff);
   const applySelection = useGitStore(groupId, (state) => state.applySelection);
   const interactiveDiff = useGitStore(groupId, (state) => (filePath ? state.interactiveDiffs[filePath] : undefined));
@@ -188,10 +214,11 @@ const DiffView: React.FC<DiffViewProps> = ({
 
   const detectedLanguage = useMemo(() => language || getLanguageFromFilename(filename), [language, filename]);
   const parsedDiff = useMemo(() => parseGitDiff(original, modified), [original, modified]);
-  const interactive = allowSelection && Boolean(filePath);
+  const interactiveRequested =
+    Boolean(filePath) && (allowSelection || Boolean(submodule) || metadata?.kind === "submodule");
 
   useEffect(() => {
-    if (!interactive || !filePath) {
+    if (!interactiveRequested || !filePath) {
       setIsLoading(false);
       return;
     }
@@ -208,18 +235,30 @@ const DiffView: React.FC<DiffViewProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [interactive, filePath, getInteractiveDiff]);
+  }, [interactiveRequested, filePath, getInteractiveDiff]);
+
+  const diffMetadata = interactiveRequested ? (interactiveDiff ?? metadata) : metadata;
+  const submoduleDiff = diffMetadata?.submodule;
+  const isSubmodule = Boolean(submoduleDiff || submodule || diffMetadata?.kind === "submodule");
+  const isBinary = Boolean(diffMetadata?.binary || diffMetadata?.oldBinary || diffMetadata?.newBinary);
+  const isLarge = Boolean(
+    diffMetadata?.large || diffMetadata?.patchTruncated || diffMetadata?.oldTruncated || diffMetadata?.newTruncated
+  );
+  const imageDiff = diffMetadata?.image;
+  const previewUnavailable = isBinary || isLarge;
+  const interactive =
+    interactiveRequested && !previewUnavailable && !isSubmodule && diffMetadata?.capability?.lineSelectable !== false;
 
   const displayHunks = useMemo(
     () =>
-      interactive && interactiveDiff
+      interactive && interactiveDiff && !previewUnavailable
         ? mapInteractiveDiffToDisplay(interactiveDiff)
         : mapParsedDiffToDisplay(parsedDiff),
-    [interactive, interactiveDiff, parsedDiff]
+    [interactive, interactiveDiff, parsedDiff, previewUnavailable]
   );
 
   const diffStats = useMemo(() => {
-    if (interactive && interactiveDiff) {
+    if (interactive && interactiveDiff && !previewUnavailable) {
       return {
         added: interactiveDiff.stats.added,
         removed: interactiveDiff.stats.deleted,
@@ -231,14 +270,14 @@ const DiffView: React.FC<DiffViewProps> = ({
       added: rows.filter((row) => row.type === "added").length,
       removed: rows.filter((row) => row.type === "removed").length,
     };
-  }, [displayHunks, interactive, interactiveDiff]);
+  }, [displayHunks, interactive, interactiveDiff, previewUnavailable]);
 
   const fileSelectionType = useMemo<GitSelectionType>(() => {
-    if (!interactive || !interactiveDiff) {
+    if (!interactive || !interactiveDiff || previewUnavailable) {
       return "none";
     }
     return interactiveDiff.includedState;
-  }, [interactive, interactiveDiff]);
+  }, [interactive, interactiveDiff, previewUnavailable]);
 
   const selectedRowCount = useMemo(
     () => displayHunks.flatMap((hunk) => hunk.rows).filter((row) => row.selectable && row.selected).length,
@@ -300,7 +339,7 @@ const DiffView: React.FC<DiffViewProps> = ({
     lineIds: string[],
     hunkIds: string[]
   ) => {
-    if (!interactive || !filePath || !interactiveDiff) {
+    if (!interactive || !filePath || !interactiveDiff || previewUnavailable) {
       return;
     }
 
@@ -333,7 +372,7 @@ const DiffView: React.FC<DiffViewProps> = ({
           <span className="text-[10px] text-ide-mute/60 bg-ide-bg px-1.5 py-0.5 rounded shrink-0">
             {detectedLanguage}
           </span>
-          {(diffStats.added > 0 || diffStats.removed > 0) && (
+          {(diffStats.added > 0 || diffStats.removed > 0) && !previewUnavailable && (
             <span className="text-[10px] shrink-0">
               {diffStats.added > 0 && <span className="text-green-400">+{diffStats.added}</span>}
               {diffStats.added > 0 && diffStats.removed > 0 && <span className="text-ide-mute mx-0.5">/</span>}
@@ -349,13 +388,89 @@ const DiffView: React.FC<DiffViewProps> = ({
       </div>
 
       <div className={diffBodyClassName} style={isMobile ? { overscrollBehaviorX: "contain" } : undefined}>
-        {isLoading && interactive && !interactiveDiff ? (
+        {isLoading && interactiveRequested && !interactiveDiff ? (
           <div className="h-full flex items-center justify-center text-ide-mute gap-2">
             <Loader2 size={14} className="animate-spin" />
-            Loading diff
+            {t("git.loading")}
+          </div>
+        ) : imageDiff ? (
+          <GitImageDiffPreview
+            image={imageDiff}
+            oldSize={diffMetadata?.oldSize}
+            newSize={diffMetadata?.newSize}
+            oldTruncated={diffMetadata?.oldTruncated}
+            newTruncated={diffMetadata?.newTruncated}
+            locale={locale}
+          />
+        ) : previewUnavailable ? (
+          <div className="h-full flex flex-col items-center justify-center gap-2 px-6 text-center text-ide-mute">
+            <span className="text-sm text-ide-text">{isBinary ? t("git.binaryFile") : t("git.largeFile")}</span>
+            <span className="text-xs max-w-md">
+              {isBinary ? t("git.binaryDiffUnavailable") : t("git.largeDiffUnavailable")}
+            </span>
+            {(diffMetadata?.oldSize !== undefined || diffMetadata?.newSize !== undefined) && (
+              <span className="text-[10px] font-mono">
+                {diffMetadata?.oldSize ?? 0} -&gt; {diffMetadata?.newSize ?? 0} {t("git.bytes")}
+              </span>
+            )}
+          </div>
+        ) : isSubmodule ? (
+          <div className="h-full overflow-auto px-4 py-5 text-sm">
+            <div className="flex items-center gap-2 text-ide-text">
+              <GitBranch size={16} className="text-ide-accent" />
+              <span>{t("git.submoduleDiff")}</span>
+            </div>
+            <div className="mt-3 grid gap-2 text-xs text-ide-mute">
+              <div className="font-mono text-ide-text">{filePath || filename || "submodule"}</div>
+              {submoduleDiff?.url && <div className="truncate font-mono">{submoduleDiff.url}</div>}
+              <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono">
+                <span>
+                  {t("git.submoduleOldCommit")}: {submoduleDiff?.oldSHA || "-"}
+                </span>
+                <span>
+                  {t("git.submoduleNewCommit")}: {submoduleDiff?.newSHA || "-"}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {(submoduleDiff?.status.initialized ?? submodule?.initialized) ? (
+                  <span className="rounded border border-green-500/30 px-1.5 py-0.5 text-[10px] text-green-400">
+                    {t("git.submoduleInitialized")}
+                  </span>
+                ) : (
+                  <span className="rounded border border-orange-500/30 px-1.5 py-0.5 text-[10px] text-orange-400">
+                    {t("git.submoduleUninitialized")}
+                  </span>
+                )}
+                {(submoduleDiff?.status.commitChanged || submodule?.commitChanged) && (
+                  <span className="rounded border border-orange-500/30 px-1.5 py-0.5 text-[10px] text-orange-400">
+                    {t("git.submoduleCommitChanged")}
+                  </span>
+                )}
+                {(submoduleDiff?.status.modifiedChanges || submodule?.modifiedChanges) && (
+                  <span className="rounded border border-yellow-500/30 px-1.5 py-0.5 text-[10px] text-yellow-400">
+                    {t("git.submoduleModified")}
+                  </span>
+                )}
+                {(submoduleDiff?.status.untrackedChanges || submodule?.untrackedChanges) && (
+                  <span className="rounded border border-blue-500/30 px-1.5 py-0.5 text-[10px] text-blue-400">
+                    {t("git.submoduleUntracked")}
+                  </span>
+                )}
+                {(submoduleDiff?.status.conflict || submodule?.conflict) && (
+                  <span className="rounded border border-red-500/30 px-1.5 py-0.5 text-[10px] text-red-400">
+                    {t("git.submoduleConflict")}
+                  </span>
+                )}
+              </div>
+            </div>
+            {diffMetadata?.patch && (
+              <pre className="mt-4 overflow-auto border-t border-ide-border pt-3 font-mono text-[11px] leading-5 text-ide-mute">
+                {diffMetadata.patch}
+              </pre>
+            )}
           </div>
         ) : displayHunks.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-ide-mute">No changes</div>
+          <div className="h-full flex items-center justify-center text-ide-mute">{t("git.noChanges")}</div>
         ) : (
           <div className={diffContentWrapperClassName} style={diffContentWrapperStyle}>
             {displayHunks.map((hunk) => (

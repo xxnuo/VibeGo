@@ -99,6 +99,9 @@ const MotionMenu: React.FC<MotionMenuProps> = ({ open, title, items, onClose }) 
             onClick={onClose}
           />
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label={title}
             className="absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-ide-border bg-ide-panel p-2 pb-safe shadow-[0_-14px_40px_rgba(0,0,0,0.22)]"
             initial={{ y: 28, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -156,6 +159,9 @@ const MotionConfirmDialog: React.FC<MotionConfirmDialogProps> = ({
             onClick={onCancel}
           />
           <motion.div
+            role="alertdialog"
+            aria-modal="true"
+            aria-label={title}
             className="relative z-10 w-full border-t border-ide-border bg-background p-4 pb-5 shadow-lg md:max-w-lg md:rounded-2xl md:border md:p-6 md:pb-6"
             initial={{ y: 18, opacity: 0, scale: 0.98 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}

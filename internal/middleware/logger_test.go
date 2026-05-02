@@ -65,6 +65,29 @@ func TestLogger(t *testing.T) {
 		assert.Contains(t, output, "200")
 	})
 
+	t.Run("Redacts URL Secrets", func(t *testing.T) {
+		output := captureLogs(func() {
+			req, _ := http.NewRequest("GET", "/test?q=hello&key=long-lived-secret&sig=signed-secret&Signature=other-secret&code=oauth-code&state=oauth-state&error_description=private-details", nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			assert.Equal(t, http.StatusOK, w.Code)
+		})
+
+		assert.Contains(t, output, "q=hello")
+		assert.Contains(t, output, "key=REDACTED")
+		assert.Contains(t, output, "sig=REDACTED")
+		assert.Contains(t, output, "Signature=REDACTED")
+		assert.Contains(t, output, "code=REDACTED")
+		assert.Contains(t, output, "state=REDACTED")
+		assert.Contains(t, output, "error_description=REDACTED")
+		assert.NotContains(t, output, "long-lived-secret")
+		assert.NotContains(t, output, "signed-secret")
+		assert.NotContains(t, output, "other-secret")
+		assert.NotContains(t, output, "oauth-code")
+		assert.NotContains(t, output, "oauth-state")
+		assert.NotContains(t, output, "private-details")
+	})
+
 	t.Run("Warn Log", func(t *testing.T) {
 		output := captureLogs(func() {
 			req, _ := http.NewRequest("GET", "/warn", nil)

@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"context"
 	"os"
 	"time"
 
@@ -10,12 +11,15 @@ import (
 type TerminalInfo struct {
 	ID                  string               `json:"id"`
 	Name                string               `json:"name"`
+	TabColor            string               `json:"tab_color"`
+	TabIcon             string               `json:"tab_icon"`
 	Shell               string               `json:"shell"`
 	Cwd                 string               `json:"cwd"`
 	CurrentCwd          string               `json:"current_cwd"`
 	Cols                int                  `json:"cols"`
 	Rows                int                  `json:"rows"`
 	RuntimeType         string               `json:"runtime_type"`
+	SSHProfileID        string               `json:"ssh_profile_id,omitempty"`
 	Readonly            bool                 `json:"readonly"`
 	Capabilities        TerminalCapabilities `json:"capabilities"`
 	Status              string               `json:"status"`
@@ -34,23 +38,31 @@ type TerminalInfo struct {
 }
 
 type CreateOptions struct {
-	Name               string
-	Cwd                string
+	Name string
+	Cwd  string
+	// Command starts a one-shot PTY command when non-empty. An empty command
+	// preserves the interactive shell behavior used by ordinary sessions.
+	Command            string
 	Cols               int
 	Rows               int
 	UserID             string
 	WorkspaceSessionID string
 	GroupID            string
 	ParentID           string
+	RuntimeType        string
+	SSHProfileID       string
+	SSHAuth            SSHAuthSecrets
+	Context            context.Context
 }
 
 type ShellMetadataUpdate struct {
-	CurrentCwd          *string
-	ShellType           *string
-	ShellState          *string
-	ShellIntegration    *bool
-	LastCommand         *string
-	LastCommandExitCode *int
+	CurrentCwd             *string
+	ShellType              *string
+	ShellState             *string
+	ShellIntegration       *bool
+	LastCommand            *string
+	LastCommandExitCode    *int
+	LastCommandExitCodeSet bool
 }
 
 type WorkspaceTerminalAssignment struct {
@@ -78,6 +90,11 @@ type ManagerConfig struct {
 	WSPingInterval       time.Duration
 	WSReadTimeout        time.Duration
 	WSWriteTimeout       time.Duration
+	RuntimeFactory       RuntimeFactory
+	// BlockTermRuntimeRegistry optionally supplies a shared route table. When
+	// omitted, NewManager creates an in-memory registry so session routes are
+	// still fenced; legacy protocol messages remain compatible.
+	BlockTermRuntimeRegistry *BlockTermRuntimeRegistry
 }
 
 func (c *ManagerConfig) applyDefaults() {
@@ -123,12 +140,15 @@ func sessionToInfo(s *model.TerminalSession) *TerminalInfo {
 	return &TerminalInfo{
 		ID:                  s.ID,
 		Name:                s.Name,
+		TabColor:            s.TabColor,
+		TabIcon:             s.TabIcon,
 		Shell:               s.Shell,
 		Cwd:                 s.Cwd,
 		CurrentCwd:          s.CurrentCwd,
 		Cols:                s.Cols,
 		Rows:                s.Rows,
 		RuntimeType:         s.RuntimeType,
+		SSHProfileID:        s.SSHProfileID,
 		Readonly:            s.Readonly,
 		Capabilities:        capabilities,
 		Status:              s.Status,
@@ -145,4 +165,19 @@ func sessionToInfo(s *model.TerminalSession) *TerminalInfo {
 		CreatedAt:           s.CreatedAt,
 		UpdatedAt:           s.UpdatedAt,
 	}
+}
+
+// cloneTerminalSession makes a stable value copy for callers that may run
+// concurrently with PTY metadata updates. The exit-code pointer needs its own
+// allocation so a caller never observes a later replacement.
+func cloneTerminalSession(s *model.TerminalSession) model.TerminalSession {
+	if s == nil {
+		return model.TerminalSession{}
+	}
+	clone := *s
+	if s.LastCommandExitCode != nil {
+		exitCode := *s.LastCommandExitCode
+		clone.LastCommandExitCode = &exitCode
+	}
+	return clone
 }

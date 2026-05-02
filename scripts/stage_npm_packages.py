@@ -9,9 +9,13 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 REPOSITORY_URL = "https://github.com/xxnuo/VibeGo"
+WAVETERM_ATTRIBUTION_FILES = (
+    PurePosixPath("thirdparty/waveterm/LICENSE"),
+    PurePosixPath("thirdparty/waveterm/NOTICE"),
+)
 
 PLATFORMS = {
     ("android", "arm64"): {
@@ -78,9 +82,15 @@ def npm_pack(staging_dir: Path, output_path: Path) -> None:
         pack_dir = Path(tmp)
         out = run(["npm", "pack", "--ignore-scripts", "--json", "--pack-destination", str(pack_dir)], cwd=staging_dir)
         data = json.loads(out)
-        if not data:
+        if isinstance(data, list):
+            packages = data
+        elif isinstance(data, dict):
+            packages = list(data.values())
+        else:
+            packages = []
+        if len(packages) != 1 or not isinstance(packages[0], dict):
             raise RuntimeError("npm pack did not return any output")
-        filename = data[0].get("filename")
+        filename = packages[0].get("filename")
         if not filename:
             raise RuntimeError("npm pack output missing filename")
         src = pack_dir / filename
@@ -90,25 +100,57 @@ def npm_pack(staging_dir: Path, output_path: Path) -> None:
         shutil.move(str(src), output_path)
 
 
-def extract_binary(archive: Path, binary_name: str, dest: Path) -> None:
+def archive_file_members(tf: tarfile.TarFile, archive: Path) -> dict[PurePosixPath, tarfile.TarInfo]:
+    files: dict[PurePosixPath, tarfile.TarInfo] = {}
+    for member in tf.getmembers():
+        if not member.isfile():
+            continue
+        path = PurePosixPath(member.name)
+        if path.is_absolute() or ".." in path.parts:
+            raise RuntimeError(f"unsafe archive path in {archive}: {member.name}")
+        if path in files:
+            raise RuntimeError(f"duplicate archive path in {archive}: {member.name}")
+        files[path] = member
+    return files
+
+
+def read_archive_file(tf: tarfile.TarFile, archive: Path, member: tarfile.TarInfo) -> bytes:
+    stream = tf.extractfile(member)
+    if stream is None:
+        raise RuntimeError(f"cannot extract file from archive: {archive}: {member.name}")
+    return stream.read()
+
+
+def extract_release_files(
+    archive: Path,
+    archive_binary_name: str,
+    package_binary_name: str,
+    package_root: Path,
+) -> None:
+    binary_path = PurePosixPath(archive_binary_name)
     with tarfile.open(archive, "r:gz") as tf:
-        members = [m for m in tf.getmembers() if m.isfile()]
-        if not members:
-            raise RuntimeError(f"archive has no files: {archive}")
-        target = None
-        for m in members:
-            if Path(m.name).name == binary_name:
-                target = m
-                break
-        if target is None:
-            target = members[0]
-        f = tf.extractfile(target)
-        if f is None:
-            raise RuntimeError(f"cannot extract file from archive: {archive}")
-        data = f.read()
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(data)
-    dest.chmod(0o755)
+        members = archive_file_members(tf, archive)
+        if binary_path not in members:
+            raise RuntimeError(f"archive missing binary {archive_binary_name}: {archive}")
+
+        missing = [str(path) for path in WAVETERM_ATTRIBUTION_FILES if path not in members]
+        if missing:
+            raise RuntimeError(f"archive missing required files: {archive}: {', '.join(missing)}")
+        binary_data = read_archive_file(tf, archive, members[binary_path])
+        attribution = {
+            path: read_archive_file(tf, archive, members[path])
+            for path in WAVETERM_ATTRIBUTION_FILES
+        }
+
+    binary_dest = package_root / "vendor" / package_binary_name
+    binary_dest.parent.mkdir(parents=True, exist_ok=True)
+    binary_dest.write_bytes(binary_data)
+    binary_dest.chmod(0o755)
+
+    for path in WAVETERM_ATTRIBUTION_FILES:
+        dest = package_root.joinpath(*path.parts)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(attribution[path])
 
 
 def stage_platform_package(
@@ -123,6 +165,9 @@ def stage_platform_package(
     archive = artifacts_dir / f"vibego_{tag}_{goos}_{goarch}.tar.gz"
     if not archive.exists():
         raise RuntimeError(f"missing artifact: {archive}")
+    archive_binary_name = f"vibego_{tag}_{goos}_{goarch}"
+    if goos == "windows":
+        archive_binary_name += ".exe"
 
     pkg_name = f"@vibego/vibego-{platform['pkg_suffix']}"
 
@@ -133,14 +178,14 @@ def stage_platform_package(
             "version": version,
             "os": [platform["node_os"]],
             "cpu": [platform["node_cpu"]],
-            "files": ["vendor"],
+            "files": ["vendor", "thirdparty/waveterm"],
             "repository": {
                 "type": "git",
                 "url": REPOSITORY_URL,
             },
         }
         (root / "package.json").write_text(json.dumps(package_json, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        extract_binary(archive, platform["binary_name"], root / "vendor" / platform["binary_name"])
+        extract_release_files(archive, archive_binary_name, platform["binary_name"], root)
 
         tarball = output_dir / f"vibego-npm-{platform['pkg_suffix']}-{version}.tgz"
         npm_pack(root, tarball)

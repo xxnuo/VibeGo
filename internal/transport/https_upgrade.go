@@ -54,7 +54,9 @@ func NewHTTPSUpgradeHandler(cfg HTTPSUpgradeHandlerConfig) (http.Handler, error)
 
 func (h *httpsUpgradeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.shouldServeFallback(r) {
-		h.fallback.ServeHTTP(w, r)
+		secureRequest := r.Clone(r.Context())
+		secureRequest.URL.Scheme = "https"
+		h.fallback.ServeHTTP(w, secureRequest)
 		return
 	}
 	if r.URL.Path == CertificateDownloadPath {

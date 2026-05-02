@@ -14,7 +14,8 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({ onSwitchSession, 
   const dialog = useDialog();
   const sessions = useSessionStore((s) => s.sessions);
   const currentSessionId = useSessionStore((s) => s.currentSessionId);
-  const loading = useSessionStore((s) => s.loading);
+  const sessionsLoading = useSessionStore((s) => s.sessionsLoading);
+  const workspaceLoading = useSessionStore((s) => s.loading);
   const loadSessions = useSessionStore((s) => s.loadSessions);
   const deleteSession = useSessionStore((s) => s.deleteSession);
   const clearAllSessions = useSessionStore((s) => s.clearAllSessions);
@@ -30,22 +31,24 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({ onSwitchSession, 
 
   const handleDelete = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
+    if (workspaceLoading) return;
     const session = sessions.find((s) => s.id === sessionId);
     const confirmed = await dialog.confirm(
       t("session.deleteConfirm").replace("{name}", session?.name || ""),
       undefined,
       { confirmVariant: "danger", confirmText: t("common.delete") }
     );
-    if (!confirmed) return;
+    if (!confirmed || useSessionStore.getState().loading) return;
     await deleteSession(sessionId);
   };
 
   const handleClearAll = async () => {
+    if (workspaceLoading) return;
     const confirmed = await dialog.confirm(t("session.clearAllConfirm"), undefined, {
       confirmVariant: "danger",
       confirmText: t("session.clearAll"),
     });
-    if (!confirmed) return;
+    if (!confirmed || useSessionStore.getState().loading) return;
     await clearAllSessions();
   };
 
@@ -59,8 +62,12 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({ onSwitchSession, 
   };
 
   const handleSwitch = async (sessionId: string) => {
+    if (!workspaceLoading && sessionId === currentSessionId) return;
     await switchSession(sessionId);
-    onSwitchSession(sessionId);
+    const state = useSessionStore.getState();
+    if (state.currentSessionId === sessionId && !state.loading) {
+      onSwitchSession(sessionId);
+    }
   };
 
   const startEditing = (e: React.MouseEvent, session: { id: string; name: string }) => {
@@ -87,7 +94,7 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({ onSwitchSession, 
     return date.toLocaleDateString(getIntlLocale(locale));
   };
 
-  if (loading && sessions.length === 0) {
+  if (sessionsLoading && sessions.length === 0) {
     return <div className="flex items-center justify-center py-8 text-ide-mute text-sm">{t("common.loading")}</div>;
   }
 
@@ -100,7 +107,8 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({ onSwitchSession, 
         {sessions.length > 0 && (
           <button
             onClick={handleClearAll}
-            className="text-xs text-ide-mute hover:text-red-500 flex items-center gap-1 transition-colors"
+            disabled={workspaceLoading}
+            className="text-xs text-ide-mute hover:text-red-500 flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             title={t("session.clearAll")}
           >
             <Trash2 size={12} />
@@ -127,7 +135,7 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({ onSwitchSession, 
                 onClick={() => handleSwitch(session.id)}
                 className={`group flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg border transition-all ${
                   isCurrent
-                    ? "bg-ide-accent/10 border-ide-accent/30 cursor-pointer"
+                    ? "bg-ide-accent/10 border-ide-accent/30 cursor-default"
                     : "border-transparent hover:bg-ide-bg cursor-pointer hover:border-ide-border"
                 }`}
               >
@@ -192,7 +200,8 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({ onSwitchSession, 
                     </button>
                     <button
                       onClick={(e) => handleDelete(e, session.id)}
-                      className="p-1.5 rounded hover:bg-ide-bg-hover text-ide-mute hover:text-red-500"
+                      disabled={workspaceLoading}
+                      className="p-1.5 rounded hover:bg-ide-bg-hover text-ide-mute hover:text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       title={t("session.delete")}
                     >
                       <Trash2 size={14} />

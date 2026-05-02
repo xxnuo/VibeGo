@@ -1,0 +1,528 @@
+.git-repository-settings-overlay {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  background: color-mix(in srgb, var(--ide-bg) 48%, transparent);
+}
+
+.git-repository-settings-panel {
+  display: flex;
+  width: min(650px, 100%);
+  min-width: 0;
+  height: 100%;
+  flex-direction: column;
+  border-left: 1px solid var(--ide-border);
+  background: var(--ide-panel);
+  box-shadow: -8px 0 24px color-mix(in srgb, #000 22%, transparent);
+  color: var(--ide-text);
+}
+
+.git-repository-settings-header {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--ide-border);
+  padding: 8px 12px;
+}
+
+.git-repository-settings-heading,
+.git-repository-settings-header-actions,
+.git-repository-settings-section-heading,
+.git-repository-settings-list-row-heading,
+.git-repository-settings-section-actions,
+.git-repository-settings-worktree-actions,
+.git-repository-settings-worktree-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.git-repository-settings-heading,
+.git-repository-settings-section-heading {
+  gap: 7px;
+}
+
+.git-repository-settings-heading > svg,
+.git-repository-settings-section-heading > svg {
+  flex: 0 0 auto;
+  color: var(--ide-accent);
+}
+
+.git-repository-settings-title-wrap {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.git-repository-settings-title-wrap h2,
+.git-repository-settings-section-heading h3 {
+  margin: 0;
+  color: var(--ide-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.git-repository-settings-title-wrap span {
+  max-width: 520px;
+  overflow: hidden;
+  color: var(--ide-mute);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-repository-settings-header-actions {
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.git-repository-settings-icon-button {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ide-mute);
+  cursor: pointer;
+}
+
+.git-repository-settings-icon-button:hover:not(:disabled) {
+  border-color: var(--ide-border);
+  background: color-mix(in srgb, var(--ide-accent) 10%, transparent);
+  color: var(--ide-text);
+}
+
+.git-repository-settings-icon-button:focus-visible,
+.git-repository-settings-button:focus-visible,
+.git-repository-settings-panel input:focus-visible,
+.git-repository-settings-panel select:focus-visible,
+.git-repository-settings-panel textarea:focus-visible {
+  outline: 1px solid var(--ide-accent);
+  outline-offset: -1px;
+}
+
+.git-repository-settings-icon-button:disabled,
+.git-repository-settings-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.git-repository-settings-icon-button--danger:hover:not(:disabled) {
+  border-color: color-mix(in srgb, #ef4444 60%, var(--ide-border));
+  color: #f87171;
+}
+
+.git-repository-settings-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px 24px;
+}
+
+.git-repository-settings-scroll::-webkit-scrollbar {
+  width: 7px;
+}
+
+.git-repository-settings-scroll::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: var(--ide-border);
+}
+
+.git-repository-settings-section {
+  border-bottom: 1px solid var(--ide-border);
+  padding: 12px 0 14px;
+}
+
+.git-repository-settings-section:first-child {
+  padding-top: 2px;
+}
+
+.git-repository-settings-section:last-child {
+  border-bottom: 0;
+}
+
+.git-repository-settings-section-heading {
+  min-height: 24px;
+  margin-bottom: 9px;
+}
+
+.git-repository-settings-count,
+.git-repository-settings-badge {
+  display: inline-flex;
+  min-height: 18px;
+  align-items: center;
+  border: 1px solid var(--ide-border);
+  border-radius: 3px;
+  color: var(--ide-mute);
+  font-size: 10px;
+  padding: 0 5px;
+}
+
+.git-repository-settings-count {
+  margin-left: 2px;
+}
+
+.git-repository-settings-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.git-repository-settings-form-grid label,
+.git-repository-settings-worktree-add label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.git-repository-settings-form-grid label > span,
+.git-repository-settings-worktree-add label > span {
+  color: var(--ide-mute);
+  font-size: 10px;
+}
+
+.git-repository-settings-field-wide {
+  grid-column: 1 / -1;
+}
+
+.git-repository-settings-panel input,
+.git-repository-settings-panel select,
+.git-repository-settings-panel textarea {
+  min-width: 0;
+  border: 1px solid var(--ide-border);
+  border-radius: 4px;
+  background: var(--ide-bg);
+  color: var(--ide-text);
+  font: inherit;
+  font-size: 11px;
+  outline: 0;
+}
+
+.git-repository-settings-panel input,
+.git-repository-settings-panel select {
+  height: 29px;
+  padding: 0 7px;
+}
+
+.git-repository-settings-panel textarea {
+  display: block;
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  padding: 8px;
+  font-family: var(--font-mono);
+  line-height: 1.5;
+}
+
+.git-repository-settings-panel input::placeholder,
+.git-repository-settings-panel textarea::placeholder {
+  color: var(--ide-mute);
+  opacity: 0.8;
+}
+
+.git-repository-settings-effective,
+.git-repository-settings-status-grid {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 10px;
+  margin: 9px 0;
+  color: var(--ide-mute);
+  font-size: 10px;
+}
+
+.git-repository-settings-effective code,
+.git-repository-settings-status-grid strong,
+.git-repository-settings-muted-code,
+.git-repository-settings-worktree-heading code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ide-text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-repository-settings-status--ok {
+  color: #4ade80 !important;
+}
+
+.git-repository-settings-status--warning {
+  color: #fb923c !important;
+}
+
+.git-repository-settings-muted-code {
+  display: block;
+  margin: 4px 0 8px;
+  color: var(--ide-mute);
+}
+
+.git-repository-settings-hint,
+.git-repository-settings-empty {
+  color: var(--ide-mute);
+  font-size: 10px;
+}
+
+.git-repository-settings-error {
+  margin-bottom: 8px;
+  border-left: 2px solid #ef4444;
+  background: color-mix(in srgb, #ef4444 9%, transparent);
+  color: #fca5a5;
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 7px 8px;
+}
+
+.git-repository-settings-loading {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--ide-mute);
+  font-size: 11px;
+}
+
+.git-repository-settings-load-error {
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+}
+
+.git-repository-settings-load-error .git-repository-settings-error {
+  margin: 0;
+  width: min(420px, 100%);
+}
+
+.git-repository-settings-button {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid var(--ide-border);
+  border-radius: 4px;
+  background: var(--ide-bg);
+  color: var(--ide-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  padding: 0 9px;
+}
+
+.git-repository-settings-button:hover:not(:disabled) {
+  border-color: var(--ide-accent);
+  background: color-mix(in srgb, var(--ide-accent) 10%, var(--ide-bg));
+}
+
+.git-repository-settings-button--primary {
+  border-color: var(--ide-accent);
+  background: var(--ide-accent);
+  color: var(--ide-on-accent);
+}
+
+.git-repository-settings-button--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ide-accent) 85%, #000);
+  color: var(--ide-on-accent);
+}
+
+.git-repository-settings-button--danger {
+  border-color: color-mix(in srgb, #ef4444 45%, var(--ide-border));
+  color: #f87171;
+}
+
+.git-repository-settings-button--danger:hover:not(:disabled) {
+  border-color: #ef4444;
+  background: color-mix(in srgb, #ef4444 10%, var(--ide-bg));
+  color: #fca5a5;
+}
+
+.git-repository-settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.git-repository-settings-list-row {
+  border: 1px solid var(--ide-border);
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.git-repository-settings-list-row-heading {
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.git-repository-settings-list-row-heading strong,
+.git-repository-settings-worktree-title strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ide-text);
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-repository-settings-list-row .git-repository-settings-button {
+  margin-top: 7px;
+}
+
+.git-repository-settings-add-row {
+  display: grid;
+  grid-template-columns: minmax(75px, 0.35fr) minmax(0, 1fr) auto;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.git-repository-settings-section-actions {
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 7px;
+}
+
+.git-repository-settings-worktree-heading {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.git-repository-settings-worktree-title {
+  gap: 5px;
+}
+
+.git-repository-settings-worktree-heading code {
+  color: var(--ide-mute);
+}
+
+.git-repository-settings-submodule-heading {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.git-repository-settings-submodule-heading code {
+  overflow: hidden;
+  color: var(--ide-mute);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-repository-settings-submodule-commits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 7px;
+  color: var(--ide-mute);
+  font-size: 10px;
+}
+
+.git-repository-settings-submodule-commits code {
+  color: var(--ide-text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.git-repository-settings-submodule-actions,
+.git-repository-settings-submodule-toolbar,
+.git-repository-settings-submodule-options {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.git-repository-settings-submodule-actions {
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.git-repository-settings-submodule-options {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  margin-top: 9px;
+  border-top: 1px solid color-mix(in srgb, var(--ide-border) 70%, transparent);
+  padding-top: 9px;
+}
+
+.git-repository-settings-submodule-toolbar {
+  margin-left: auto;
+}
+
+.git-repository-settings-badge--dirty {
+  border-color: color-mix(in srgb, #eab308 55%, var(--ide-border));
+  color: #eab308;
+}
+
+.git-repository-settings-badge--danger {
+  border-color: color-mix(in srgb, #ef4444 55%, var(--ide-border));
+  color: #f87171;
+}
+
+.git-repository-settings-worktree-actions {
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.git-repository-settings-worktree-actions input {
+  flex: 1;
+}
+
+.git-repository-settings-badge--warning {
+  border-color: color-mix(in srgb, #fb923c 55%, var(--ide-border));
+  color: #fb923c;
+}
+
+.git-repository-settings-worktree-add {
+  margin-top: 9px;
+  border-top: 1px solid color-mix(in srgb, var(--ide-border) 70%, transparent);
+  padding-top: 9px;
+}
+
+.git-repository-settings-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0;
+  color: var(--ide-mute);
+  font-size: 10px;
+}
+
+.git-repository-settings-checkbox input {
+  width: 13px;
+  height: 13px;
+  accent-color: var(--ide-accent);
+}
+
+@media (max-width: 560px) {
+  .git-repository-settings-panel {
+    width: 100%;
+    border-left: 0;
+  }
+
+  .git-repository-settings-form-grid,
+  .git-repository-settings-add-row {
+    grid-template-columns: 1fr;
+  }
+
+  .git-repository-settings-field-wide {
+    grid-column: auto;
+  }
+}

@@ -50,6 +50,7 @@ func (m *mockMaster) Close() error {
 type mockSlave struct {
 	readData  []byte
 	writeData [][]byte
+	signals   []string
 	mu        sync.Mutex
 }
 
@@ -73,6 +74,13 @@ func (s *mockSlave) Write(p []byte) (int, error) {
 }
 
 func (s *mockSlave) ResizeTerminal(cols, rows int) error {
+	return nil
+}
+
+func (s *mockSlave) Signal(name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.signals = append(s.signals, name)
 	return nil
 }
 
@@ -173,6 +181,63 @@ func TestWebTTY_Resize(t *testing.T) {
 
 	go wt.Run(ctx)
 	time.Sleep(100 * time.Millisecond)
+}
+
+func TestWebTTY_Signal(t *testing.T) {
+	slave := &mockSlave{}
+	wt := newWebTTY(&mockMaster{}, slave)
+	data, err := json.Marshal(WSMessage{Type: MsgTypeSignal, Signal: " sigterm "})
+	if err != nil {
+		t.Fatalf("marshal signal message: %v", err)
+	}
+
+	if err := wt.handleMessage(data); err != nil {
+		t.Fatalf("handle signal message: %v", err)
+	}
+
+	slave.mu.Lock()
+	defer slave.mu.Unlock()
+	if len(slave.signals) != 1 || slave.signals[0] != "TERM" {
+		t.Fatalf("signals = %v, want [TERM]", slave.signals)
+	}
+}
+
+func TestWebTTY_RejectsInvalidSignal(t *testing.T) {
+	slave := &mockSlave{}
+	wt := newWebTTY(&mockMaster{}, slave)
+	data, err := json.Marshal(WSMessage{Type: MsgTypeSignal, Signal: "QUIT"})
+	if err != nil {
+		t.Fatalf("marshal signal message: %v", err)
+	}
+
+	if err := wt.handleMessage(data); err != nil {
+		t.Fatalf("handle invalid signal message: %v", err)
+	}
+
+	slave.mu.Lock()
+	defer slave.mu.Unlock()
+	if len(slave.signals) != 0 {
+		t.Fatalf("invalid signal was forwarded: %v", slave.signals)
+	}
+}
+
+func TestWebTTY_DeniesSignalWhenWritesAreNotPermitted(t *testing.T) {
+	slave := &mockSlave{}
+	wt := newWebTTY(&mockMaster{}, slave, withPermitWrite(false))
+	data, err := json.Marshal(WSMessage{Type: MsgTypeSignal, Signal: "INT"})
+	if err != nil {
+		t.Fatalf("marshal signal message: %v", err)
+	}
+
+	if err := wt.handleMessage(data); err != nil {
+		t.Fatalf("handle read-only signal message: %v", err)
+	}
+
+	slave.mu.Lock()
+	defer slave.mu.Unlock()
+	if len(slave.signals) != 0 {
+		t.Fatalf("read-only signal was forwarded: %v", slave.signals)
+	}
 }
 
 func TestWebTTY_OnClosed(t *testing.T) {

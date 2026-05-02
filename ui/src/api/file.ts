@@ -1,4 +1,15 @@
 import { API_BASE, getAuthHeaders, request } from "@/api/request";
+import { createSerialExecutor, type ViewSession } from "@/lib/view-session";
+
+const runViewUrlRequest = createSerialExecutor();
+
+export interface RendererFileClient {
+  info: (path: string) => Promise<FileInfo>;
+  read: (path: string) => Promise<{ path: string; content: string; size: number }>;
+  check: (path: string) => Promise<{ exist: boolean; path?: string }>;
+  save: (path: string, content: string) => Promise<{ ok: boolean }>;
+  viewUrl: (path: string) => Promise<ViewSession>;
+}
 
 export interface FileInfo {
   path: string;
@@ -224,4 +235,91 @@ export const fileApi = {
     if (key) params.set("key", key);
     return `${API_BASE}/file/download?${params.toString()}`;
   },
+
+  viewUrl: async (path: string) => {
+    const key = localStorage.getItem("vibego_auth_key");
+    if (!key) {
+      const params = new URLSearchParams({ path, inline: "1" });
+      return { url: `${API_BASE}/file/download?${params.toString()}`, expiresAt: null } satisfies ViewSession;
+    }
+    return runViewUrlRequest(async () => {
+      const result = await request<{ url: string; expires_at: number }>(
+        `/file/view-url?path=${encodeURIComponent(path)}`
+      );
+      return { url: result.url, expiresAt: result.expires_at } satisfies ViewSession;
+    });
+  },
 };
+
+export interface RendererFileClientScope {
+  runtimeType: "local" | "ssh";
+  terminalId: string;
+  blockId?: string;
+  /** BlockTerm model timestamps are milliseconds; the API scope uses Unix seconds. */
+  createdAt?: number;
+}
+
+function normalizeBlockCreatedAtSeconds(value: number | undefined): number | undefined {
+  if (!Number.isSafeInteger(value) || (value as number) < 0) return undefined;
+  return Math.round((value as number) / 1000);
+}
+
+export function createRendererFileClient(scope: RendererFileClientScope): RendererFileClient;
+export function createRendererFileClient(
+  runtimeType: "local" | "ssh",
+  terminalId: string,
+  blockId?: string,
+  createdAt?: number
+): RendererFileClient;
+export function createRendererFileClient(
+  scopeOrRuntimeType: RendererFileClientScope | "local" | "ssh",
+  legacyTerminalId?: string,
+  legacyBlockId?: string,
+  legacyCreatedAt?: number
+): RendererFileClient {
+  const scope: RendererFileClientScope =
+    typeof scopeOrRuntimeType === "string"
+      ? {
+          runtimeType: scopeOrRuntimeType,
+          terminalId: legacyTerminalId || "",
+          blockId: legacyBlockId,
+          createdAt: legacyCreatedAt,
+        }
+      : scopeOrRuntimeType;
+  if (scope.runtimeType !== "ssh") return fileApi;
+  const blockCreatedAt = normalizeBlockCreatedAtSeconds(scope.createdAt);
+  const hasBlockScope = Boolean(scope.blockId && blockCreatedAt !== undefined);
+  const query = (path: string) => {
+    const params = new URLSearchParams({ terminal_id: scope.terminalId, path });
+    if (hasBlockScope) {
+      params.set("block_id", scope.blockId as string);
+      params.set("block_created_at", String(blockCreatedAt));
+    }
+    return params.toString();
+  };
+  const body = (path: string, extra: Record<string, unknown> = {}) => ({
+    terminal_id: scope.terminalId,
+    path,
+    ...(hasBlockScope ? { block_id: scope.blockId, block_created_at: blockCreatedAt } : {}),
+    ...extra,
+  });
+  return {
+    info: (path) => request<FileInfo>(`/file/remote/info?${query(path)}`),
+    read: (path) => request<{ path: string; content: string; size: number }>(`/file/remote/read?${query(path)}`),
+    check: (path) =>
+      request<{ exist: boolean; path?: string }>("/file/remote/check", {
+        method: "POST",
+        body: JSON.stringify(body(path)),
+      }),
+    save: (path, content) =>
+      request<{ ok: boolean }>("/file/remote/save", {
+        method: "POST",
+        body: JSON.stringify(body(path, { content })),
+      }),
+    viewUrl: (path) =>
+      runViewUrlRequest(async () => {
+        const result = await request<{ url: string; expires_at: number }>(`/file/remote/view-url?${query(path)}`);
+        return { url: result.url, expiresAt: result.expires_at } satisfies ViewSession;
+      }),
+  };
+}

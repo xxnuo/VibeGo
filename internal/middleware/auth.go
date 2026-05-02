@@ -9,22 +9,47 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func Auth(key string) gin.HandlerFunc {
+const bearerAccessKeyContext = "vibego.auth.bearer-access-key"
+
+func BearerAccessKey(c *gin.Context) (string, bool) {
+	value, ok := c.Get(bearerAccessKeyContext)
+	key, valid := value.(string)
+	return key, ok && valid && key != ""
+}
+
+func Auth(key string, fileViewAuthorizers ...*FileViewAuthorizer) gin.HandlerFunc {
 	keyBytes := []byte(key)
+	var fileViews *FileViewAuthorizer
+	if len(fileViewAuthorizers) > 0 {
+		fileViews = fileViewAuthorizers[0]
+	}
 	return func(c *gin.Context) {
 		if key == "" {
 			c.Next()
 			return
 		}
 
-		reqKey := c.GetHeader("Authorization")
-		if reqKey != "" {
-			reqKey = strings.TrimPrefix(reqKey, "Bearer ")
+		authorization := c.GetHeader("Authorization")
+		bearerKey := ""
+		reqKey := authorization
+		if authorization != "" {
+			if strings.HasPrefix(authorization, "Bearer ") {
+				bearerKey = strings.TrimPrefix(authorization, "Bearer ")
+			}
+			reqKey = strings.TrimPrefix(authorization, "Bearer ")
 		} else {
 			reqKey = c.Query("key")
 		}
 
-		if subtle.ConstantTimeCompare([]byte(reqKey), keyBytes) != 1 {
+		authorizedByKey := subtle.ConstantTimeCompare([]byte(reqKey), keyBytes) == 1
+		if authorizedByKey && bearerKey != "" {
+			c.Set(bearerAccessKeyContext, bearerKey)
+		}
+		authorized := authorizedByKey
+		if !authorized && fileViews != nil {
+			authorized = fileViews.Authorize(c)
+		}
+		if !authorized {
 			log.Warn().
 				Str("ip", c.ClientIP()).
 				Str("path", c.Request.URL.Path).

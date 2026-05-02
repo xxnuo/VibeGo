@@ -93,6 +93,40 @@ func TestHistoryBufferReset(t *testing.T) {
 	}
 }
 
+func TestHistoryBufferRestorePreservesAbsoluteCursor(t *testing.T) {
+	hb := newHistoryBuffer(5)
+	hb.Restore([]byte("abcdef"), 12)
+
+	if got := string(hb.Read()); got != "bcdef" {
+		t.Fatalf("restored data = %q, want %q", got, "bcdef")
+	}
+	start, end := hb.CursorRange()
+	if start != 7 || end != 12 {
+		t.Fatalf("restored cursor range = (%d, %d), want (7, 12)", start, end)
+	}
+
+	if _, err := hb.Write([]byte("gh")); err != nil {
+		t.Fatalf("append restored history: %v", err)
+	}
+	if got := string(hb.Read()); got != "defgh" {
+		t.Fatalf("appended data = %q, want %q", got, "defgh")
+	}
+	start, end = hb.CursorRange()
+	if start != 9 || end != 14 {
+		t.Fatalf("appended cursor range = (%d, %d), want (9, 14)", start, end)
+	}
+}
+
+func TestHistoryBufferRestoreRepairsLegacyCursor(t *testing.T) {
+	hb := newHistoryBuffer(8)
+	hb.Restore([]byte("legacy"), 0)
+
+	start, end := hb.CursorRange()
+	if start != 0 || end != 6 {
+		t.Fatalf("legacy cursor range = (%d, %d), want (0, 6)", start, end)
+	}
+}
+
 func TestHistoryBufferConcurrent(t *testing.T) {
 	hb := newHistoryBuffer(100)
 

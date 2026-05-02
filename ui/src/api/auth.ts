@@ -1,4 +1,4 @@
-const API_BASE = "/api";
+import { API_BASE, getAuthHeaders } from "@/api/request";
 
 export interface AuthStatusResponse {
   need_login: boolean;
@@ -34,6 +34,10 @@ export const authApi = {
   },
 
   logout: async (): Promise<void> => {
+    await fetch(`${API_BASE}/file/view-session/logout`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
     await fetch(`${API_BASE}/auth/logout`, { method: "POST" });
   },
 };

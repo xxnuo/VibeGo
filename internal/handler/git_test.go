@@ -113,6 +113,8 @@ func TestGitLog(t *testing.T) {
 	assert.Equal(t, 1, resp.Commits[0].ParentCount)
 	assert.Equal(t, 0, resp.Commits[1].ParentCount)
 	assert.Equal(t, "test@example.com", resp.Commits[0].AuthorEmail)
+	assert.NotNil(t, resp.Commits[0].Tags)
+	assert.NotNil(t, resp.Commits[1].Tags)
 }
 
 func TestGitInit(t *testing.T) {
@@ -316,4 +318,49 @@ func TestGitUndoCommit(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestGitUndoInitialCommitMakesBranchUnbornAndPreservesWorktree(t *testing.T) {
+	repoDir, err := os.MkdirTemp("", "git-undo-initial")
+	assert.NoError(t, err)
+	defer os.RemoveAll(repoDir)
+	runGit := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repoDir
+		output, runErr := cmd.CombinedOutput()
+		assert.NoError(t, runErr, string(output))
+	}
+	runGit("init")
+	runGit("config", "user.name", "Test")
+	runGit("config", "user.email", "test@example.com")
+
+	initialPath := filepath.Join(repoDir, "file.txt")
+	assert.NoError(t, os.WriteFile(initialPath, []byte("initial\n"), 0644))
+	runGit("add", "file.txt")
+	runGit("commit", "-m", "initial")
+
+	// Simulate both a deleted tracked file and an unrelated untracked change.
+	assert.NoError(t, os.Remove(initialPath))
+	unrelatedPath := filepath.Join(repoDir, "unrelated.txt")
+	assert.NoError(t, os.WriteFile(unrelatedPath, []byte("keep\n"), 0644))
+
+	h := NewGitHandler(nil)
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	h.Register(r.Group("/"))
+	w := postJSON(r, "/git/undo", map[string]string{"path": repoDir})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	// The deleted file is restored, while the repository has no commit and all
+	// content is represented as unstaged/untracked work.
+	content, err := os.ReadFile(initialPath)
+	assert.NoError(t, err)
+	assert.Equal(t, "initial\n", string(content))
+	assert.FileExists(t, unrelatedPath)
+	head := exec.Command("git", "rev-parse", "--verify", "HEAD^{commit}")
+	head.Dir = repoDir
+	assert.Error(t, head.Run())
+	status := collectFileStatus(repoDir)
+	assert.True(t, containsStatusPath(status, "file.txt"))
+	assert.True(t, containsStatusPath(status, "unrelated.txt"))
 }

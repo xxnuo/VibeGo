@@ -70,6 +70,21 @@ func (s *Store) Clear() error {
 	return query.Delete(&model.UserSetting{}).Error
 }
 
+// ClearExcept removes user-facing settings while retaining keys owned by a
+// service. Service-managed secrets must not be implicitly deleted by the
+// generic settings reset endpoint; their owner provides an explicit logout or
+// revoke operation instead.
+func (s *Store) ClearExcept(keys ...string) error {
+	query := s.db
+	if s.userID != "" {
+		query = query.Where("user_id = ?", s.userID)
+	}
+	if len(keys) > 0 {
+		query = query.Where("key NOT IN ?", keys)
+	}
+	return query.Delete(&model.UserSetting{}).Error
+}
+
 func (s *Store) Delete(key string) error {
 	query := s.db.Where("key = ?", key)
 	if s.userID != "" {

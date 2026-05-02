@@ -1,7 +1,9 @@
 import { DiffEditor } from "@monaco-editor/react";
 import { AlertTriangle, Check, X } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { fileApi } from "@/api/file";
+import type { GitConflictResolveMode, GitConflictStages } from "@/api/git";
+import { gitApi } from "@/api/git";
+import { buildConflictDocuments } from "@/components/git/conflict-utils";
 import type { Locale } from "@/stores";
 import "@/lib/monaco";
 import { useAppStore } from "@/stores/app-store";
@@ -10,7 +12,11 @@ interface ConflictViewProps {
   repoPath: string;
   filePath: string;
   locale: Locale;
-  onResolve: (content: string) => void;
+  onResolve: (
+    content: string,
+    hash: string,
+    mode?: Exclude<GitConflictResolveMode, "line-map">
+  ) => boolean | Promise<boolean>;
   onCancel: () => void;
 }
 
@@ -23,8 +29,11 @@ const i18n = {
     accept: "Accept Resolution",
     cancel: "Cancel",
     loading: "Loading...",
+    loadError: "Failed to load conflict details",
     useOurs: "Use Ours",
     useTheirs: "Use Theirs",
+    deleteOurs: "Delete Ours",
+    deleteTheirs: "Delete Theirs",
   },
   zh: {
     title: "解决冲突",
@@ -34,51 +43,12 @@ const i18n = {
     accept: "接受解决",
     cancel: "取消",
     loading: "加载中...",
+    loadError: "加载冲突详情失败",
     useOurs: "使用我们的",
     useTheirs: "使用他们的",
+    deleteOurs: "删除我们的版本",
+    deleteTheirs: "删除传入版本",
   },
-};
-
-const parseConflictMarkers = (content: string) => {
-  const lines = content.split("\n");
-  let ours = "";
-  let theirs = "";
-  let base = "";
-  let inOurs = false;
-  let inTheirs = false;
-  let inBase = false;
-
-  for (const line of lines) {
-    if (line.startsWith("<<<<<<<")) {
-      inOurs = true;
-      continue;
-    }
-    if (line.startsWith("|||||||")) {
-      inOurs = false;
-      inBase = true;
-      continue;
-    }
-    if (line.startsWith("=======")) {
-      inOurs = false;
-      inBase = false;
-      inTheirs = true;
-      continue;
-    }
-    if (line.startsWith(">>>>>>>")) {
-      inTheirs = false;
-      continue;
-    }
-
-    if (inOurs) {
-      ours += line + "\n";
-    } else if (inBase) {
-      base += line + "\n";
-    } else if (inTheirs) {
-      theirs += line + "\n";
-    }
-  }
-
-  return { ours: ours.trimEnd(), theirs: theirs.trimEnd(), base: base.trimEnd() };
 };
 
 const getLanguageFromFilename = (filename?: string): string => {
@@ -102,9 +72,12 @@ const ConflictView: React.FC<ConflictViewProps> = ({ repoPath, filePath, locale,
   const t = i18n[locale] || i18n.en;
   const appTheme = useAppStore((s) => s.theme);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [conflictHash, setConflictHash] = useState("");
   const [ours, setOurs] = useState("");
   const [theirs, setTheirs] = useState("");
   const [resolved, setResolved] = useState("");
+  const [stages, setStages] = useState<GitConflictStages | undefined>();
   const [activeTab, setActiveTab] = useState<"compare" | "edit">("compare");
   const compareModelIdRef = useRef(`git-conflict-compare-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const editModelIdRef = useRef(`git-conflict-edit-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -119,16 +92,23 @@ const ConflictView: React.FC<ConflictViewProps> = ({ repoPath, filePath, locale,
   useEffect(() => {
     const loadContent = async () => {
       setLoading(true);
+      setLoadError(false);
       try {
-        const fullPath = `${repoPath}/${filePath}`;
-        const res = await fileApi.read(fullPath);
-        const content = res.content || "";
-        const parsed = parseConflictMarkers(content);
-        setOurs(parsed.ours);
-        setTheirs(parsed.theirs);
-        setResolved(parsed.ours);
+        const details = await gitApi.conflictDetails(repoPath, filePath);
+        const documents = buildConflictDocuments(details.segments || []);
+        setOurs(documents.ours);
+        setTheirs(documents.theirs);
+        // In a modify/delete conflict the deleted side is empty. Start the
+        // editor with the surviving side so accepting without another click
+        // cannot accidentally create an empty file.
+        const initialResolved = details.stages?.ours.deleted ? documents.theirs : documents.ours;
+        setResolved(initialResolved);
+        setConflictHash(details.hash || "");
+        setStages(details.stages);
       } catch (err) {
         console.error("Failed to load conflict file:", err);
+        setConflictHash("");
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
@@ -137,17 +117,40 @@ const ConflictView: React.FC<ConflictViewProps> = ({ repoPath, filePath, locale,
   }, [repoPath, filePath]);
 
   const handleUseOurs = () => {
+    if (stages?.ours.deleted) {
+      void handleResolve("", "delete");
+      return;
+    }
     setResolved(ours);
     setActiveTab("edit");
   };
 
   const handleUseTheirs = () => {
+    if (stages?.theirs.deleted) {
+      void handleResolve("", "delete");
+      return;
+    }
     setResolved(theirs);
     setActiveTab("edit");
   };
 
+  const handleResolve = async (content: string, mode: Exclude<GitConflictResolveMode, "line-map"> = "manual") => {
+    if (!conflictHash) return;
+    const ok = await onResolve(content, conflictHash, mode);
+    if (ok) onCancel();
+  };
+
+  const handleAccept = async () => {
+    await handleResolve(resolved, "manual");
+  };
+
+  const bothSidesDeleted = Boolean(stages?.ours.deleted && stages?.theirs.deleted);
+
   if (loading) {
     return <div className="h-full flex items-center justify-center text-ide-mute">{t.loading}</div>;
+  }
+  if (loadError) {
+    return <div className="h-full flex items-center justify-center text-ide-mute">{t.loadError}</div>;
   }
 
   return (
@@ -163,13 +166,13 @@ const ConflictView: React.FC<ConflictViewProps> = ({ repoPath, filePath, locale,
             onClick={handleUseOurs}
             className="px-2 py-1 text-xs bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30"
           >
-            {t.useOurs}
+            {stages?.ours.deleted ? t.deleteOurs : t.useOurs}
           </button>
           <button
             onClick={handleUseTheirs}
             className="px-2 py-1 text-xs bg-green-500/20 text-green-400 rounded hover:bg-green-500/30"
           >
-            {t.useTheirs}
+            {stages?.theirs.deleted ? t.deleteTheirs : t.useTheirs}
           </button>
         </div>
       </div>
@@ -253,8 +256,9 @@ const ConflictView: React.FC<ConflictViewProps> = ({ repoPath, filePath, locale,
           {t.cancel}
         </button>
         <button
-          onClick={() => onResolve(resolved)}
-          className="px-4 py-1.5 text-sm bg-ide-accent text-ide-bg rounded flex items-center gap-1 hover:bg-ide-accent/80"
+          onClick={() => void handleAccept()}
+          disabled={!conflictHash || bothSidesDeleted}
+          className="px-4 py-1.5 text-sm bg-ide-accent text-ide-bg rounded flex items-center gap-1 hover:bg-ide-accent/80 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Check size={14} />
           {t.accept}

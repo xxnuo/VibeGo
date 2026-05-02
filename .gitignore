@@ -10,4 +10,6 @@ ui/CLAUDE.md
 /scripts/__pycache__
 /assets/sherpa/
 /thirdparty/desktop
-/thirdparty/waveterm
+/thirdparty/waveterm/*
+!/thirdparty/waveterm/LICENSE
+!/thirdparty/waveterm/NOTICE

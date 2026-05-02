@@ -1,4 +1,4 @@
-.PHONY: generate-docs clean-code format dev-server dev-ui build clean-dist build-frontend build-backend package-backend verify-release build-release bump prepare-test test download-sherpa
+.PHONY: generate-docs clean-code format dev-server dev-ui build clean-dist build-frontend build-backend package-backend test-release-packaging verify-release build-release bump prepare-test test download-sherpa thirdparty verify-waveterm-reference
 
 VERSION ?= $(shell git describe --tags --match 'v*' 2>/dev/null || echo v0.0.0-dev)
 DIST_DIR ?= dist
@@ -70,13 +70,17 @@ package-backend:
 	@bin="$(BINARY_NAME)_$(VERSION)_$(GOOS)_$(GOARCH)"; \
 	if [ "$(GOOS)" = "windows" ]; then bin="$${bin}.exe"; fi; \
 	tar_name="$${bin%.exe}.tar.gz"; \
-	tar -C $(DIST_DIR) -czf "$(ARTIFACTS_DIR)/$${tar_name}" "$${bin}"
+	bash scripts/package_release_archive.sh "$(DIST_DIR)" "$(ARTIFACTS_DIR)/$${tar_name}" "$${bin}"
+
+test-release-packaging:
+	uv run python scripts/test_release_packages.py
 
 verify-release:
 	cd $(UI_DIR) && pnpm install --frozen-lockfile
 	cd $(UI_DIR) && pnpm run lint
 	cd $(UI_DIR) && pnpm run build
 	go test ./...
+	$(MAKE) test-release-packaging
 
 build-release:
 	$(MAKE) clean-dist
@@ -95,6 +99,8 @@ bump:
 	@:
 
 TEST_REPO_DIR ?= testdata/repo
+WAVETERM_DIR ?= thirdparty/waveterm
+WAVETERM_REF ?= bea1949e47c60703b263e1bcd4633f40ee69db6e
 
 prepare-test:
 	@echo "Creating test git repository at $(TEST_REPO_DIR)..."
@@ -122,5 +128,11 @@ test:
 
 thirdparty:
 	@mkdir -p thirdparty
-	@cd thirdparty && git clone https://github.com/desktop/desktop.git && git checkout development
-	@cd thirdparty && git clone https://github.com/wavetermdev/waveterm.git && git checkout main-legacy
+	@if [ ! -d thirdparty/desktop/.git ]; then git clone --branch development https://github.com/desktop/desktop.git thirdparty/desktop; fi
+	@if [ ! -d thirdparty/waveterm/.git ]; then git clone --branch main-legacy https://github.com/wavetermdev/waveterm.git thirdparty/waveterm; fi
+	@$(MAKE) verify-waveterm-reference
+
+verify-waveterm-reference:
+	@test -d "$(WAVETERM_DIR)/.git" || (echo "$(WAVETERM_DIR) is not a Git checkout; run 'make thirdparty'" >&2; exit 1)
+	@test "$$(git -C "$(WAVETERM_DIR)" rev-parse --abbrev-ref HEAD)" = "main-legacy" || (echo "WaveTerm checkout must be on main-legacy" >&2; exit 1)
+	@test "$$(git -C "$(WAVETERM_DIR)" rev-parse HEAD)" = "$(WAVETERM_REF)" || (echo "WaveTerm checkout must be at $(WAVETERM_REF)" >&2; exit 1)

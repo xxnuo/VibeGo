@@ -225,6 +225,53 @@ func TestGitCommitDiff(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestGitCommitRangeFilesAndDiff(t *testing.T) {
+	dir := setupGitRepoWithMultipleCommits(t)
+	defer os.RemoveAll(dir)
+	r, _ := setupRouter()
+
+	w := postJSON(r, "/git/log", map[string]interface{}{"path": dir, "limit": 3})
+	require.Equal(t, http.StatusOK, w.Code)
+	var logResp struct {
+		Commits []CommitInfo `json:"commits"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &logResp))
+	require.Len(t, logResp.Commits, 3)
+	newest := logResp.Commits[0].Hash
+	oldest := logResp.Commits[2].Hash
+
+	w = postJSON(r, "/git/commit-files", map[string]interface{}{
+		"path": dir, "commit": newest, "fromCommit": oldest,
+	})
+	require.Equal(t, http.StatusOK, w.Code)
+	var filesResp struct {
+		Files []CommitFileInfo `json:"files"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &filesResp))
+	require.Equal(t, []CommitFileInfo{
+		{Path: "file1.txt", Status: "A"},
+		{Path: "file2.txt", Status: "A"},
+		{Path: "file3.txt", Status: "A"},
+	}, filesResp.Files)
+
+	w = postJSON(r, "/git/commit-diff", map[string]interface{}{
+		"path": dir, "commit": newest, "fromCommit": oldest, "filePath": "file1.txt",
+	})
+	require.Equal(t, http.StatusOK, w.Code)
+	var diffResp struct {
+		Old string `json:"old"`
+		New string `json:"new"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &diffResp))
+	assert.Empty(t, diffResp.Old)
+	assert.Equal(t, "one", diffResp.New)
+
+	w = postJSON(r, "/git/commit-files", map[string]interface{}{
+		"path": dir, "commit": oldest, "fromCommit": newest,
+	})
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
 func TestGitRemotes(t *testing.T) {
 	dir := setupGitRepoWithMultipleCommits(t)
 	defer os.RemoveAll(dir)

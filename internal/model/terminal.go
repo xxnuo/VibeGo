@@ -7,12 +7,15 @@ type TerminalSession struct {
 	GroupID             string `gorm:"column:group_id;index" json:"group_id"`
 	ParentID            string `gorm:"column:parent_id;index" json:"parent_id"`
 	Name                string `gorm:"column:name" json:"name"`
+	TabColor            string `gorm:"column:tab_color" json:"tab_color"`
+	TabIcon             string `gorm:"column:tab_icon" json:"tab_icon"`
 	Shell               string `gorm:"column:shell" json:"shell"`
 	Cwd                 string `gorm:"column:cwd" json:"cwd"`
 	CurrentCwd          string `gorm:"column:current_cwd" json:"current_cwd"`
 	Cols                int    `gorm:"column:cols" json:"cols"`
 	Rows                int    `gorm:"column:rows" json:"rows"`
 	RuntimeType         string `gorm:"column:runtime_type" json:"runtime_type"`
+	SSHProfileID        string `gorm:"column:ssh_profile_id;index" json:"ssh_profile_id,omitempty"`
 	Readonly            bool   `gorm:"column:readonly" json:"readonly"`
 	Status              string `gorm:"column:status;index:idx_user_status" json:"status"`
 	ExitCode            int    `gorm:"column:exit_code" json:"exit_code"`
@@ -22,8 +25,12 @@ type TerminalSession struct {
 	ShellIntegration    bool   `gorm:"column:shell_integration" json:"shell_integration"`
 	LastCommand         string `gorm:"column:last_command;type:text" json:"last_command"`
 	LastCommandExitCode *int   `gorm:"column:last_command_exit_code" json:"last_command_exit_code"`
-	CreatedAt           int64  `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt           int64  `gorm:"column:updated_at" json:"updated_at"`
+	// BlockTermViewJSON stores terminal-scoped presentation state such as the
+	// desktop BlockTerm sidebar. It is separate from workspace state and block
+	// presentation metadata.
+	BlockTermViewJSON string `gorm:"column:blockterm_view_json;type:text" json:"blockterm_view_json,omitempty"`
+	CreatedAt         int64  `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt         int64  `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (TerminalSession) TableName() string {

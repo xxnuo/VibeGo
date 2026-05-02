@@ -1,4 +1,4 @@
-import type { GitCommit, GitDiff } from "@/api/git";
+import type { GitCommit, GitDiff, GitSubmoduleStatus } from "@/api/git";
 
 export type { GitCommit, GitDiff };
 
@@ -10,4 +10,5 @@ export interface GitFileNode {
   staged: boolean;
   originalContent?: string;
   modifiedContent?: string;
+  submodule?: GitSubmoduleStatus;
 }

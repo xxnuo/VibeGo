@@ -18,6 +18,9 @@ type gitScopeDraft struct {
 	Summary     string                        `json:"summary"`
 	Description string                        `json:"description"`
 	IsAmend     bool                          `json:"isAmend"`
+	NoVerify    bool                          `json:"noVerify"`
+	SignOff     bool                          `json:"signOff"`
+	AllowEmpty  bool                          `json:"allowEmpty"`
 	Files       map[string]fileSelectionState `json:"files"`
 }
 
@@ -56,6 +59,9 @@ func cloneDraft(draft gitScopeDraft) gitScopeDraft {
 		Summary:     draft.Summary,
 		Description: draft.Description,
 		IsAmend:     draft.IsAmend,
+		NoVerify:    draft.NoVerify,
+		SignOff:     draft.SignOff,
+		AllowEmpty:  draft.AllowEmpty,
 		Files:       make(map[string]fileSelectionState, len(draft.Files)),
 	}
 	for filePath, state := range draft.Files {
@@ -72,7 +78,7 @@ func normalizeDraft(draft gitScopeDraft) gitScopeDraft {
 }
 
 func isEmptyDraft(draft gitScopeDraft) bool {
-	return draft.Summary == "" && draft.Description == "" && !draft.IsAmend && len(draft.Files) == 0
+	return draft.Summary == "" && draft.Description == "" && !draft.IsAmend && !draft.NoVerify && !draft.SignOff && !draft.AllowEmpty && len(draft.Files) == 0
 }
 
 func (s *gitSelectionStore) load(scopeKey string) (gitScopeDraft, bool, error) {
@@ -163,6 +169,28 @@ func (s *gitSelectionStore) resetRepo(scopeKey string) {
 	_ = s.save(scopeKey, gitScopeDraft{})
 }
 
+// resetAfterCommit clears the one-shot commit draft fields while preserving
+// persistent commit preferences such as no-verify and sign-off.
+func (s *gitSelectionStore) resetAfterCommit(scopeKey string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if scopeKey == "" {
+		return
+	}
+
+	draft, ok, _ := s.load(scopeKey)
+	if !ok {
+		return
+	}
+	draft.Summary = ""
+	draft.Description = ""
+	draft.IsAmend = false
+	draft.AllowEmpty = false
+	draft.Files = make(map[string]fileSelectionState)
+	_ = s.save(scopeKey, draft)
+}
+
 func (s *gitSelectionStore) pruneRepo(scopeKey string, validPaths map[string]struct{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -193,7 +221,7 @@ func (s *gitSelectionStore) getDraftFields(scopeKey string) (gitScopeDraft, bool
 	return cloneDraft(draft), true
 }
 
-func (s *gitSelectionStore) setDraftFields(scopeKey string, summary, description *string, isAmend *bool) {
+func (s *gitSelectionStore) setDraftFields(scopeKey string, summary, description *string, isAmend, noVerify, signOff, allowEmpty *bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -206,6 +234,15 @@ func (s *gitSelectionStore) setDraftFields(scopeKey string, summary, description
 	}
 	if isAmend != nil {
 		draft.IsAmend = *isAmend
+	}
+	if noVerify != nil {
+		draft.NoVerify = *noVerify
+	}
+	if signOff != nil {
+		draft.SignOff = *signOff
+	}
+	if allowEmpty != nil {
+		draft.AllowEmpty = *allowEmpty
 	}
 
 	_ = s.save(scopeKey, draft)

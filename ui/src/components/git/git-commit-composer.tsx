@@ -1,4 +1,4 @@
-import { Check, Loader2, Sparkles, Undo2, X } from "lucide-react";
+import { Check, Loader2, Settings2, Sparkles, Undo2, X } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { getTranslation, type Locale } from "@/lib/i18n";
@@ -26,25 +26,48 @@ const GitCommitComposer: React.FC<GitCommitComposerProps> = ({
   onUndoLastCommit,
 }) => {
   const t = useCallback((key: string) => getTranslation(locale, key), [locale]);
-  const { summary, description, isAmend, setSummary, setDescription, setIsAmend, commitSelected, amendCommit } =
-    useGitStore(
-      groupId,
-      useShallow((state) => ({
-        summary: state.summary,
-        description: state.description,
-        isAmend: state.isAmend,
-        setSummary: state.setSummary,
-        setDescription: state.setDescription,
-        setIsAmend: state.setIsAmend,
-        commitSelected: state.commitSelected,
-        amendCommit: state.amendCommit,
-      }))
-    );
+  const {
+    summary,
+    description,
+    isAmend,
+    skipCommitHooks,
+    signOffCommits,
+    allowEmptyCommit,
+    setSummary,
+    setDescription,
+    setIsAmend,
+    setSkipCommitHooks,
+    setSignOffCommits,
+    setAllowEmptyCommit,
+    commitSelected,
+    amendCommit,
+  } = useGitStore(
+    groupId,
+    useShallow((state) => ({
+      summary: state.summary,
+      description: state.description,
+      isAmend: state.isAmend,
+      skipCommitHooks: state.skipCommitHooks,
+      signOffCommits: state.signOffCommits,
+      allowEmptyCommit: state.allowEmptyCommit,
+      setSummary: state.setSummary,
+      setDescription: state.setDescription,
+      setIsAmend: state.setIsAmend,
+      setSkipCommitHooks: state.setSkipCommitHooks,
+      setSignOffCommits: state.setSignOffCommits,
+      setAllowEmptyCommit: state.setAllowEmptyCommit,
+      commitSelected: state.commitSelected,
+      amendCommit: state.amendCommit,
+    }))
+  );
 
   const [showDescription, setShowDescription] = useState(false);
+  const [showCommitOptions, setShowCommitOptions] = useState(false);
   const [undoToast, setUndoToast] = useState(false);
+  const composerRef = useRef<HTMLDivElement | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const canCommit = checkedCount > 0 && (summary.trim() || autoSummary).length > 0 && !hasConflicts;
+  const canCommit =
+    (checkedCount > 0 || allowEmptyCommit) && (summary.trim() || autoSummary).length > 0 && !hasConflicts;
 
   useEffect(() => {
     if (description) {
@@ -54,6 +77,9 @@ const GitCommitComposer: React.FC<GitCommitComposerProps> = ({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!composerRef.current?.contains(document.activeElement)) {
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && canCommit && !isLoading) {
         e.preventDefault();
         if (!summary.trim() && autoSummary) {
@@ -77,6 +103,28 @@ const GitCommitComposer: React.FC<GitCommitComposerProps> = ({
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!showCommitOptions) {
+      return;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && !composerRef.current?.contains(event.target)) {
+        setShowCommitOptions(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowCommitOptions(false);
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showCommitOptions]);
 
   const handleCommit = useCallback(async () => {
     if (!summary.trim() && autoSummary) {
@@ -103,7 +151,7 @@ const GitCommitComposer: React.FC<GitCommitComposerProps> = ({
 
   return (
     <>
-      <div className="shrink-0 border-t border-ide-border bg-ide-panel/30 p-3 space-y-2">
+      <div ref={composerRef} className="relative shrink-0 border-t border-ide-border bg-ide-panel/30 p-3 space-y-2">
         <div className="relative">
           <input
             type="text"
@@ -149,15 +197,62 @@ const GitCommitComposer: React.FC<GitCommitComposerProps> = ({
           </button>
         )}
 
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={isAmend}
-            onChange={(e) => setIsAmend(e.target.checked)}
-            className="accent-ide-accent w-3.5 h-3.5"
-          />
-          <span className="text-[10px] text-ide-mute">{t("git.amend")}</span>
-        </label>
+        <div className="flex items-center justify-between gap-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isAmend}
+              onChange={(e) => setIsAmend(e.target.checked)}
+              className="accent-ide-accent w-3.5 h-3.5"
+            />
+            <span className="text-[10px] text-ide-mute">{t("git.amend")}</span>
+          </label>
+          <button
+            type="button"
+            onClick={() => setShowCommitOptions((open) => !open)}
+            className={`p-1 text-ide-mute hover:text-ide-text transition-colors ${
+              skipCommitHooks || signOffCommits || allowEmptyCommit ? "text-ide-accent" : ""
+            }`}
+            title={t("git.commitOptions")}
+            aria-label={t("git.commitOptions")}
+            aria-expanded={showCommitOptions}
+          >
+            <Settings2 size={14} />
+          </button>
+        </div>
+
+        {showCommitOptions && (
+          <div className="absolute right-3 bottom-12 z-20 w-56 border border-ide-border bg-ide-panel p-2 shadow-xl shadow-black/20">
+            <div className="mb-1 px-1 text-[10px] font-medium text-ide-text">{t("git.commitOptions")}</div>
+            <label className="flex cursor-pointer items-center gap-2 px-1 py-1.5 text-[11px] text-ide-mute hover:bg-ide-bg hover:text-ide-text">
+              <input
+                type="checkbox"
+                checked={skipCommitHooks}
+                onChange={(e) => setSkipCommitHooks(e.target.checked)}
+                className="accent-ide-accent w-3.5 h-3.5"
+              />
+              <span>{t("git.skipCommitHooks")}</span>
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 px-1 py-1.5 text-[11px] text-ide-mute hover:bg-ide-bg hover:text-ide-text">
+              <input
+                type="checkbox"
+                checked={signOffCommits}
+                onChange={(e) => setSignOffCommits(e.target.checked)}
+                className="accent-ide-accent w-3.5 h-3.5"
+              />
+              <span>{t("git.signOffCommits")}</span>
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 px-1 py-1.5 text-[11px] text-ide-mute hover:bg-ide-bg hover:text-ide-text">
+              <input
+                type="checkbox"
+                checked={allowEmptyCommit}
+                onChange={(e) => setAllowEmptyCommit(e.target.checked)}
+                className="accent-ide-accent w-3.5 h-3.5"
+              />
+              <span>{t("git.allowEmptyCommit")}</span>
+            </label>
+          </div>
+        )}
 
         <button
           disabled={!canCommit || isLoading}

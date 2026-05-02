@@ -151,6 +151,22 @@ func (wt *webTTY) handleMessage(data []byte) error {
 		if msg.Cols > 0 && msg.Rows > 0 {
 			wt.slave.ResizeTerminal(msg.Cols, msg.Rows)
 		}
+
+	case MsgTypeSignal:
+		if !wt.permitWrite {
+			return nil
+		}
+		signal, err := NormalizeTerminalSignal(msg.Signal)
+		if err != nil {
+			return nil
+		}
+		if signaler, ok := wt.slave.(interface{ Signal(string) error }); ok {
+			_ = signaler.Signal(signal)
+		} else if signal == "INT" {
+			if _, err := wt.slave.Write([]byte{3}); err != nil {
+				return ErrSlaveClosed
+			}
+		}
 	}
 
 	return nil

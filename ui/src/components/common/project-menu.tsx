@@ -331,7 +331,12 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
     <>
       <div className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm transition-opacity" onClick={onClose} />
 
-      <div className="fixed bottom-0 left-0 right-0 md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[480px] bg-ide-panel border-t md:border border-ide-border md:rounded-2xl shadow-2xl z-50 p-5 font-mono transform transition-transform duration-300">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="VibeGo"
+        className="fixed bottom-0 left-0 right-0 md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[480px] bg-ide-panel border-t md:border border-ide-border md:rounded-2xl shadow-2xl z-50 p-5 font-mono transform transition-transform duration-300"
+      >
         <div className="flex justify-between items-center mb-6 pb-2 border-b border-ide-border">
           <h3 className="font-bold text-ide-text flex items-center gap-2">
             <span className="bg-ide-accent text-ide-bg p-1 rounded-md">

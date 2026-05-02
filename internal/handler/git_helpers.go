@@ -3,10 +3,49 @@ package handler
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
 )
+
+// sanitizeGitRemoteURL is used for values crossing the API boundary. Git
+// permits credentials in both URL-style and SCP-style remotes; those
+// credentials must never be rendered in repository settings or status data.
+func sanitizeGitRemoteURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if strings.Contains(raw, "://") {
+		if parsed, err := url.Parse(raw); err == nil {
+			parsed.User = nil
+			return parsed.String()
+		}
+		// Keep malformed-but-displayable remotes from leaking an authority
+		// userinfo prefix when the standard parser rejects them.
+		if schemeEnd := strings.Index(raw, "://"); schemeEnd >= 0 {
+			rest := raw[schemeEnd+3:]
+			authorityEnd := len(rest)
+			if end := strings.IndexAny(rest, "/?#"); end >= 0 {
+				authorityEnd = end
+			}
+			if at := strings.LastIndexByte(rest[:authorityEnd], '@'); at >= 0 {
+				return raw[:schemeEnd+3] + rest[at+1:authorityEnd] + rest[authorityEnd:]
+			}
+		}
+	}
+	// SCP-like syntax is user@host:path. A password-bearing variant can be
+	// written as user:password@host:path; remove the complete prefix there,
+	// while retaining the conventional non-secret `git@host:path` form.
+	if at := strings.LastIndexByte(raw, '@'); at > 0 {
+		prefix := raw[:at]
+		if strings.Contains(prefix, ":") {
+			return raw[at+1:]
+		}
+	}
+	return raw
+}
 
 type BranchStatusInfo struct {
 	Branch   string `json:"branch"`
@@ -19,6 +58,7 @@ type BranchesSnapshot struct {
 	Branches       []string `json:"branches"`
 	RemoteBranches []string `json:"remoteBranches"`
 	CurrentBranch  string   `json:"currentBranch"`
+	RecentBranches []string `json:"recentBranches,omitempty"`
 }
 
 func collectFileStatus(repoRoot string) []FileStatus {
@@ -113,7 +153,7 @@ func collectCommitLog(repoRoot string, limit int) []CommitInfo {
 }
 
 func parseGitDecorationTags(decoration string) []string {
-	var tags []string
+	tags := make([]string, 0)
 	for _, part := range strings.Split(decoration, ",") {
 		part = strings.TrimSpace(part)
 		if strings.HasPrefix(part, "tag: ") {
@@ -289,7 +329,7 @@ func collectBranchesSnapshot(repoRoot string) BranchesSnapshot {
 		currentBranch = strings.TrimSpace(string(out))
 	}
 
-	cmd = newGitCommand("branch", "--format=%(refname:short)")
+	cmd = newGitCommand("for-each-ref", "--format=%(refname:strip=2)", "refs/heads")
 	cmd.Dir = repoRoot
 	out, err = cmd.Output()
 	if err != nil {
@@ -308,7 +348,24 @@ func collectBranchesSnapshot(repoRoot string) BranchesSnapshot {
 		Branches:       branchList,
 		RemoteBranches: collectRemoteBranches(repoRoot),
 		CurrentBranch:  currentBranch,
+		RecentBranches: collectRecentBranchNames(repoRoot),
 	}
+}
+
+func collectRecentBranchNames(repoRoot string) []string {
+	// The recovery collector also handles reflog-less/unborn repositories and
+	// filters deleted or remote-only refs for branch-picker consumers.
+	details, err := (&GitHandler{}).collectGitRecentBranches(repoRoot, 5)
+	if err != nil {
+		return []string{}
+	}
+	result := make([]string, 0, len(details))
+	for _, item := range details {
+		if item.Exists {
+			result = append(result, item.Name)
+		}
+	}
+	return result
 }
 
 func collectConflictFiles(repoRoot string) []string {
@@ -329,7 +386,7 @@ func collectConflictFiles(repoRoot string) []string {
 }
 
 func collectRemoteBranches(repoRoot string) []string {
-	cmd := newGitCommand("branch", "-r", "--format=%(refname:short)")
+	cmd := newGitCommand("for-each-ref", "--format=%(refname:strip=2)", "refs/remotes")
 	cmd.Dir = repoRoot
 	out, err := cmd.Output()
 	if err != nil {
@@ -369,7 +426,7 @@ func collectRemoteInfos(repoRoot string) []RemoteInfo {
 		var urls []string
 		for _, u := range strings.Split(strings.TrimSpace(string(urlOut)), "\n") {
 			if u != "" {
-				urls = append(urls, u)
+				urls = append(urls, sanitizeGitRemoteURL(u))
 			}
 		}
 		sort.Strings(urls)
@@ -386,25 +443,57 @@ func collectRemoteInfos(repoRoot string) []RemoteInfo {
 	return result
 }
 
-func collectStashEntries(repoRoot string) []StashEntry {
-	cmd := newGitCommand("stash", "list")
+func hasGitRemote(repoRoot, remoteName string) bool {
+	remoteName = strings.TrimSpace(remoteName)
+	if remoteName == "" {
+		return false
+	}
+	cmd := newGitCommand("remote")
 	cmd.Dir = repoRoot
 	output, err := cmd.Output()
 	if err != nil {
-		return nil
+		return false
+	}
+	for _, name := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if strings.TrimSpace(name) == remoteName {
+			return true
+		}
+	}
+	return false
+}
+
+func collectStashEntries(repoRoot string) []StashEntry {
+	entries, _ := loadStashEntries(repoRoot)
+	return entries
+}
+
+func loadStashEntries(repoRoot string) ([]StashEntry, error) {
+	cmd := newGitCommand("stash", "list", "--format=%H%x00%gd%x00%gs", "-z")
+	cmd.Dir = repoRoot
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, gitCommandError(err, output)
 	}
 
-	var entries []StashEntry
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	for i, line := range lines {
-		if line == "" {
+	parts := strings.Split(string(output), "\x00")
+	entries := make([]StashEntry, 0, len(parts)/3)
+	for i := 0; i+2 < len(parts); i += 3 {
+		oid := strings.TrimSpace(parts[i])
+		selector := parts[i+1]
+		subject := parts[i+2]
+		if !isGitObjectID(oid) || selector == "" {
 			continue
 		}
+		index := len(entries)
+		if _, err := fmt.Sscanf(selector, "stash@{%d}", &index); err != nil {
+			index = len(entries)
+		}
 		entries = append(entries, StashEntry{
-			Index:   i,
-			Message: line,
+			Index:   index,
+			OID:     oid,
+			Message: selector + ": " + subject,
 		})
 	}
 
-	return entries
+	return entries, nil
 }

@@ -1,12 +1,18 @@
 package terminal
 
 import (
+	"log"
 	"time"
 
 	"github.com/xxnuo/vibego/internal/model"
 )
 
 func (m *Manager) flushHistoryToDB(at *activeTerminal) error {
+	at.stateMu.Lock()
+	defer at.stateMu.Unlock()
+	at.sessionMu.RLock()
+	session := cloneTerminalSession(at.Session)
+	at.sessionMu.RUnlock()
 	data := at.historyBuffer.Read()
 	_, cursor := at.historyBuffer.CursorRange()
 
@@ -15,18 +21,20 @@ func (m *Manager) flushHistoryToDB(at *activeTerminal) error {
 		SessionID:   at.ID,
 		Data:        data,
 		Cursor:      cursor,
-		Cols:        at.Session.Cols,
-		Rows:        at.Session.Rows,
-		Status:      at.Session.Status,
-		ExitCode:    at.Session.ExitCode,
-		RuntimeType: at.Session.RuntimeType,
-		Readonly:    at.Session.Readonly,
+		Cols:        session.Cols,
+		Rows:        session.Rows,
+		Status:      session.Status,
+		ExitCode:    session.ExitCode,
+		RuntimeType: session.RuntimeType,
+		Readonly:    session.Readonly,
 		UpdatedAt:   now,
 	}); err != nil {
 		return err
 	}
 
+	at.sessionMu.Lock()
 	at.Session.HistorySize = int64(len(data))
+	at.sessionMu.Unlock()
 
 	if m.historyMaxRecords > 0 {
 		m.pruneOldHistoryRecords(at.ID)
@@ -59,12 +67,25 @@ func (m *Manager) CleanupExpiredHistory() error {
 }
 
 func (m *Manager) flushHistory(at *activeTerminal) {
+	if at.flushDone != nil {
+		defer close(at.flushDone)
+	}
 	for {
+		select {
+		case <-at.Done:
+			return
+		default:
+		}
+
 		select {
 		case <-at.flushTicker.C:
 			at.historyMu.Lock()
-			m.flushHistoryToDB(at)
+			if err := m.flushHistoryToDB(at); err != nil {
+				log.Printf("terminal history periodic flush failed for terminal %s: %v", at.ID, err)
+			}
 			at.historyMu.Unlock()
+		case <-at.flushStop:
+			return
 		case <-at.Done:
 			return
 		}

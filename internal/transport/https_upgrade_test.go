@@ -160,6 +160,9 @@ func TestHTTPSUpgradeHandlerServesFallbackForTrustedProxyHTTPS(t *testing.T) {
 		},
 		Fallback: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			fallbackHit = true
+			if r.URL.Scheme != "https" {
+				t.Errorf("fallback URL scheme = %q, want https", r.URL.Scheme)
+			}
 			w.WriteHeader(http.StatusNoContent)
 		}),
 	})
@@ -195,6 +198,9 @@ func TestHTTPSUpgradeHandlerServesFallbackForTrustedProxyForwardedHTTPS(t *testi
 		},
 		Fallback: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			fallbackHit = true
+			if r.URL.Scheme != "https" {
+				t.Errorf("fallback URL scheme = %q, want https", r.URL.Scheme)
+			}
 			w.WriteHeader(http.StatusNoContent)
 		}),
 	})

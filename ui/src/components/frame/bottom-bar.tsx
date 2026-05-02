@@ -310,7 +310,7 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick, onNewPage }) => {
 
   const closeGroup = async (group: PageGroup) => {
     if (group.type === "home" && groups.length <= 1) return;
-    if (group.type === "group") {
+    if (group.type === "group" && group.pages.some((page) => page.path)) {
       await closeFolderGroup(group.id);
       return;
     }

@@ -5,10 +5,18 @@ import {
   type CommitFileInfo,
   type GitBranchesSnapshot,
   type GitCommit,
+  type GitCommitOptions,
+  type GitConflictResolveMode,
   type GitDiff,
   type GitDraft,
   type GitInteractiveDiff,
+  type GitOperationResponse,
+  type GitRemoteCheckoutResponse,
+  type GitReorderOptions,
+  type GitSquashOptions,
+  type GitStashFile,
   type GitStructuredFile,
+  type GitSubmoduleStatus,
   type GitTagInfo,
   type GitTagsSnapshot,
   type GitWSSnapshot,
@@ -23,6 +31,7 @@ export interface GitFileNode {
   name: string;
   status: "modified" | "added" | "deleted" | "renamed" | "copied" | "untracked";
   includedState: "none" | "partial" | "all";
+  submodule?: GitSubmoduleStatus;
 }
 
 export interface GitSyncOptions {
@@ -49,20 +58,31 @@ export interface GitState {
   summary: string;
   description: string;
   isAmend: boolean;
+  skipCommitHooks: boolean;
+  signOffCommits: boolean;
+  allowEmptyCommit: boolean;
   currentBranch: string;
   branches: string[];
   remoteBranches: string[];
+  recentBranches: string[];
   aheadCount: number;
   behindCount: number;
   upstreamBranch: string | null;
   hasRemote: boolean;
+  remoteNames: string[];
   remoteUrls: string[];
   commits: GitCommit[];
   selectedCommit: GitCommit | null;
   selectedCommitFiles: CommitFileInfo[];
   activeTab: "changes" | "history";
   stashes: StashEntry[];
+  selectedStashIndex: number | null;
+  selectedStashFile: string | null;
+  stashFiles: GitStashFile[];
+  stashDiff: GitInteractiveDiff | null;
+  stashLoading: boolean;
   conflicts: string[];
+  operation: GitOperationResponse | null;
   tags: GitTagInfo[];
   tagsToPush: string[];
   tagsToPushError: string | null;
@@ -74,6 +94,9 @@ export interface GitState {
   setSummary: (s: string) => void;
   setDescription: (d: string) => void;
   setIsAmend: (v: boolean) => void;
+  setSkipCommitHooks: (v: boolean) => void;
+  setSignOffCommits: (v: boolean) => void;
+  setAllowEmptyCommit: (v: boolean) => void;
   setActiveTab: (tab: "changes" | "history") => void;
   setSelectedCommit: (c: GitCommit | null) => void;
   toggleFile: (path: string) => Promise<void>;
@@ -92,6 +115,7 @@ export interface GitState {
   fetchConflicts: () => Promise<void>;
   fetchDraft: () => Promise<void>;
   fetchTags: () => Promise<void>;
+  fetchOperationStatus: () => Promise<void>;
   syncRepo: (options?: GitSyncOptions) => Promise<void>;
 
   commitSelected: () => Promise<boolean>;
@@ -99,17 +123,29 @@ export interface GitState {
   undoLastCommit: () => Promise<boolean>;
   smartSwitchBranch: (branch: string) => Promise<boolean>;
   createBranch: (branch: string, from?: string) => Promise<boolean>;
-  deleteBranch: (branch: string) => Promise<boolean>;
+  deleteBranch: (branch: string, force?: boolean) => Promise<boolean>;
+  checkoutRemoteBranch: (remote: string, branch: string, localBranch?: string) => Promise<boolean>;
+  switchRemoteBranch: (remote: string, branch: string, localBranch?: string) => Promise<boolean>;
+  renameBranch: (branch: string, newBranch: string) => Promise<boolean>;
+  deleteRemoteBranch: (remote: string, branch: string) => Promise<boolean>;
+  pruneRemote: (remote?: string) => Promise<boolean>;
   createTag: (name: string, commit: string) => Promise<boolean>;
   deleteTag: (name: string) => Promise<boolean>;
   gitFetch: () => Promise<boolean>;
   gitPull: () => Promise<boolean>;
   gitPush: (force?: boolean) => Promise<boolean>;
   stash: (message?: string, files?: string[]) => Promise<boolean>;
-  stashPop: (index?: number) => Promise<boolean>;
-  stashDrop: (index?: number) => Promise<boolean>;
+  stashPop: (index?: number, oid?: string) => Promise<boolean>;
+  stashDrop: (index?: number, oid?: string) => Promise<boolean>;
+  selectStash: (index: number | null) => Promise<void>;
+  selectStashFile: (filePath: string | null) => Promise<void>;
   discardFile: (path: string) => Promise<void>;
-  resolveConflict: (filePath: string, content: string) => Promise<boolean>;
+  resolveConflict: (
+    filePath: string,
+    content: string,
+    hash: string,
+    mode?: Exclude<GitConflictResolveMode, "line-map">
+  ) => Promise<boolean>;
   getDiff: (filePath: string) => Promise<GitDiff | null>;
   getInteractiveDiff: (filePath: string, mode?: "working" | "staged") => Promise<GitInteractiveDiff | null>;
   applySelection: (
@@ -124,6 +160,29 @@ export interface GitState {
   getCommitFiles: (commitHash: string) => Promise<CommitFileInfo[]>;
   getCommitDiff: (commitHash: string, filePath: string) => Promise<GitDiff | null>;
   addPatch: (filePath: string, patch: string) => Promise<boolean>;
+  mergeOperation: (
+    ref: string,
+    action?: "start" | "continue" | "abort",
+    options?: { noFF?: boolean; files?: string[] }
+  ) => Promise<boolean>;
+  rebaseOperation: (
+    upstream: string,
+    action?: "start" | "continue" | "abort" | "skip",
+    options?: { target?: string; files?: string[] }
+  ) => Promise<boolean>;
+  cherryPickOperation: (
+    commit: string,
+    action?: "start" | "continue" | "abort" | "skip",
+    options?: { mainline?: number; commits?: string[]; files?: string[] }
+  ) => Promise<boolean>;
+  revertOperation: (
+    commit: string,
+    action?: "start" | "continue" | "abort" | "skip",
+    files?: string[]
+  ) => Promise<boolean>;
+  resetToCommit: (ref: string, mode?: "soft" | "mixed" | "hard") => Promise<boolean>;
+  squashOperation: (toSquash: string[], squashOnto: string, options?: GitSquashOptions) => Promise<boolean>;
+  reorderOperation: (toMove: string[], beforeCommit?: string, options?: GitReorderOptions) => Promise<boolean>;
 
   applyStatusUpdate: (files: GitStructuredFile[]) => void;
   applyBranchStatus: (bs: BranchStatusInfo) => void;
@@ -131,6 +190,7 @@ export interface GitState {
   applyRemotes: (remotes: RemoteInfo[]) => void;
   applyStashes: (stashes: StashEntry[]) => void;
   applyConflicts: (conflicts: string[]) => void;
+  applyOperation: (operation: GitOperationResponse | null) => void;
   applyTagsSnapshot: (snapshot: GitTagsSnapshot) => void;
   applyDraft: (draft?: Partial<GitDraftSnapshot>) => void;
   applySnapshot: (snapshot: GitWSSnapshot) => void;
@@ -174,6 +234,7 @@ const statusFilesToNodes = (files?: GitStructuredFile[] | null): GitFileNode[] =
         name: file.path.split("/").pop() || file.path,
         status: mapStatus(file.changeType || file.worktreeStatus || file.indexStatus),
         includedState: file.includedState ?? "all",
+        submodule: file.submodule,
       });
     }
   }
@@ -186,16 +247,32 @@ interface GitDraftSnapshot {
   summary: string;
   description: string;
   isAmend: boolean;
+  skipCommitHooks: boolean;
+  signOffCommits: boolean;
+  allowEmptyCommit: boolean;
+  noVerify?: boolean;
+  signOff?: boolean;
+  allowEmpty?: boolean;
 }
 
 const toDraftSnapshot = (draft?: Partial<GitDraftSnapshot>) => ({
   summary: draft?.summary || getDefaultCommitSummary(),
   description: draft?.description || "",
-  isAmend: draft?.isAmend || false,
+  isAmend: draft?.isAmend ?? false,
+  skipCommitHooks: draft?.skipCommitHooks ?? draft?.noVerify ?? false,
+  signOffCommits: draft?.signOffCommits ?? draft?.signOff ?? false,
+  allowEmptyCommit: draft?.allowEmptyCommit ?? draft?.allowEmpty ?? false,
 });
 
 const getDraftSnapshotKey = (draft: GitDraftSnapshot) =>
-  JSON.stringify([draft.summary, draft.description, draft.isAmend]);
+  JSON.stringify([
+    draft.summary,
+    draft.description,
+    draft.isAmend,
+    draft.skipCommitHooks,
+    draft.signOffCommits,
+    draft.allowEmptyCommit,
+  ]);
 
 const getValidPathSet = (nodes: GitFileNode[]) => new Set(nodes.map((node) => node.path));
 
@@ -220,20 +297,31 @@ const createInitialGitSnapshot = () => ({
   summary: getDefaultCommitSummary(),
   description: "",
   isAmend: false,
+  skipCommitHooks: false,
+  signOffCommits: false,
+  allowEmptyCommit: false,
   currentBranch: "main",
   branches: [] as string[],
   remoteBranches: [] as string[],
+  recentBranches: [] as string[],
   aheadCount: 0,
   behindCount: 0,
   upstreamBranch: null as string | null,
   hasRemote: false,
+  remoteNames: [] as string[],
   remoteUrls: [] as string[],
   commits: [] as GitCommit[],
   selectedCommit: null as GitCommit | null,
   selectedCommitFiles: [] as CommitFileInfo[],
   activeTab: "changes" as const,
   stashes: [] as StashEntry[],
+  selectedStashIndex: null as number | null,
+  selectedStashFile: null as string | null,
+  stashFiles: [] as GitStashFile[],
+  stashDiff: null as GitInteractiveDiff | null,
+  stashLoading: false,
   conflicts: [] as string[],
+  operation: null as GitOperationResponse | null,
   tags: [] as GitTagInfo[],
   tagsToPush: [] as string[],
   tagsToPushError: null as string | null,
@@ -246,14 +334,144 @@ const createGitState =
   (set, get) => {
     let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
     let draftIdleTimer: ReturnType<typeof setTimeout> | null = null;
+    let commitFilesRequestId = 0;
+    let stashRequestId = 0;
+    let branchSwitchRequestId = 0;
     let draftReadBlocked = false;
     let pendingDraftRefresh = false;
     let lastSavedDraftKey = getDraftSnapshotKey(toDraftSnapshot());
+
+    const clearStashSelection = () => {
+      stashRequestId += 1;
+      return {
+        selectedStashIndex: null,
+        selectedStashFile: null,
+        stashFiles: [],
+        stashDiff: null,
+        stashLoading: false,
+      } satisfies Pick<
+        GitState,
+        "selectedStashIndex" | "selectedStashFile" | "stashFiles" | "stashDiff" | "stashLoading"
+      >;
+    };
+
+    const applyRemoteCheckoutResponse = (response: GitRemoteCheckoutResponse) => {
+      const state = get();
+      const stateUpdate: Partial<GitState> = {
+        currentBranch: response.branch || response.currentBranch || state.currentBranch,
+        branches: response.branches ?? state.branches,
+        remoteBranches: response.remoteBranches ?? state.remoteBranches,
+        ...clearStashSelection(),
+      };
+      // Older compatible handlers may omit the status payload. Keep the
+      // current file view in that case instead of replacing it with an empty
+      // list; the websocket/status sync will refresh it when available.
+      if (Array.isArray(response.status?.files)) {
+        const nodes = statusFilesToNodes(response.status.files);
+        stateUpdate.allFiles = nodes;
+        stateUpdate.workingDiffs = {};
+        stateUpdate.interactiveDiffs = {};
+      }
+      set(stateUpdate);
+      if (response.branchStatus) {
+        get().applyBranchStatus(response.branchStatus);
+      }
+    };
+
+    const runRemoteCheckout = async (
+      remote: string,
+      branch: string,
+      localBranch: string | undefined,
+      call: (path: string, remote: string, branch: string, localBranch?: string) => Promise<GitRemoteCheckoutResponse>,
+      errorMessage: string
+    ) => {
+      const requestId = ++branchSwitchRequestId;
+      const { currentPath } = get();
+      if (!currentPath) {
+        return false;
+      }
+
+      set({ isLoading: true, error: null });
+      try {
+        const response = await call(currentPath, remote, branch, localBranch);
+        if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+          // A newer checkout or repository path has superseded this request;
+          // do not surface the old result as an operation failure.
+          return true;
+        }
+        applyRemoteCheckoutResponse(response);
+        if (response.stashConflict) {
+          set({
+            error: `Branch switched to ${response.branch}, but the auto-stash could not be restored: ${response.stashError || "resolve the remaining stash manually"}`,
+          });
+          return false;
+        }
+        return true;
+      } catch (err) {
+        if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+          return true;
+        }
+        set({ error: err instanceof Error ? err.message : errorMessage });
+        return false;
+      } finally {
+        if (requestId === branchSwitchRequestId && get().currentPath === currentPath) {
+          set({ isLoading: false });
+        }
+      }
+    };
 
     const getScopePayload = () => ({
       workspace_session_id: get().workspaceSessionId || undefined,
       group_id: get().scopeGroupId || undefined,
     });
+
+    const applyOperationResponse = (response: GitOperationResponse | null) => {
+      if (!response) {
+        set({ operation: null });
+        return;
+      }
+      if (response.state === "invalid") {
+        set({ operation: response });
+        return;
+      }
+      // Older/API-compatible servers may return an operation response without
+      // the structured status payload. Preserve the current file view in that
+      // case; an explicitly empty files array still means the worktree is clean.
+      if (!Array.isArray(response.status?.files)) {
+        set((state) => ({
+          operation: response,
+          conflicts: response.conflicts ?? state.conflicts,
+        }));
+        return;
+      }
+      const nodes = statusFilesToNodes(response.status?.files);
+      set((state) => ({
+        operation: response,
+        allFiles: nodes,
+        workingDiffs: pickWorkingDiffs(nodes, state.workingDiffs),
+        interactiveDiffs: pickInteractiveDiffs(nodes, state.interactiveDiffs),
+        conflicts: response.conflicts ?? [],
+      }));
+    };
+
+    const runOperation = async (call: (path: string) => Promise<GitOperationResponse>): Promise<boolean> => {
+      const { currentPath } = get();
+      if (!currentPath) return false;
+      set({ isLoading: true, error: null });
+      try {
+        const response = await call(currentPath);
+        applyOperationResponse(response);
+        if (!response.ok) {
+          set({ error: response.error || response.output || "Git operation failed" });
+        }
+        return response.ok;
+      } catch (err) {
+        set({ error: err instanceof Error ? err.message : "Git operation failed" });
+        return false;
+      } finally {
+        set({ isLoading: false });
+      }
+    };
 
     const clearDraftSaveTimer = () => {
       if (draftSaveTimer) {
@@ -270,8 +488,8 @@ const createGitState =
     };
 
     const getCurrentDraftSnapshot = (): GitDraftSnapshot => {
-      const { summary, description, isAmend } = get();
-      return { summary, description, isAmend };
+      const { summary, description, isAmend, skipCommitHooks, signOffCommits, allowEmptyCommit } = get();
+      return { summary, description, isAmend, skipCommitHooks, signOffCommits, allowEmptyCommit };
     };
 
     const getCurrentDraftKey = () => getDraftSnapshotKey(getCurrentDraftSnapshot());
@@ -345,12 +563,18 @@ const createGitState =
       scopeGroupId: groupId || null,
 
       setCurrentPath: (path) => {
+        branchSwitchRequestId += 1;
         const nextDraft = resetDraftSyncState();
         set(() => ({
           currentPath: path,
+          ...clearStashSelection(),
+          isLoading: false,
           summary: nextDraft.summary,
           description: nextDraft.description,
           isAmend: nextDraft.isAmend,
+          skipCommitHooks: nextDraft.skipCommitHooks,
+          signOffCommits: nextDraft.signOffCommits,
+          allowEmptyCommit: nextDraft.allowEmptyCommit,
         }));
       },
       setScope: (workspaceSessionId) => set({ workspaceSessionId }),
@@ -369,8 +593,27 @@ const createGitState =
         queueDraftRefreshAfterIdle();
         scheduleDraftPersist();
       },
+      setSkipCommitHooks: (skipCommitHooks) => {
+        set({ skipCommitHooks });
+        queueDraftRefreshAfterIdle();
+        scheduleDraftPersist();
+      },
+      setSignOffCommits: (signOffCommits) => {
+        set({ signOffCommits });
+        queueDraftRefreshAfterIdle();
+        scheduleDraftPersist();
+      },
+      setAllowEmptyCommit: (allowEmptyCommit) => {
+        set({ allowEmptyCommit });
+        queueDraftRefreshAfterIdle();
+        scheduleDraftPersist();
+      },
       setActiveTab: (activeTab) => set({ activeTab }),
-      setSelectedCommit: (selectedCommit) => set({ selectedCommit }),
+      setSelectedCommit: (selectedCommit) =>
+        set((state) => ({
+          selectedCommit,
+          selectedCommitFiles: state.selectedCommit?.hash === selectedCommit?.hash ? state.selectedCommitFiles : [],
+        })),
 
       toggleFile: async (path) => {
         const { currentPath, allFiles } = get();
@@ -439,14 +682,19 @@ const createGitState =
         }
       },
       reset: () => {
+        branchSwitchRequestId += 1;
         const nextDraft = resetDraftSyncState();
         set(() => ({
           ...createInitialGitSnapshot(),
+          ...clearStashSelection(),
           workspaceSessionId: get().workspaceSessionId,
           scopeGroupId: groupId || get().scopeGroupId,
           summary: nextDraft.summary,
           description: nextDraft.description,
           isAmend: nextDraft.isAmend,
+          skipCommitHooks: nextDraft.skipCommitHooks,
+          signOffCommits: nextDraft.signOffCommits,
+          allowEmptyCommit: nextDraft.allowEmptyCommit,
         }));
       },
 
@@ -500,6 +748,7 @@ const createGitState =
         set({
           branches: snapshot.branches ?? [],
           remoteBranches: snapshot.remoteBranches ?? [],
+          recentBranches: snapshot.recentBranches ?? [],
           currentBranch: snapshot.currentBranch || get().currentBranch,
         });
       },
@@ -507,16 +756,44 @@ const createGitState =
       applyRemotes: (remotes) => {
         set({
           hasRemote: remotes.length > 0,
+          remoteNames: remotes.map((remote) => remote.name),
           remoteUrls: remotes.flatMap((remote) => remote.urls),
         });
       },
 
       applyStashes: (stashes) => {
-        set({ stashes: stashes ?? [] });
+        const nextStashes = stashes ?? [];
+        const previousStashes = get().stashes;
+        const stashListChanged =
+          previousStashes.length !== nextStashes.length ||
+          previousStashes.some(
+            (stash, index) =>
+              stash.index !== nextStashes[index]?.index ||
+              stash.oid !== nextStashes[index]?.oid ||
+              stash.message !== nextStashes[index]?.message
+          );
+        const selectedStashIndex = get().selectedStashIndex;
+        if (selectedStashIndex !== null && stashListChanged) {
+          stashRequestId += 1;
+          set({
+            stashes: nextStashes,
+            selectedStashIndex: null,
+            selectedStashFile: null,
+            stashFiles: [],
+            stashDiff: null,
+            stashLoading: false,
+          });
+          return;
+        }
+        set({ stashes: nextStashes });
       },
 
       applyConflicts: (conflicts) => {
         set({ conflicts: conflicts ?? [] });
+      },
+
+      applyOperation: (operation) => {
+        applyOperationResponse(operation);
       },
 
       applyTagsSnapshot: (snapshot) => {
@@ -543,10 +820,11 @@ const createGitState =
           interactiveDiffs: pickInteractiveDiffs(nodes, interactiveDiffs),
           branches: snapshot.branches.branches ?? [],
           remoteBranches: snapshot.branches.remoteBranches ?? [],
+          recentBranches: snapshot.branches.recentBranches ?? [],
           currentBranch: snapshot.branches.currentBranch || get().currentBranch,
           hasRemote: snapshot.remotes.length > 0,
+          remoteNames: snapshot.remotes.map((remote) => remote.name),
           remoteUrls: snapshot.remotes.flatMap((remote) => remote.urls),
-          stashes: snapshot.stashes ?? [],
           conflicts: snapshot.conflicts ?? [],
         };
 
@@ -555,9 +833,13 @@ const createGitState =
           stateUpdate.summary = nextDraft.summary;
           stateUpdate.description = nextDraft.description;
           stateUpdate.isAmend = nextDraft.isAmend;
+          stateUpdate.skipCommitHooks = nextDraft.skipCommitHooks;
+          stateUpdate.signOffCommits = nextDraft.signOffCommits;
+          stateUpdate.allowEmptyCommit = nextDraft.allowEmptyCommit;
         }
 
         set(stateUpdate);
+        get().applyStashes(snapshot.stashes ?? []);
         get().applyBranchStatus(snapshot.branchStatus);
       },
 
@@ -626,6 +908,7 @@ const createGitState =
           set({
             branches: res.branches.map((branch) => branch.name),
             remoteBranches: res.remoteBranches ?? [],
+            recentBranches: res.recentBranches ?? get().recentBranches,
             currentBranch: res.currentBranch,
           });
         } catch (err) {
@@ -642,9 +925,13 @@ const createGitState =
         try {
           const res = await gitApi.remotes(currentPath);
           const urls = res.remotes.flatMap((r) => r.urls);
-          set({ hasRemote: res.remotes.length > 0, remoteUrls: urls });
+          set({
+            hasRemote: res.remotes.length > 0,
+            remoteNames: res.remotes.map((remote) => remote.name),
+            remoteUrls: urls,
+          });
         } catch {
-          set({ hasRemote: false, remoteUrls: [] });
+          set({ hasRemote: false, remoteNames: [], remoteUrls: [] });
         }
       },
 
@@ -668,9 +955,9 @@ const createGitState =
 
         try {
           const res = await gitApi.stashList(currentPath);
-          set({ stashes: res.stashes ?? [] });
+          get().applyStashes(res.stashes ?? []);
         } catch {
-          set({ stashes: [] });
+          get().applyStashes([]);
         }
       },
 
@@ -727,6 +1014,17 @@ const createGitState =
             tagsToPush: [],
             tagsToPushError: err instanceof Error ? err.message : "Failed to fetch tags",
           });
+        }
+      },
+
+      fetchOperationStatus: async () => {
+        const { currentPath } = get();
+        if (!currentPath) return;
+        try {
+          const response = await gitApi.operationStatus(currentPath);
+          applyOperationResponse(response);
+        } catch (err) {
+          set({ error: err instanceof Error ? err.message : "Failed to fetch Git operation status" });
         }
       },
 
@@ -807,6 +1105,7 @@ const createGitState =
         }
 
         const stateUpdate: Partial<GitState> = {};
+        let syncedStashes: StashEntry[] | null = null;
 
         if (shouldSyncStatus && statusResult.status === "fulfilled" && statusResult.value) {
           const nodes = statusFilesToNodes(statusResult.value.files);
@@ -838,11 +1137,12 @@ const createGitState =
         if (shouldSyncRemotes && remotesResult.status === "fulfilled" && remotesResult.value) {
           const urls = remotesResult.value.remotes.flatMap((remote) => remote.urls);
           stateUpdate.hasRemote = remotesResult.value.remotes.length > 0;
+          stateUpdate.remoteNames = remotesResult.value.remotes.map((remote) => remote.name);
           stateUpdate.remoteUrls = urls;
         }
 
         if (shouldSyncStashes && stashesResult.status === "fulfilled" && stashesResult.value) {
-          stateUpdate.stashes = stashesResult.value.stashes ?? [];
+          syncedStashes = stashesResult.value.stashes ?? [];
         }
 
         if (shouldSyncConflicts && conflictsResult.status === "fulfilled" && conflictsResult.value) {
@@ -865,11 +1165,18 @@ const createGitState =
             stateUpdate.summary = nextDraft.summary;
             stateUpdate.description = nextDraft.description;
             stateUpdate.isAmend = nextDraft.isAmend;
+            stateUpdate.skipCommitHooks = nextDraft.skipCommitHooks;
+            stateUpdate.signOffCommits = nextDraft.signOffCommits;
+            stateUpdate.allowEmptyCommit = nextDraft.allowEmptyCommit;
           }
         }
 
         if (Object.keys(stateUpdate).length > 0) {
           set(stateUpdate);
+        }
+
+        if (syncedStashes) {
+          get().applyStashes(syncedStashes);
         }
 
         if (shouldSyncBranchStatus && branchStatusResult.status === "fulfilled" && branchStatusResult.value) {
@@ -900,16 +1207,38 @@ const createGitState =
       },
 
       commitSelected: async () => {
-        const { currentPath, allFiles, summary, description } = get();
-        if (!currentPath || !summary.trim() || !allFiles.some((file) => file.includedState !== "none")) {
+        const { currentPath, allFiles, summary, description, skipCommitHooks, signOffCommits, allowEmptyCommit } =
+          get();
+        if (
+          !currentPath ||
+          !summary.trim() ||
+          (!allowEmptyCommit && !allFiles.some((file) => file.includedState !== "none"))
+        ) {
           return false;
         }
 
         set({ isLoading: true, error: null });
 
         try {
-          const res = await gitApi.commitSelected(currentPath, [], [], summary, description, getScopePayload());
-          const clearedDraft = resetDraftSyncState();
+          const options: GitCommitOptions = {
+            noVerify: skipCommitHooks,
+            signOff: signOffCommits,
+            allowEmpty: allowEmptyCommit,
+          };
+          const res = await gitApi.commitSelected(
+            currentPath,
+            [],
+            [],
+            summary,
+            description,
+            getScopePayload(),
+            options
+          );
+          const clearedDraft = resetDraftSyncState({
+            skipCommitHooks,
+            signOffCommits,
+            allowEmptyCommit: false,
+          });
 
           if (res.status?.files) {
             const nodes = statusFilesToNodes(res.status.files);
@@ -923,6 +1252,9 @@ const createGitState =
               summary: clearedDraft.summary,
               description: clearedDraft.description,
               isAmend: clearedDraft.isAmend,
+              skipCommitHooks: clearedDraft.skipCommitHooks,
+              signOffCommits: clearedDraft.signOffCommits,
+              allowEmptyCommit: clearedDraft.allowEmptyCommit,
             });
           } else {
             set({
@@ -933,6 +1265,9 @@ const createGitState =
               summary: clearedDraft.summary,
               description: clearedDraft.description,
               isAmend: clearedDraft.isAmend,
+              skipCommitHooks: clearedDraft.skipCommitHooks,
+              signOffCommits: clearedDraft.signOffCommits,
+              allowEmptyCommit: clearedDraft.allowEmptyCommit,
             });
             void Promise.allSettled([
               gitApi.status(currentPath, getScopePayload()),
@@ -980,16 +1315,30 @@ const createGitState =
       },
 
       amendCommit: async () => {
-        const { currentPath, allFiles, summary, description } = get();
-        if (!currentPath || !summary.trim() || !allFiles.some((file) => file.includedState !== "none")) {
+        const { currentPath, allFiles, summary, description, skipCommitHooks, signOffCommits, allowEmptyCommit } =
+          get();
+        if (
+          !currentPath ||
+          !summary.trim() ||
+          (!allowEmptyCommit && !allFiles.some((file) => file.includedState !== "none"))
+        ) {
           return false;
         }
 
         set({ isLoading: true, error: null });
 
         try {
-          const res = await gitApi.amend(currentPath, [], [], summary, description, getScopePayload());
-          const clearedDraft = resetDraftSyncState();
+          const options: GitCommitOptions = {
+            noVerify: skipCommitHooks,
+            signOff: signOffCommits,
+            allowEmpty: allowEmptyCommit,
+          };
+          const res = await gitApi.amend(currentPath, [], [], summary, description, getScopePayload(), options);
+          const clearedDraft = resetDraftSyncState({
+            skipCommitHooks,
+            signOffCommits,
+            allowEmptyCommit: false,
+          });
 
           if (res.status?.files) {
             const nodes = statusFilesToNodes(res.status.files);
@@ -1003,6 +1352,9 @@ const createGitState =
               summary: clearedDraft.summary,
               description: clearedDraft.description,
               isAmend: clearedDraft.isAmend,
+              skipCommitHooks: clearedDraft.skipCommitHooks,
+              signOffCommits: clearedDraft.signOffCommits,
+              allowEmptyCommit: clearedDraft.allowEmptyCommit,
             });
           } else {
             set({
@@ -1013,6 +1365,9 @@ const createGitState =
               summary: clearedDraft.summary,
               description: clearedDraft.description,
               isAmend: clearedDraft.isAmend,
+              skipCommitHooks: clearedDraft.skipCommitHooks,
+              signOffCommits: clearedDraft.signOffCommits,
+              allowEmptyCommit: clearedDraft.allowEmptyCommit,
             });
             void Promise.allSettled([
               gitApi.status(currentPath, getScopePayload()),
@@ -1088,6 +1443,7 @@ const createGitState =
       },
 
       smartSwitchBranch: async (branch) => {
+        const requestId = ++branchSwitchRequestId;
         const { currentPath } = get();
         if (!currentPath) {
           return false;
@@ -1097,26 +1453,44 @@ const createGitState =
 
         try {
           const res = await gitApi.smartSwitchBranch(currentPath, branch);
-          const nodes = statusFilesToNodes(res.status.files);
-          set({
-            allFiles: nodes,
-            workingDiffs: {},
-            interactiveDiffs: {},
+          if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+            return true;
+          }
+          const stateUpdate: Partial<GitState> = {
             currentBranch: res.branch,
-          });
+            ...clearStashSelection(),
+          };
+          if (Array.isArray(res.status?.files)) {
+            stateUpdate.allFiles = statusFilesToNodes(res.status.files);
+            stateUpdate.workingDiffs = {};
+            stateUpdate.interactiveDiffs = {};
+          }
+          set(stateUpdate);
           if (res.branchStatus) {
             get().applyBranchStatus(res.branchStatus);
           }
+          if (res.stashConflict) {
+            set({
+              error: `Branch switched to ${res.branch}, but the auto-stash could not be restored: ${res.stashError || "resolve the remaining stash manually"}`,
+            });
+            return false;
+          }
           return true;
         } catch (err) {
+          if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+            return true;
+          }
           set({ error: err instanceof Error ? err.message : "Failed to switch branch" });
           return false;
         } finally {
-          set({ isLoading: false });
+          if (requestId === branchSwitchRequestId && get().currentPath === currentPath) {
+            set({ isLoading: false });
+          }
         }
       },
 
       createBranch: async (branch, from) => {
+        const requestId = ++branchSwitchRequestId;
         const { currentPath } = get();
         if (!currentPath) {
           return false;
@@ -1126,16 +1500,25 @@ const createGitState =
 
         try {
           await gitApi.createBranch(currentPath, branch, from);
+          if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+            return true;
+          }
           return true;
         } catch (err) {
+          if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+            return true;
+          }
           set({ error: err instanceof Error ? err.message : "Failed to create branch" });
           return false;
         } finally {
-          set({ isLoading: false });
+          if (requestId === branchSwitchRequestId && get().currentPath === currentPath) {
+            set({ isLoading: false });
+          }
         }
       },
 
-      deleteBranch: async (branch) => {
+      deleteBranch: async (branch, force = false) => {
+        const requestId = ++branchSwitchRequestId;
         const { currentPath } = get();
         if (!currentPath) {
           return false;
@@ -1144,13 +1527,172 @@ const createGitState =
         set({ isLoading: true, error: null });
 
         try {
-          await gitApi.deleteBranch(currentPath, branch);
+          await gitApi.deleteBranch(currentPath, branch, force);
+          if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+            return true;
+          }
           return true;
         } catch (err) {
+          if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+            return true;
+          }
           set({ error: err instanceof Error ? err.message : "Failed to delete branch" });
           return false;
         } finally {
-          set({ isLoading: false });
+          if (requestId === branchSwitchRequestId && get().currentPath === currentPath) {
+            set({ isLoading: false });
+          }
+        }
+      },
+
+      checkoutRemoteBranch: async (remote, branch, localBranch) => {
+        return runRemoteCheckout(
+          remote,
+          branch,
+          localBranch,
+          (path, targetRemote, targetBranch, targetLocalBranch) =>
+            gitApi.checkoutRemoteBranch(path, targetRemote, targetBranch, targetLocalBranch),
+          "Failed to checkout remote branch"
+        );
+      },
+
+      switchRemoteBranch: async (remote, branch, localBranch) => {
+        return runRemoteCheckout(
+          remote,
+          branch,
+          localBranch,
+          (path, targetRemote, targetBranch, targetLocalBranch) =>
+            gitApi.switchRemoteBranch(path, targetRemote, targetBranch, targetLocalBranch),
+          "Failed to switch remote branch"
+        );
+      },
+
+      renameBranch: async (branch, newBranch) => {
+        const requestId = ++branchSwitchRequestId;
+        const { currentPath } = get();
+        if (!currentPath) {
+          return false;
+        }
+
+        set({ isLoading: true, error: null });
+
+        try {
+          const res = await gitApi.renameBranch(currentPath, branch, newBranch);
+          if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+            return true;
+          }
+          if (res.branches) {
+            set({
+              branches: res.branches,
+              remoteBranches: res.remoteBranches ?? get().remoteBranches,
+              currentBranch: res.currentBranch ?? get().currentBranch,
+            });
+          } else {
+            const snapshot = await gitApi.branches(currentPath);
+            if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+              return true;
+            }
+            set({
+              branches: snapshot.branches.map((item) => item.name),
+              remoteBranches: snapshot.remoteBranches ?? [],
+              currentBranch: snapshot.currentBranch,
+            });
+          }
+          if (res.branchStatus) {
+            get().applyBranchStatus(res.branchStatus);
+          }
+          return true;
+        } catch (err) {
+          if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+            return true;
+          }
+          set({ error: err instanceof Error ? err.message : "Failed to rename branch" });
+          return false;
+        } finally {
+          if (requestId === branchSwitchRequestId && get().currentPath === currentPath) {
+            set({ isLoading: false });
+          }
+        }
+      },
+
+      deleteRemoteBranch: async (remote, branch) => {
+        const requestId = ++branchSwitchRequestId;
+        const { currentPath } = get();
+        if (!currentPath) {
+          return false;
+        }
+
+        set({ isLoading: true, error: null });
+
+        try {
+          const res = await gitApi.deleteRemoteBranch(currentPath, remote, branch);
+          if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+            return true;
+          }
+          if (res.branches) {
+            set({
+              branches: res.branches,
+              remoteBranches: res.remoteBranches ?? get().remoteBranches,
+              currentBranch: res.currentBranch ?? get().currentBranch,
+            });
+          } else {
+            const snapshot = await gitApi.branches(currentPath);
+            if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+              return true;
+            }
+            set({
+              branches: snapshot.branches.map((item) => item.name),
+              remoteBranches: snapshot.remoteBranches ?? [],
+              currentBranch: snapshot.currentBranch,
+            });
+          }
+          if (res.branchStatus) {
+            get().applyBranchStatus(res.branchStatus);
+          }
+          return true;
+        } catch (err) {
+          if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+            return true;
+          }
+          set({ error: err instanceof Error ? err.message : "Failed to delete remote branch" });
+          return false;
+        } finally {
+          if (requestId === branchSwitchRequestId && get().currentPath === currentPath) {
+            set({ isLoading: false });
+          }
+        }
+      },
+
+      pruneRemote: async (remote = "origin") => {
+        const requestId = ++branchSwitchRequestId;
+        const { currentPath } = get();
+        if (!currentPath) {
+          return false;
+        }
+
+        set({ isLoading: true, error: null });
+
+        try {
+          const res = await gitApi.pruneRemote(currentPath, remote);
+          if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+            return true;
+          }
+          set({
+            branches: res.branches ?? get().branches,
+            remoteBranches: res.remoteBranches ?? get().remoteBranches,
+            currentBranch: res.currentBranch ?? get().currentBranch,
+          });
+          return true;
+        } catch (err) {
+          if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+            return true;
+          }
+          set({ error: err instanceof Error ? err.message : "Failed to prune remote branches" });
+          return false;
+        } finally {
+          if (requestId === branchSwitchRequestId && get().currentPath === currentPath) {
+            set({ isLoading: false });
+          }
         }
       },
 
@@ -1280,6 +1822,7 @@ const createGitState =
       },
 
       stash: async (message, files) => {
+        const requestId = ++branchSwitchRequestId;
         const { currentPath } = get();
         if (!currentPath) {
           return false;
@@ -1289,6 +1832,9 @@ const createGitState =
 
         try {
           const res = await gitApi.stash(currentPath, message, files);
+          if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+            return true;
+          }
           if (res.status) {
             const nodes = statusFilesToNodes(res.status.files);
             set({
@@ -1297,25 +1843,36 @@ const createGitState =
               interactiveDiffs: {},
             });
           }
+          set(clearStashSelection());
           return true;
         } catch (err) {
+          if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+            return true;
+          }
           set({ error: err instanceof Error ? err.message : "Failed to stash" });
           return false;
         } finally {
-          set({ isLoading: false });
+          if (requestId === branchSwitchRequestId && get().currentPath === currentPath) {
+            set({ isLoading: false });
+          }
         }
       },
 
-      stashPop: async (index = 0) => {
-        const { currentPath } = get();
+      stashPop: async (index = 0, oid) => {
+        const requestId = ++branchSwitchRequestId;
+        const { currentPath, stashes } = get();
         if (!currentPath) {
           return false;
         }
+        const stashOID = oid ?? stashes.find((stash) => stash.index === index)?.oid;
 
         set({ isLoading: true, error: null });
 
         try {
-          const res = await gitApi.stashPop(currentPath, index);
+          const res = await gitApi.stashPop(currentPath, index, stashOID);
+          if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+            return true;
+          }
           if (res.status) {
             const nodes = statusFilesToNodes(res.status.files);
             set({
@@ -1324,31 +1881,155 @@ const createGitState =
               interactiveDiffs: {},
             });
           }
+          set(clearStashSelection());
           return true;
         } catch (err) {
+          if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+            return true;
+          }
           set({ error: err instanceof Error ? err.message : "Failed to pop stash" });
           return false;
         } finally {
-          set({ isLoading: false });
+          if (requestId === branchSwitchRequestId && get().currentPath === currentPath) {
+            set({ isLoading: false });
+          }
         }
       },
 
-      stashDrop: async (index = 0) => {
-        const { currentPath } = get();
+      stashDrop: async (index = 0, oid) => {
+        const requestId = ++branchSwitchRequestId;
+        const { currentPath, stashes } = get();
         if (!currentPath) {
           return false;
         }
+        const stashOID = oid ?? stashes.find((stash) => stash.index === index)?.oid;
 
         set({ isLoading: true, error: null });
 
         try {
-          await gitApi.stashDrop(currentPath, index);
+          await gitApi.stashDrop(currentPath, index, stashOID);
+          if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+            return true;
+          }
+          set(clearStashSelection());
           return true;
         } catch (err) {
+          if (requestId !== branchSwitchRequestId || get().currentPath !== currentPath) {
+            return true;
+          }
           set({ error: err instanceof Error ? err.message : "Failed to drop stash" });
           return false;
         } finally {
-          set({ isLoading: false });
+          if (requestId === branchSwitchRequestId && get().currentPath === currentPath) {
+            set({ isLoading: false });
+          }
+        }
+      },
+
+      selectStash: async (index) => {
+        const { currentPath, stashes } = get();
+        stashRequestId += 1;
+        const requestId = stashRequestId;
+        if (index === null) {
+          set({
+            selectedStashIndex: null,
+            selectedStashFile: null,
+            stashFiles: [],
+            stashDiff: null,
+            stashLoading: false,
+          });
+          return;
+        }
+        const selectedStash = stashes.find((stash) => stash.index === index);
+        if (!currentPath || !selectedStash) {
+          set({
+            selectedStashIndex: null,
+            selectedStashFile: null,
+            stashFiles: [],
+            stashDiff: null,
+            stashLoading: false,
+          });
+          return;
+        }
+
+        set({
+          selectedStashIndex: index,
+          selectedStashFile: null,
+          stashFiles: [],
+          stashDiff: null,
+          stashLoading: true,
+          error: null,
+        });
+        try {
+          const response = await gitApi.stashFiles(currentPath, index, selectedStash.oid);
+          const state = get();
+          if (
+            requestId === stashRequestId &&
+            state.currentPath === currentPath &&
+            state.selectedStashIndex === index &&
+            state.stashes.find((stash) => stash.index === index)?.oid === selectedStash.oid
+          ) {
+            set({ stashFiles: response.files ?? [], stashLoading: false });
+          }
+        } catch (err) {
+          const state = get();
+          if (
+            requestId === stashRequestId &&
+            state.currentPath === currentPath &&
+            state.selectedStashIndex === index &&
+            state.stashes.find((stash) => stash.index === index)?.oid === selectedStash.oid
+          ) {
+            set({
+              stashFiles: [],
+              stashLoading: false,
+              error: err instanceof Error ? err.message : "Failed to get stash files",
+            });
+          }
+        }
+      },
+
+      selectStashFile: async (filePath) => {
+        const { currentPath, selectedStashIndex, stashes } = get();
+        stashRequestId += 1;
+        const requestId = stashRequestId;
+        if (filePath === null || selectedStashIndex === null) {
+          set({ selectedStashFile: null, stashDiff: null, stashLoading: false });
+          return;
+        }
+        if (!currentPath) {
+          set({ selectedStashFile: null, stashDiff: null, stashLoading: false });
+          return;
+        }
+        const selectedStashOID = stashes.find((stash) => stash.index === selectedStashIndex)?.oid;
+
+        set({ selectedStashFile: filePath, stashDiff: null, stashLoading: true, error: null });
+        try {
+          const diff = await gitApi.stashDiff(currentPath, selectedStashIndex, filePath, selectedStashOID);
+          const state = get();
+          if (
+            requestId === stashRequestId &&
+            state.currentPath === currentPath &&
+            state.selectedStashIndex === selectedStashIndex &&
+            state.stashes.find((stash) => stash.index === selectedStashIndex)?.oid === selectedStashOID &&
+            state.selectedStashFile === filePath
+          ) {
+            set({ stashDiff: diff, stashLoading: false });
+          }
+        } catch (err) {
+          const state = get();
+          if (
+            requestId === stashRequestId &&
+            state.currentPath === currentPath &&
+            state.selectedStashIndex === selectedStashIndex &&
+            state.stashes.find((stash) => stash.index === selectedStashIndex)?.oid === selectedStashOID &&
+            state.selectedStashFile === filePath
+          ) {
+            set({
+              stashDiff: null,
+              stashLoading: false,
+              error: err instanceof Error ? err.message : "Failed to get stash diff",
+            });
+          }
         }
       },
 
@@ -1384,7 +2065,7 @@ const createGitState =
         }
       },
 
-      resolveConflict: async (filePath, content) => {
+      resolveConflict: async (filePath, content, hash, mode = "manual") => {
         const { currentPath } = get();
         if (!currentPath) {
           return false;
@@ -1393,7 +2074,8 @@ const createGitState =
         set({ isLoading: true, error: null });
 
         try {
-          const res = await gitApi.resolveConflict(currentPath, filePath, content);
+          const manualContent = mode === "manual" ? content : undefined;
+          const res = await gitApi.conflictResolve(currentPath, filePath, mode, hash, undefined, manualContent);
           const nodes = statusFilesToNodes(res.status.files);
           set((state) => ({
             allFiles: nodes,
@@ -1501,13 +2183,29 @@ const createGitState =
         if (!currentPath) {
           return [];
         }
+        const requestId = ++commitFilesRequestId;
+        const requestPath = currentPath;
 
         try {
-          const res = await gitApi.commitFiles(currentPath, commitHash);
-          set({ selectedCommitFiles: res.files });
+          const res = await gitApi.commitFiles(requestPath, commitHash);
+          const state = get();
+          if (
+            requestId === commitFilesRequestId &&
+            state.currentPath === requestPath &&
+            state.selectedCommit?.hash === commitHash
+          ) {
+            set({ selectedCommitFiles: res.files });
+          }
           return res.files;
         } catch (err) {
-          set({ error: err instanceof Error ? err.message : "Failed to get commit files" });
+          const state = get();
+          if (
+            requestId === commitFilesRequestId &&
+            state.currentPath === requestPath &&
+            state.selectedCommit?.hash === commitHash
+          ) {
+            set({ error: err instanceof Error ? err.message : "Failed to get commit files" });
+          }
           return [];
         }
       },
@@ -1544,6 +2242,26 @@ const createGitState =
           set({ isLoading: false });
         }
       },
+
+      mergeOperation: (ref, action = "start", options) =>
+        runOperation((path) => gitApi.merge(path, ref, action, options)),
+
+      rebaseOperation: (upstream, action = "start", options) =>
+        runOperation((path) => gitApi.rebase(path, upstream, action, options)),
+
+      cherryPickOperation: (commit, action = "start", options) =>
+        runOperation((path) => gitApi.cherryPick(path, commit, action, options)),
+
+      revertOperation: (commit, action = "start", files) =>
+        runOperation((path) => gitApi.revert(path, commit, action, files)),
+
+      resetToCommit: (ref, mode = "mixed") => runOperation((path) => gitApi.resetToCommit(path, ref, mode)),
+
+      squashOperation: (toSquash, squashOnto, options) =>
+        runOperation((path) => gitApi.squash(path, toSquash, squashOnto, options)),
+
+      reorderOperation: (toMove, beforeCommit, options) =>
+        runOperation((path) => gitApi.reorder(path, toMove, beforeCommit, options)),
     };
   };
 

@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import "@xterm/xterm/css/xterm.css";
 import { fileApi } from "@/api/file";
 import { type TerminalCapabilities, terminalApi } from "@/api/terminal";
+import { decodeBase64Bytes } from "@/components/terminal/blockterm-model";
 import { getResolvedTerminalFontFamily } from "@/components/terminal/fonts";
 import TerminalSelectionMenu from "@/components/terminal/terminal-selection-menu";
 import { useTranslation } from "@/lib/i18n";
@@ -100,6 +101,7 @@ const SELECTION_MENU_WIDTH = 216;
 const SELECTION_MENU_HEIGHT = 44;
 const SELECTION_MENU_MARGIN = 8;
 const DEFAULT_TERMINAL_CAPABILITIES: TerminalCapabilities = {
+  completion: false,
   durable: false,
   resume: true,
   shell_integration: false,
@@ -431,12 +433,7 @@ const parseOsc777Notification = (data: string): ParsedTerminalNotification | nul
 };
 
 const decodeBase64Utf8 = (value: string): string => {
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return new TextDecoder().decode(bytes);
+  return new TextDecoder().decode(decodeBase64Bytes(value));
 };
 
 const parseOsc7Path = (value: string): string | null => {
@@ -853,8 +850,6 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
 
-        let decoder = new TextDecoder("utf-8", { fatal: false });
-
         const sendAck = (cursorValue: number) => {
           if (!Number.isFinite(cursorValue) || cursorValue <= lastAckCursorRef.current) {
             return;
@@ -905,7 +900,6 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
               }
               if (msg.reset) {
                 terminal.reset();
-                decoder = new TextDecoder("utf-8", { fatal: false });
                 pendingReplayWritesRef.current = 0;
                 lastSavedCursorRef.current = 0;
               }
@@ -913,17 +907,12 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
               let hasOutput = false;
               try {
                 if (typeof msg.data === "string" && msg.data.length > 0) {
-                  const binaryString = atob(msg.data);
-                  const bytes = new Uint8Array(binaryString.length);
-                  for (let i = 0; i < binaryString.length; i++) {
-                    bytes[i] = binaryString.charCodeAt(i);
-                  }
-                  const decoded = decoder.decode(bytes, { stream: true });
-                  hasOutput = decoded.length > 0;
+                  const bytes = decodeBase64Bytes(msg.data);
+                  hasOutput = bytes.length > 0;
                   if (hasOutput && msg.type === "replay") {
                     pendingReplayWritesRef.current += 1;
                   }
-                  terminal.write(decoded, () => {
+                  terminal.write(bytes, () => {
                     if (cursorValue !== undefined) {
                       lastCursorRef.current = cursorValue;
                       sendAck(cursorValue);

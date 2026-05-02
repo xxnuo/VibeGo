@@ -24,6 +24,7 @@ import {
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { deleteSpeechModelAssets, preloadSpeechModel, speechAssetStates } from "@/components/keyboard/core/sherpa-asr";
+import { BlockTermModelSettings } from "@/components/settings/blockterm-model-settings";
 import { useFrameController } from "@/framework/frame/controller";
 import {
   customFontFamily,
@@ -874,26 +875,30 @@ const SettingsPage: React.FC = () => {
     <div className="h-full overflow-y-auto bg-ide-bg">
       <div className="max-w-2xl mx-auto p-4">
         <div className="space-y-2">
-          {activeTab === "notification"
-            ? renderNotificationTab()
-            : activeTab === "page"
-              ? renderPageTab()
-              : categorySettings.map((schema) =>
-                  schema.key === "speechModel" ? (
-                    <React.Fragment key={schema.key}>{renderSpeechModelCard()}</React.Fragment>
-                  ) : (
-                    <SettingItem
-                      key={schema.key}
-                      schema={schema}
-                      value={settings[schema.key] || schema.defaultValue}
-                      settings={settings}
-                      schemas={SETTINGS_SCHEMA}
-                      onChange={(v) => void handleSettingChange(schema.key, v)}
-                      onSettingChange={(key, v) => void handleSettingChange(key, v)}
-                      t={t}
-                    />
-                  )
-                )}
+          {activeTab === "notification" ? (
+            renderNotificationTab()
+          ) : activeTab === "page" ? (
+            renderPageTab()
+          ) : activeTab === "model" ? (
+            <BlockTermModelSettings t={t} />
+          ) : (
+            categorySettings.map((schema) =>
+              schema.key === "speechModel" ? (
+                <React.Fragment key={schema.key}>{renderSpeechModelCard()}</React.Fragment>
+              ) : (
+                <SettingItem
+                  key={schema.key}
+                  schema={schema}
+                  value={settings[schema.key] || schema.defaultValue}
+                  settings={settings}
+                  schemas={SETTINGS_SCHEMA}
+                  onChange={(v) => void handleSettingChange(schema.key, v)}
+                  onSettingChange={(key, v) => void handleSettingChange(key, v)}
+                  t={t}
+                />
+              )
+            )
+          )}
         </div>
       </div>
     </div>

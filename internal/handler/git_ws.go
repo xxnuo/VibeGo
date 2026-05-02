@@ -327,9 +327,15 @@ func (h *GitWSHandler) sendSnapshot(client *gitWSClient) error {
 		HeadHash:     collectHeadHash(client.repoRoot),
 		BranchStatus: BranchStatusInfo{},
 		Draft: GitDraftResponse{
-			Summary:     draft.Summary,
-			Description: draft.Description,
-			IsAmend:     draft.IsAmend,
+			Summary:          draft.Summary,
+			Description:      draft.Description,
+			IsAmend:          draft.IsAmend,
+			NoVerify:         draft.NoVerify,
+			SignOff:          draft.SignOff,
+			AllowEmpty:       draft.AllowEmpty,
+			SkipCommitHooks:  draft.NoVerify,
+			SignOffCommits:   draft.SignOff,
+			AllowEmptyCommit: draft.AllowEmpty,
 		},
 	}
 	if branchStatus := collectBranchStatus(client.repoRoot); branchStatus != nil {

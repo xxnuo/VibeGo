@@ -1,150 +1,398 @@
-import { ArrowDown, ArrowUp, Check, GitBranch, Globe, Plus, Search, Trash2, X } from "lucide-react";
-import React, { useCallback, useMemo, useState } from "react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  Clock,
+  GitBranch,
+  Globe,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { getTranslation, type Locale } from "@/lib/i18n";
 
 interface BranchSelectorProps {
   isOpen: boolean;
+  isLoading?: boolean;
   branches: string[];
   remoteBranches: string[];
+  recentBranches?: string[];
+  remoteNames?: string[];
   currentBranch: string;
   aheadCount: number;
   behindCount: number;
   locale: Locale;
+  anchorRef?: React.RefObject<HTMLElement | null>;
   onClose: () => void;
   onSwitch: (branch: string) => void;
+  onSwitchRemote?: (remote: string, branch: string) => void;
   onCreate: (branch: string) => void;
   onDelete: (branch: string) => void;
+  onRename?: (branch: string) => void;
+  onDeleteRemote?: (remote: string, branch: string) => void;
+  onPrune?: () => void;
+}
+
+export function parseRemoteBranchDisplay(
+  displayName: string,
+  remoteNames: string[]
+): { remote: string; branch: string } | null {
+  const remote = [...remoteNames]
+    .sort((left, right) => right.length - left.length)
+    .find((name) => displayName.startsWith(`${name}/`) && displayName.length > name.length + 1);
+  if (remote) return { remote, branch: displayName.slice(remote.length + 1) };
+  return null;
 }
 
 const BranchSelector: React.FC<BranchSelectorProps> = ({
   isOpen,
+  isLoading = false,
   branches,
   remoteBranches,
+  recentBranches = [],
+  remoteNames = [],
   currentBranch,
   aheadCount,
   behindCount,
   locale,
+  anchorRef,
   onClose,
   onSwitch,
+  onSwitchRemote = () => undefined,
   onCreate,
   onDelete,
+  onRename = () => undefined,
+  onDeleteRemote = () => undefined,
+  onPrune = () => undefined,
 }) => {
   const t = useCallback((key: string) => getTranslation(locale, key), [locale]);
+  const isMobile = useIsMobile();
   const [search, setSearch] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [newBranchName, setNewBranchName] = useState("");
+  const [desktopAnchorReady, setDesktopAnchorReady] = useState(false);
+  const branchListRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const openingTriggerRef = useRef<HTMLElement | null>(null);
+  const virtualAnchorRef = useRef<HTMLElement | null>(null);
+  const wasOpenRef = useRef(false);
 
   const localBranches = useMemo(() => {
     const lower = search.toLowerCase();
-    return branches.filter((b) => b !== currentBranch && (!lower || b.toLowerCase().includes(lower)));
+    return branches.filter((branch) => branch !== currentBranch && (!lower || branch.toLowerCase().includes(lower)));
   }, [branches, currentBranch, search]);
+
+  const recentLocalBranches = useMemo(() => {
+    const lower = search.toLowerCase();
+    const known = new Set(branches);
+    return recentBranches.filter(
+      (branch, index) =>
+        branch !== currentBranch &&
+        known.has(branch) &&
+        recentBranches.indexOf(branch) === index &&
+        (!lower || branch.toLowerCase().includes(lower))
+    );
+  }, [branches, currentBranch, recentBranches, search]);
 
   const filteredRemote = useMemo(() => {
     const lower = search.toLowerCase();
-    return (remoteBranches ?? []).filter((b) => !lower || b.toLowerCase().includes(lower));
+    return (remoteBranches ?? []).filter((branch) => !lower || branch.toLowerCase().includes(lower));
   }, [remoteBranches, search]);
+
+  const restoreTriggerFocus = useCallback(() => {
+    const trigger = openingTriggerRef.current;
+    window.requestAnimationFrame(() => {
+      if (trigger?.isConnected) trigger.focus();
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    const wasOpen = wasOpenRef.current;
+    if (isOpen && !wasOpen) {
+      const activeElement = document.activeElement;
+      const fallbackTrigger = document.querySelector<HTMLElement>(".desktop-git-toolbar-button--branch");
+      const trigger =
+        anchorRef?.current ??
+        (activeElement instanceof HTMLElement && activeElement !== document.body ? activeElement : fallbackTrigger);
+      openingTriggerRef.current = trigger;
+      virtualAnchorRef.current = trigger;
+      setDesktopAnchorReady(Boolean(trigger));
+    } else if (!isOpen && wasOpen) {
+      setDesktopAnchorReady(false);
+      setSearch("");
+      setIsCreating(false);
+      setNewBranchName("");
+      restoreTriggerFocus();
+    }
+    wasOpenRef.current = isOpen;
+  }, [anchorRef, isOpen, restoreTriggerFocus]);
 
   const handleSwitch = useCallback(
     (branch: string) => {
+      if (isLoading) return;
       if (branch !== currentBranch) onSwitch(branch);
       onClose();
     },
-    [currentBranch, onSwitch, onClose]
+    [currentBranch, isLoading, onSwitch, onClose]
   );
 
   const handleCreate = useCallback(() => {
-    if (newBranchName.trim()) {
+    if (!isLoading && newBranchName.trim()) {
       onCreate(newBranchName.trim());
       setNewBranchName("");
       setIsCreating(false);
     }
-  }, [newBranchName, onCreate]);
+  }, [isLoading, newBranchName, onCreate]);
 
   const handleDelete = useCallback(
-    (e: React.MouseEvent, branch: string) => {
-      e.stopPropagation();
-      if (branch !== currentBranch) onDelete(branch);
+    (event: React.MouseEvent, branch: string) => {
+      event.stopPropagation();
+      if (!isLoading && branch !== currentBranch) onDelete(branch);
     },
-    [currentBranch, onDelete]
+    [currentBranch, isLoading, onDelete]
   );
 
-  if (!isOpen) return null;
+  const handleRename = useCallback(
+    (event: React.MouseEvent, branch: string) => {
+      event.stopPropagation();
+      if (!isLoading) onRename(branch);
+    },
+    [isLoading, onRename]
+  );
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50" onClick={onClose}>
-      <div
-        className="bg-ide-bg border-t border-ide-border rounded-t-2xl shadow-xl w-full max-w-lg max-h-[70vh] flex flex-col animate-in slide-in-from-bottom duration-200"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-ide-border">
+  const handleDeleteRemote = useCallback(
+    (event: React.MouseEvent, displayName: string) => {
+      event.stopPropagation();
+      if (isLoading) return;
+      const target = parseRemoteBranchDisplay(displayName, remoteNames);
+      if (target) onDeleteRemote(target.remote, target.branch);
+    },
+    [isLoading, onDeleteRemote, remoteNames]
+  );
+
+  const handleSwitchRemote = useCallback(
+    (displayName: string) => {
+      if (isLoading) return;
+      const target = parseRemoteBranchDisplay(displayName, remoteNames);
+      if (!target) return;
+      onSwitchRemote(target.remote, target.branch);
+      onClose();
+    },
+    [isLoading, onClose, onSwitchRemote, remoteNames]
+  );
+
+  const getBranchOptions = useCallback(
+    () =>
+      Array.from(
+        branchListRef.current?.querySelectorAll<HTMLButtonElement>('[data-branch-option="true"]:not(:disabled)') ?? []
+      ),
+    []
+  );
+
+  const focusBranchOption = useCallback(
+    (position: "first" | "last" | "next" | "previous", current?: HTMLButtonElement) => {
+      const options = getBranchOptions();
+      if (options.length === 0) return;
+      if (position === "first") {
+        options[0].focus();
+        return;
+      }
+      if (position === "last") {
+        options[options.length - 1].focus();
+        return;
+      }
+      const currentIndex = current ? options.indexOf(current) : -1;
+      const offset = position === "next" ? 1 : -1;
+      const nextIndex = currentIndex < 0 ? (offset > 0 ? 0 : options.length - 1) : currentIndex + offset;
+      options[(nextIndex + options.length) % options.length].focus();
+    },
+    [getBranchOptions]
+  );
+
+  const handleBranchOptionKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        focusBranchOption(event.key === "ArrowDown" ? "next" : "previous", event.currentTarget);
+      } else if (event.key === "Home" || event.key === "End") {
+        event.preventDefault();
+        focusBranchOption(event.key === "Home" ? "first" : "last");
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }
+    },
+    [focusBranchOption, onClose]
+  );
+
+  const handleSearchKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        focusBranchOption(event.key === "ArrowDown" ? "first" : "last");
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        getBranchOptions()[0]?.click();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }
+    },
+    [focusBranchOption, getBranchOptions, onClose]
+  );
+
+  const renderSelectorContent = (compact: boolean) => {
+    const itemPadding = compact ? "px-3 py-1.5" : "px-4 py-2.5";
+    return (
+      <>
+        <div
+          className={`flex items-center justify-between border-b border-ide-border ${compact ? "px-3 py-2" : "px-4 py-3"}`}
+        >
           <div className="flex items-center gap-2">
             <GitBranch size={16} className="text-ide-accent" />
             <span className="text-sm font-medium text-ide-text">{t("git.branches")}</span>
           </div>
-          <button onClick={onClose} className="text-ide-mute hover:text-ide-text p-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-sm p-1 text-ide-mute hover:bg-ide-panel hover:text-ide-text"
+            aria-label={t("git.cancel")}
+          >
             <X size={16} />
           </button>
         </div>
 
-        <div className="px-3 py-2 border-b border-ide-border">
-          <div className="flex items-center gap-2 bg-ide-panel rounded-lg px-3 py-2">
+        <div className={`border-b border-ide-border ${compact ? "p-2" : "px-3 py-2"}`}>
+          <div
+            className={`flex items-center gap-2 border border-transparent bg-ide-panel focus-within:border-ide-accent ${compact ? "rounded-sm px-2 py-1.5" : "rounded-lg px-3 py-2"}`}
+          >
             <Search size={14} className="text-ide-mute" />
             <input
+              ref={searchInputRef}
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={handleSearchKeyDown}
               placeholder={t("git.searchBranches")}
-              className="flex-1 bg-transparent text-sm text-ide-text outline-none placeholder-ide-mute"
+              className="min-w-0 flex-1 bg-transparent text-sm text-ide-text outline-none placeholder-ide-mute"
               autoFocus
             />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          <div className="px-3 pt-2 pb-1">
-            <span className="text-[10px] font-bold text-ide-mute uppercase">{t("git.current")}</span>
+        <div ref={branchListRef} className="min-h-0 flex-1 overflow-y-auto" role="group" aria-label={t("git.branches")}>
+          <div className="px-3 pb-1 pt-2">
+            <span className="text-[10px] font-bold uppercase text-ide-mute">{t("git.current")}</span>
           </div>
-          <div className="flex items-center justify-between px-4 py-2.5 bg-ide-accent/10">
-            <div className="flex items-center gap-2 min-w-0">
-              <GitBranch size={14} className="text-ide-accent shrink-0" />
-              <span className="text-sm text-ide-accent font-medium truncate">{currentBranch}</span>
-              <Check size={14} className="text-ide-accent shrink-0" />
+          <div className={`flex items-center justify-between gap-2 bg-ide-accent/10 ${itemPadding}`}>
+            <div className="flex min-w-0 items-center gap-2">
+              <GitBranch size={14} className="shrink-0 text-ide-accent" />
+              <span className="truncate text-sm font-medium text-ide-accent">{currentBranch}</span>
+              <Check size={14} className="shrink-0 text-ide-accent" />
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={(event) => handleRename(event, currentBranch)}
+                disabled={isLoading}
+                className="rounded-sm p-1 text-ide-mute hover:bg-ide-panel hover:text-ide-accent disabled:opacity-50"
+                aria-label={t("git.renameBranch")}
+                title={t("git.renameBranch")}
+              >
+                <Pencil size={13} />
+              </button>
               {aheadCount > 0 && (
-                <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                <span className="flex items-center gap-0.5 rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-400">
                   <ArrowUp size={9} /> {aheadCount}
                 </span>
               )}
               {behindCount > 0 && (
-                <span className="text-[10px] bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                <span className="flex items-center gap-0.5 rounded bg-orange-500/20 px-1.5 py-0.5 text-[10px] text-orange-400">
                   <ArrowDown size={9} /> {behindCount}
                 </span>
               )}
             </div>
           </div>
 
+          {recentLocalBranches.length > 0 && (
+            <>
+              <div className="px-3 pb-1 pt-3">
+                <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-ide-mute">
+                  <Clock size={10} /> {t("git.recentBranches")}
+                </span>
+              </div>
+              {recentLocalBranches.map((branch) => (
+                <button
+                  key={`recent-${branch}`}
+                  type="button"
+                  data-branch-option="true"
+                  disabled={isLoading}
+                  className={`flex w-full items-center justify-between text-left transition-colors hover:bg-ide-panel focus:bg-ide-panel focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${itemPadding}`}
+                  onClick={() => handleSwitch(branch)}
+                  onKeyDown={handleBranchOptionKeyDown}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Clock size={14} className="shrink-0 text-ide-accent" />
+                    <span className="truncate text-sm text-ide-text">{branch}</span>
+                  </span>
+                  <Check size={13} className="shrink-0 text-ide-mute/50" />
+                </button>
+              ))}
+            </>
+          )}
+
           {localBranches.length > 0 && (
             <>
-              <div className="px-3 pt-3 pb-1">
-                <span className="text-[10px] font-bold text-ide-mute uppercase">{t("git.local")}</span>
+              <div className="px-3 pb-1 pt-3">
+                <span className="text-[10px] font-bold uppercase text-ide-mute">{t("git.local")}</span>
               </div>
               {localBranches.map((branch) => (
                 <div
                   key={branch}
-                  className="flex items-center justify-between px-4 py-2.5 cursor-pointer hover:bg-ide-panel active:bg-ide-panel/80 transition-colors"
-                  onClick={() => handleSwitch(branch)}
+                  className="group flex items-center transition-colors hover:bg-ide-panel focus-within:bg-ide-panel"
+                  role="presentation"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <GitBranch size={14} className="text-ide-mute shrink-0" />
-                    <span className="text-sm text-ide-text truncate">{branch}</span>
-                  </div>
                   <button
-                    onClick={(e) => handleDelete(e, branch)}
-                    className="text-ide-mute hover:text-red-400 p-1 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity"
+                    type="button"
+                    data-branch-option="true"
+                    disabled={isLoading}
+                    className={`flex min-w-0 flex-1 items-center gap-2 text-left focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${itemPadding}`}
+                    onClick={() => handleSwitch(branch)}
+                    onKeyDown={handleBranchOptionKeyDown}
                   >
-                    <Trash2 size={14} />
+                    <GitBranch size={14} className="shrink-0 text-ide-mute" />
+                    <span className="truncate text-sm text-ide-text">{branch}</span>
                   </button>
+                  <div className="flex shrink-0 items-center gap-0.5 pr-3 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100">
+                    <button
+                      type="button"
+                      onClick={(event) => handleRename(event, branch)}
+                      disabled={isLoading}
+                      className="rounded-sm p-1 text-ide-mute hover:text-ide-accent disabled:opacity-50"
+                      aria-label={`${t("git.renameBranch")} ${branch}`}
+                      title={t("git.renameBranch")}
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => handleDelete(event, branch)}
+                      disabled={isLoading}
+                      className="rounded-sm p-1 text-ide-mute hover:text-red-400 disabled:opacity-50"
+                      aria-label={`${t("git.deleteBranch")} ${branch}`}
+                      title={t("git.deleteBranch")}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </>
@@ -152,60 +400,94 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({
 
           {filteredRemote.length > 0 && (
             <>
-              <div className="px-3 pt-3 pb-1">
-                <span className="text-[10px] font-bold text-ide-mute uppercase flex items-center gap-1">
+              <div className="flex items-center justify-between px-3 pb-1 pt-3">
+                <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-ide-mute">
                   <Globe size={10} /> {t("git.remote")}
                 </span>
-              </div>
-              {filteredRemote.map((branch) => (
-                <div
-                  key={branch}
-                  className="flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-ide-panel transition-colors"
-                  onClick={() => {
-                    const localName = branch.includes("/") ? branch.split("/").slice(1).join("/") : branch;
-                    handleSwitch(localName);
-                  }}
+                <button
+                  type="button"
+                  onClick={onPrune}
+                  disabled={isLoading || remoteNames.length === 0}
+                  className="rounded-sm p-1 text-ide-mute hover:bg-ide-panel hover:text-ide-accent disabled:opacity-50"
+                  aria-label={t("git.pruneRemote")}
+                  title={t("git.pruneRemote")}
                 >
-                  <Globe size={14} className="text-ide-mute shrink-0" />
-                  <span className="text-sm text-ide-mute truncate">{branch}</span>
-                </div>
-              ))}
+                  <RefreshCw size={12} />
+                </button>
+              </div>
+              {filteredRemote.map((branch) => {
+                const target = parseRemoteBranchDisplay(branch, remoteNames);
+                return (
+                  <div
+                    key={branch}
+                    className="group flex items-center transition-colors hover:bg-ide-panel focus-within:bg-ide-panel"
+                    role="presentation"
+                  >
+                    <button
+                      type="button"
+                      data-branch-option="true"
+                      disabled={isLoading || !target}
+                      className={`flex min-w-0 flex-1 items-center gap-2 text-left focus:outline-none disabled:cursor-default disabled:opacity-50 ${itemPadding}`}
+                      onClick={() => handleSwitchRemote(branch)}
+                      onKeyDown={handleBranchOptionKeyDown}
+                    >
+                      <Globe size={14} className="shrink-0 text-ide-mute" />
+                      <span className="truncate text-sm text-ide-mute">{branch}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => handleDeleteRemote(event, branch)}
+                      className="mr-3 shrink-0 rounded-sm p-1 text-ide-mute opacity-100 transition-opacity hover:text-red-400 disabled:opacity-30 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100"
+                      disabled={isLoading || !target}
+                      aria-label={`${t("git.deleteRemoteBranch")} ${branch}`}
+                      title={t("git.deleteRemoteBranch")}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                );
+              })}
             </>
           )}
         </div>
 
-        <div className="border-t border-ide-border p-3">
+        <div className={`border-t border-ide-border ${compact ? "p-2" : "p-3"}`}>
           {isCreating ? (
             <div className="space-y-2">
               <input
                 type="text"
                 value={newBranchName}
-                onChange={(e) => setNewBranchName(e.target.value)}
+                onChange={(event) => setNewBranchName(event.target.value)}
                 placeholder={t("git.newBranch")}
-                className="w-full bg-ide-panel border border-ide-border rounded-lg px-3 py-2 text-sm text-ide-text outline-none focus:border-ide-accent"
+                className={`w-full border border-ide-border bg-ide-panel px-3 text-sm text-ide-text outline-none focus:border-ide-accent ${compact ? "rounded-sm py-1.5" : "rounded-lg py-2"}`}
                 autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleCreate();
-                  if (e.key === "Escape") {
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") handleCreate();
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    event.stopPropagation();
                     setIsCreating(false);
                     setNewBranchName("");
+                    if (!isMobile) onClose();
                   }
                 }}
               />
               <div className="flex gap-2">
                 <button
+                  type="button"
                   onClick={() => {
                     setIsCreating(false);
                     setNewBranchName("");
                   }}
-                  className="flex-1 px-3 py-2 text-sm text-ide-mute hover:text-ide-text rounded-lg"
+                  className={`flex-1 text-sm text-ide-mute hover:bg-ide-panel hover:text-ide-text ${compact ? "rounded-sm px-2 py-1.5" : "rounded-lg px-3 py-2"}`}
                 >
                   {t("git.cancel")}
                 </button>
                 <button
+                  type="button"
                   onClick={handleCreate}
-                  disabled={!newBranchName.trim()}
-                  className="flex-1 px-3 py-2 text-sm bg-ide-accent text-ide-bg rounded-lg disabled:opacity-50"
+                  disabled={isLoading || !newBranchName.trim()}
+                  className={`flex-1 bg-ide-accent text-sm text-ide-bg disabled:opacity-50 ${compact ? "rounded-sm px-2 py-1.5" : "rounded-lg px-3 py-2"}`}
                 >
                   {t("git.create")}
                 </button>
@@ -213,14 +495,72 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({
             </div>
           ) : (
             <button
+              type="button"
               onClick={() => setIsCreating(true)}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-ide-accent hover:bg-ide-accent/10 rounded-lg"
+              disabled={isLoading}
+              className={`flex w-full items-center justify-center gap-2 text-sm text-ide-accent hover:bg-ide-accent/10 disabled:opacity-50 ${compact ? "rounded-sm px-2 py-1.5" : "rounded-lg px-3 py-2"}`}
             >
               <Plus size={14} />
               {t("git.createBranch")}
             </button>
           )}
         </div>
+      </>
+    );
+  };
+
+  if (!isOpen) return null;
+
+  if (!isMobile) {
+    if (!desktopAnchorReady) return null;
+    return (
+      <Popover
+        open
+        modal={false}
+        onOpenChange={(open) => {
+          if (!open) onClose();
+        }}
+      >
+        <PopoverAnchor virtualRef={virtualAnchorRef} />
+        <PopoverContent
+          side="bottom"
+          align="start"
+          sideOffset={4}
+          collisionPadding={8}
+          className="flex max-h-[min(680px,calc(100vh-1rem))] w-[min(430px,calc(100vw-1rem))] flex-col overflow-hidden border-ide-border bg-ide-bg p-0 text-ide-text shadow-xl"
+          role="dialog"
+          aria-label={t("git.branches")}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            searchInputRef.current?.focus();
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            restoreTriggerFocus();
+          }}
+        >
+          {renderSelectorContent(true)}
+        </PopoverContent>
+      </Popover>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50" onClick={onClose} role="presentation">
+      <div
+        className="flex max-h-[70vh] w-full max-w-lg flex-col rounded-t-2xl border-t border-ide-border bg-ide-bg shadow-xl animate-in slide-in-from-bottom duration-200"
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onClose();
+          }
+        }}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("git.branches")}
+      >
+        {renderSelectorContent(false)}
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/xxnuo/vibego/internal/service/blocktermmodel"
 	"github.com/xxnuo/vibego/internal/service/settings"
 	"gorm.io/gorm"
 )
@@ -43,6 +44,11 @@ func (h *SettingsHandler) List(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	for key := range all {
+		if isPrivateSettingKey(key) {
+			delete(all, key)
+		}
+	}
 	applyGitSettingDefaults(all)
 	c.JSON(http.StatusOK, all)
 }
@@ -69,6 +75,10 @@ func (h *SettingsHandler) Set(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if isPrivateSettingKey(req.Key) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "setting is managed by its owning service"})
+		return
+	}
 	if err := h.store.Set(req.Key, req.Value); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -92,6 +102,10 @@ func (h *SettingsHandler) Get(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "key is required"})
 		return
 	}
+	if isPrivateSettingKey(key) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "key not found"})
+		return
+	}
 	val, err := h.store.Get(key)
 	if err != nil {
 		if defaultValue, ok := gitSettingDefault(key); ok {
@@ -113,7 +127,8 @@ func (h *SettingsHandler) Get(c *gin.Context) {
 // @Failure 500 {object} map[string]string
 // @Router /api/settings/reset [post]
 func (h *SettingsHandler) Reset(c *gin.Context) {
-	if err := h.store.Clear(); err != nil {
+	privateKeys := append([]string{"github.access_token", "github_token", "githubToken"}, blocktermmodel.PrivateSettingKeys()...)
+	if err := h.store.ClearExcept(privateKeys...); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -126,11 +141,28 @@ func (h *SettingsHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "key is required"})
 		return
 	}
+	if isPrivateSettingKey(key) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "setting is managed by its owning service"})
+		return
+	}
 	if err := h.store.Delete(key); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func isPrivateSettingKey(key string) bool {
+	key = strings.TrimSpace(key)
+	if key == "github.access_token" || key == "github_token" || key == "githubToken" {
+		return true
+	}
+	for _, privateKey := range blocktermmodel.PrivateSettingKeys() {
+		if key == privateKey {
+			return true
+		}
+	}
+	return false
 }
 
 func applyGitSettingDefaults(values map[string]string) {

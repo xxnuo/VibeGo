@@ -15,8 +15,9 @@ import {
   X,
 } from "lucide-react";
 import React, { useCallback, useMemo, useState } from "react";
-import type { StashEntry } from "@/api/git";
+import type { GitInteractiveDiff, GitStashFile, StashEntry } from "@/api/git";
 import GitCommitComposer from "@/components/git/git-commit-composer";
+import GitStashDetail from "@/components/git/git-stash-detail";
 import { getTranslation, type Locale } from "@/lib/i18n";
 import type { GitFileNode } from "@/stores";
 
@@ -24,11 +25,17 @@ type FileSelectionType = "all" | "partial" | "none";
 
 interface GitChangesViewProps {
   groupId: string;
+  path: string;
   allFiles: GitFileNode[];
   isLoading: boolean;
   locale: Locale;
   currentBranch: string;
   stashes: StashEntry[];
+  selectedStashIndex: number | null;
+  selectedStashFile: string | null;
+  stashFiles: GitStashFile[];
+  stashDiff: GitInteractiveDiff | null;
+  stashLoading: boolean;
   conflicts: string[];
   hasRemote: boolean;
   aheadCount: number;
@@ -39,8 +46,10 @@ interface GitChangesViewProps {
   onDiscardFile: (path: string) => void;
   onConflictClick: (path: string) => void;
   onStash: (message?: string, files?: string[]) => void;
-  onStashPop: (index: number) => void;
-  onStashDrop: (index: number) => void;
+  onStashPop: (index: number, oid?: string) => void;
+  onStashDrop: (index: number, oid?: string) => void;
+  onStashSelect: (index: number | null) => void;
+  onStashFileSelect: (filePath: string | null) => void;
   onPull: () => void;
   onPush: (force?: boolean) => void;
   onFetch: () => void;
@@ -177,11 +186,17 @@ const getFilePathClassName = (selectionType: FileSelectionType) => {
 
 const GitChangesView: React.FC<GitChangesViewProps> = ({
   groupId,
+  path,
   allFiles,
   isLoading,
   locale,
   currentBranch,
   stashes,
+  selectedStashIndex,
+  selectedStashFile,
+  stashFiles,
+  stashDiff,
+  stashLoading,
   conflicts,
   hasRemote,
   aheadCount,
@@ -194,6 +209,8 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
   onStash,
   onStashPop,
   onStashDrop,
+  onStashSelect,
+  onStashFileSelect,
   onPull,
   onPush,
   onFetch,
@@ -328,7 +345,7 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
               )}
               {safeStashes.length > 0 && (
                 <button
-                  onClick={() => onStashPop(safeStashes[0].index)}
+                  onClick={() => onStashPop(safeStashes[0].index, safeStashes[0].oid)}
                   disabled={isLoading}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs text-ide-mute hover:text-ide-text hover:bg-ide-panel/80 border border-transparent hover:border-ide-border transition-all disabled:opacity-50 max-w-[150px]"
                   title={safeStashes[0].message}
@@ -419,7 +436,12 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
                       {getStatusLabel(file.status)}
                     </span>
                     <div className="flex-1 min-w-0 flex flex-col" onClick={() => onFileClick(file.path)}>
-                      <span className={getFileNameClassName(selectionType)}>{file.name}</span>
+                      <span className={getFileNameClassName(selectionType)}>
+                        {file.name}
+                        {file.submodule && (
+                          <span className="ml-1.5 text-[9px] text-ide-accent">{t("git.submodule")}</span>
+                        )}
+                      </span>
                       {file.path !== file.name && (
                         <span className={getFilePathClassName(selectionType)}>{file.path}</span>
                       )}
@@ -477,19 +499,33 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
           {showStashes && (
             <div>
               {safeStashes.map((s) => (
-                <div key={s.index} className="flex items-center gap-2 px-3 py-1.5 hover:bg-ide-accent/10 group">
+                <div
+                  key={s.index}
+                  className={`flex items-center gap-2 px-3 py-1.5 hover:bg-ide-accent/10 group ${
+                    selectedStashIndex === s.index ? "bg-ide-accent/10" : ""
+                  }`}
+                >
                   <Archive size={12} className="text-purple-400 shrink-0" />
-                  <span className="flex-1 text-[10px] text-ide-text truncate">{s.message}</span>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    className="flex-1 min-w-0 truncate text-left text-[10px] text-ide-text"
+                    onClick={() => onStashSelect(s.index)}
+                    title={s.message}
+                  >
+                    {s.message}
+                  </button>
+                  <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                     <button
                       className="px-1.5 py-0.5 text-[10px] bg-green-500/20 text-green-400 rounded hover:bg-green-500/30"
-                      onClick={() => onStashPop(s.index)}
+                      onClick={() => onStashPop(s.index, s.oid)}
+                      disabled={isLoading}
                     >
                       {t("git.pop")}
                     </button>
                     <button
                       className="px-1.5 py-0.5 text-[10px] bg-red-500/20 text-red-400 rounded hover:bg-red-500/30"
-                      onClick={() => onStashDrop(s.index)}
+                      onClick={() => onStashDrop(s.index, s.oid)}
+                      disabled={isLoading}
                     >
                       {t("git.drop")}
                     </button>
@@ -497,6 +533,24 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
                 </div>
               ))}
             </div>
+          )}
+          {selectedStashIndex !== null && (
+            <GitStashDetail
+              groupId={groupId}
+              path={path}
+              locale={locale}
+              stash={safeStashes.find((stash) => stash.index === selectedStashIndex) || null}
+              files={stashFiles}
+              selectedFile={selectedStashFile}
+              diff={stashDiff}
+              loading={stashLoading}
+              disabled={isLoading}
+              compact
+              onClose={() => onStashSelect(null)}
+              onFileSelect={onStashFileSelect}
+              onPop={onStashPop}
+              onDrop={onStashDrop}
+            />
           )}
         </div>
       )}

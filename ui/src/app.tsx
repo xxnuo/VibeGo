@@ -4,6 +4,7 @@ import { fileApi } from "@/api/file";
 import { DirectoryPicker, NewPageMenu, ProjectMenu } from "@/components/common";
 import { AppFrame, NewGroupMenu } from "@/components/frame";
 import { getStoredAuthKey, LoginPage, setStoredAuthKey } from "@/components/login-page";
+import BlockTermWorkspaceNavigator from "@/components/terminal/blockterm-workspace-navigator";
 import { Toaster } from "@/components/ui/sonner";
 import { isCustomFontValue, resolveFontFamily } from "@/lib/fonts";
 import { useTranslation } from "@/lib/i18n";
@@ -22,6 +23,7 @@ import {
 } from "@/stores";
 import type { GenericGroup, ToolGroup } from "@/stores/frame-store";
 import * as gitStoreModule from "@/stores/git-store";
+import { enqueueWorkspaceMutation } from "@/stores/session-store";
 import "@/pages";
 
 const App: React.FC = () => {
@@ -57,7 +59,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     initSettings();
-    initTerminalCleanup();
+    initTerminalCleanup(enqueueWorkspaceMutation);
   }, [initSettings]);
 
   useEffect(() => {
@@ -94,8 +96,16 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!authChecked || needLogin) return;
     const init = async () => {
+      const initializationRevision = useSessionStore.getState().workspaceRevision;
       const hasSession = await initSession();
-      if (!hasSession) {
+      const sessionState = useSessionStore.getState();
+      if (
+        !hasSession &&
+        sessionState.workspaceRevision === initializationRevision &&
+        sessionState.currentSessionId === null &&
+        !sessionState.loading &&
+        sessionState.sessionInitialized
+      ) {
         initDefaultGroups();
       }
     };
@@ -344,6 +354,7 @@ const App: React.FC = () => {
       >
         {renderContent()}
       </AppFrame>
+      <BlockTermWorkspaceNavigator />
       <ProjectMenu
         isOpen={isMenuOpen}
         onClose={() => setMenuOpen(false)}

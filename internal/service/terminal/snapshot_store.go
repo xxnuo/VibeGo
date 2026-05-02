@@ -48,7 +48,7 @@ func (s *DBTerminalSnapshotStore) Load(sessionID string) (*TerminalSnapshot, err
 	}
 
 	var history model.TerminalHistory
-	if err := s.db.Where("session_id = ?", sessionID).Order("created_at DESC").First(&history).Error; err != nil {
+	if err := s.db.Where("session_id = ?", sessionID).Order("created_at DESC").Order("id DESC").First(&history).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return &TerminalSnapshot{
 				SessionID:   sessionID,
@@ -64,10 +64,18 @@ func (s *DBTerminalSnapshotStore) Load(sessionID string) (*TerminalSnapshot, err
 		return nil, err
 	}
 
+	cursor := history.Cursor
+	// Rows written before the absolute cursor column was introduced only have
+	// the retained byte count. Treat those rows as legacy snapshots rather
+	// than returning an apparently zero cursor.
+	if cursor == 0 && len(history.Data) > 0 {
+		cursor = uint64(len(history.Data))
+	}
+
 	return &TerminalSnapshot{
 		SessionID:   sessionID,
 		Data:        history.Data,
-		Cursor:      uint64(len(history.Data)),
+		Cursor:      cursor,
 		Cols:        session.Cols,
 		Rows:        session.Rows,
 		Status:      session.Status,
@@ -89,17 +97,19 @@ func (s *DBTerminalSnapshotStore) Save(snapshot *TerminalSnapshot) error {
 	}
 
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		if len(snapshot.Data) > 0 {
-			if err := tx.Where("session_id = ?", snapshot.SessionID).Delete(&model.TerminalHistory{}).Error; err != nil {
-				return err
-			}
-			if err := tx.Create(&model.TerminalHistory{
-				SessionID: snapshot.SessionID,
-				Data:      snapshot.Data,
-				CreatedAt: now,
-			}).Error; err != nil {
-				return err
-			}
+		// Keep one complete snapshot per session, including an empty snapshot.
+		// Persisting the cursor separately preserves the absolute offset after
+		// the ring is reset or all retained bytes have been evicted.
+		if err := tx.Where("session_id = ?", snapshot.SessionID).Delete(&model.TerminalHistory{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&model.TerminalHistory{
+			SessionID: snapshot.SessionID,
+			Data:      snapshot.Data,
+			Cursor:    snapshot.Cursor,
+			CreatedAt: now,
+		}).Error; err != nil {
+			return err
 		}
 
 		updates := map[string]any{

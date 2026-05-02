@@ -1,5 +1,6 @@
 import { GitGraph } from "lucide-react";
 import React, { useCallback } from "react";
+import type { GitDiff, GitSubmoduleStatus } from "@/api/git";
 import { ConflictView, DiffView, GitView } from "@/components/git";
 import { registerPage } from "@/pages/registry";
 import type { PageViewProps } from "@/pages/types";
@@ -14,6 +15,23 @@ interface GitDiffTabPayload {
   filePath?: string;
   repoPath?: string;
   allowSelection?: boolean;
+  submodule?: GitSubmoduleStatus;
+  metadata?: Pick<
+    GitDiff,
+    | "oldSize"
+    | "newSize"
+    | "oldBinary"
+    | "newBinary"
+    | "oldTruncated"
+    | "newTruncated"
+    | "binary"
+    | "large"
+    | "kind"
+    | "patch"
+    | "capability"
+    | "submodule"
+    | "image"
+  >;
 }
 
 const GitViewPage: React.FC<PageViewProps> = ({ context }) => {
@@ -27,7 +45,17 @@ const GitViewPage: React.FC<PageViewProps> = ({ context }) => {
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
   const handleGitDiff = useCallback(
-    ({ original, modified, title, filename, filePath, repoPath, allowSelection }: GitDiffTabPayload) => {
+    ({
+      original,
+      modified,
+      title,
+      filename,
+      filePath,
+      repoPath,
+      allowSelection,
+      submodule,
+      metadata,
+    }: GitDiffTabPayload) => {
       openPreviewTab({
         id: `diff-${repoPath || context.path || "repo"}-${filePath || filename || title}`,
         title,
@@ -39,6 +67,8 @@ const GitViewPage: React.FC<PageViewProps> = ({ context }) => {
           filePath,
           repoPath,
           allowSelection,
+          submodule,
+          metadata,
         },
       });
     },
@@ -86,6 +116,8 @@ const GitViewPage: React.FC<PageViewProps> = ({ context }) => {
         filePath={(activeTab.data.filePath as string) || undefined}
         repoPath={(activeTab.data.repoPath as string) || pagePath}
         allowSelection={Boolean(activeTab.data.allowSelection)}
+        submodule={activeTab.data.submodule as GitSubmoduleStatus | undefined}
+        metadata={activeTab.data.metadata as GitDiffTabPayload["metadata"]}
       />
     );
   }
@@ -96,9 +128,9 @@ const GitViewPage: React.FC<PageViewProps> = ({ context }) => {
         repoPath={(activeTab.data.repoPath as string) || ""}
         filePath={(activeTab.data.filePath as string) || ""}
         locale={locale}
-        onResolve={async (content) => {
+        onResolve={async (content, hash, mode = "manual") => {
           const { resolveConflict } = getOrCreateGitStore(context.groupId).getState();
-          await resolveConflict(activeTab.data?.filePath as string, content);
+          return resolveConflict(activeTab.data?.filePath as string, content, hash, mode);
         }}
         onCancel={() => {
           removeCurrentTab(activeTab.id);

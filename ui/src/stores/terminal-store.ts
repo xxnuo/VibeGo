@@ -1,15 +1,19 @@
 import { create } from "zustand";
-import type { TerminalCapabilities } from "@/api/terminal";
+import { type TerminalCapabilities, terminalApi } from "@/api/terminal";
+import { enqueueWorkspaceMutation } from "@/stores/workspace-mutation-queue";
 
 export type TerminalStatus = "running" | "exited" | "closed";
 
 export interface TerminalSession {
   id: string;
   name: string;
+  tabColor?: string;
+  tabIcon?: string;
   pinned?: boolean;
   status?: TerminalStatus;
   parentId?: string;
   runtimeType?: string;
+  sshProfileId?: string;
   readonly?: boolean;
   capabilities?: TerminalCapabilities;
   cwd?: string;
@@ -37,6 +41,136 @@ export interface TerminalLeaf {
 }
 
 export type LayoutNode = SplitNode | TerminalLeaf;
+
+export interface ReorderTerminalPagesOptions {
+  workspaceSessionId?: string;
+}
+
+const terminalReorderMutationVersions = new Map<string, number>();
+const terminalReorderStates = new Map<string, { pendingCount: number; confirmedOrder: string[] }>();
+let terminalStoreMutationEpoch = 0;
+
+function getTerminalReorderMutationKey(workspaceSessionId: string, groupId: string): string {
+  return `${workspaceSessionId}\u0000${groupId}`;
+}
+
+function sameTerminalOrder(left: readonly TerminalSession[], right: readonly TerminalSession[]): boolean {
+  return left.length === right.length && left.every((terminal, index) => terminal.id === right[index]?.id);
+}
+
+function restoreTerminalOrder(
+  current: readonly TerminalSession[],
+  previousOrder: readonly { id: string }[]
+): TerminalSession[] {
+  const rank = new Map(previousOrder.map((terminal, index) => [terminal.id, index]));
+  return current
+    .map((terminal, index) => ({ terminal, index }))
+    .sort((left, right) => {
+      const leftRank = rank.get(left.terminal.id);
+      const rightRank = rank.get(right.terminal.id);
+      if (leftRank !== undefined && rightRank !== undefined) return leftRank - rightRank;
+      if (leftRank !== undefined) return -1;
+      if (rightRank !== undefined) return 1;
+      return left.index - right.index;
+    })
+    .map(({ terminal }) => terminal);
+}
+
+function resolveTerminalRootId(terminal: TerminalSession, terminalsById: ReadonlyMap<string, TerminalSession>): string {
+  let current = terminal;
+  const visited = new Set<string>();
+  while (current.parentId && terminalsById.has(current.parentId) && !visited.has(current.id)) {
+    visited.add(current.id);
+    current = terminalsById.get(current.parentId) as TerminalSession;
+  }
+  return current.id;
+}
+
+function reorderTerminalInventory(
+  terminals: readonly TerminalSession[],
+  fromId: string,
+  toId: string
+): TerminalSession[] {
+  if (fromId === toId) return [...terminals];
+  const terminalsById = new Map(terminals.map((terminal) => [terminal.id, terminal]));
+  const from = terminalsById.get(fromId);
+  const to = terminalsById.get(toId);
+  if (!from || !to) return [...terminals];
+
+  const fromRootId = resolveTerminalRootId(from, terminalsById);
+  const toRootId = resolveTerminalRootId(to, terminalsById);
+  if (fromRootId === toRootId) return [...terminals];
+
+  const terminalsByRoot = new Map<string, TerminalSession[]>();
+  const rootOrder: string[] = [];
+  for (const terminal of terminals) {
+    const rootId = resolveTerminalRootId(terminal, terminalsById);
+    if (!terminalsByRoot.has(rootId)) {
+      terminalsByRoot.set(rootId, []);
+      rootOrder.push(rootId);
+    }
+    terminalsByRoot.get(rootId)?.push(terminal);
+  }
+
+  const fromIndex = rootOrder.indexOf(fromRootId);
+  const toIndex = rootOrder.indexOf(toRootId);
+  if (fromIndex < 0 || toIndex < 0) return [...terminals];
+  const nextRootOrder = [...rootOrder];
+  const [movedRootId] = nextRootOrder.splice(fromIndex, 1);
+  nextRootOrder.splice(toIndex, 0, movedRootId);
+  return nextRootOrder.flatMap((rootId) => terminalsByRoot.get(rootId) || []);
+}
+
+function buildTerminalReorderWorkspaceInventory(
+  workspaceSessionId: string,
+  terminalsByGroup: Record<string, TerminalSession[]>,
+  targetGroupId: string,
+  targetOrder: readonly TerminalSession[]
+): Record<string, TerminalSession[]> {
+  const result = Object.fromEntries(
+    Object.entries(terminalsByGroup).map(([groupId, terminals]) => {
+      if (groupId === targetGroupId) {
+        return [groupId, restoreTerminalOrder(terminals, targetOrder)];
+      }
+      const pendingState = terminalReorderStates.get(getTerminalReorderMutationKey(workspaceSessionId, groupId));
+      if (pendingState?.pendingCount) {
+        return [
+          groupId,
+          restoreTerminalOrder(
+            terminals,
+            pendingState.confirmedOrder.map((id) => ({ id }))
+          ),
+        ];
+      }
+      return [groupId, terminals];
+    })
+  );
+  if (!(targetGroupId in result)) {
+    result[targetGroupId] = [];
+  }
+  return result;
+}
+
+/**
+ * Reapply an in-flight optimistic order after a remote terminal list is
+ * reconciled. The list response carries no ordering contract, so a late
+ * refresh must not replace a drag operation that is still awaiting sync.
+ */
+export function preservePendingTerminalReorder(
+  workspaceSessionId: string,
+  currentTerminalsByGroup: Record<string, TerminalSession[]>,
+  nextTerminalsByGroup: Record<string, TerminalSession[]>
+): Record<string, TerminalSession[]> {
+  if (!workspaceSessionId) return nextTerminalsByGroup;
+  const result = { ...nextTerminalsByGroup };
+  for (const [groupId, nextTerminals] of Object.entries(result)) {
+    const pendingState = terminalReorderStates.get(getTerminalReorderMutationKey(workspaceSessionId, groupId));
+    if (!pendingState?.pendingCount) continue;
+    const optimistic = currentTerminalsByGroup[groupId] || pendingState.confirmedOrder.map((id) => ({ id, name: id }));
+    result[groupId] = restoreTerminalOrder(nextTerminals, optimistic);
+  }
+  return result;
+}
 
 function findTerminalIds(node: LayoutNode): string[] {
   if (node.type === "terminal") return [node.terminalId];
@@ -122,6 +256,12 @@ interface TerminalState {
   getFocusedId: (groupId: string) => string | null;
   setFocusedId: (groupId: string, terminalId: string | null) => void;
   getTerminalPageIds: (groupId: string, terminalId: string) => string[];
+  reorderTerminalPages: (
+    groupId: string,
+    fromId: string,
+    toId: string,
+    options?: ReorderTerminalPagesOptions
+  ) => Promise<boolean>;
   splitTerminal: (rootId: string, targetPaneId: string, newTerminalId: string, direction: SplitDirection) => void;
   closeFromLayout: (groupId: string, terminalId: string) => void;
   removeTerminalPage: (groupId: string, terminalId: string) => void;
@@ -345,6 +485,101 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     return layout ? findTerminalIds(layout) : [rootId];
   },
 
+  reorderTerminalPages: async (groupId, fromId, toId, options) => {
+    const previous = get().terminalsByGroup[groupId] || [];
+    const optimistic = reorderTerminalInventory(previous, fromId, toId);
+    if (sameTerminalOrder(previous, optimistic)) return false;
+
+    const workspaceSessionId = options?.workspaceSessionId?.trim() || "";
+    // A detached/local-only terminal still needs the optimistic reorder, but
+    // there is no durable mutation to track or roll back.
+    if (!workspaceSessionId) {
+      set((state) => ({
+        terminalsByGroup: { ...state.terminalsByGroup, [groupId]: optimistic },
+      }));
+      return true;
+    }
+
+    const mutationKey = getTerminalReorderMutationKey(workspaceSessionId, groupId);
+    const mutationVersion = (terminalReorderMutationVersions.get(mutationKey) || 0) + 1;
+    const mutationEpoch = terminalStoreMutationEpoch;
+    let mutationState = terminalReorderStates.get(mutationKey);
+    if (!mutationState || mutationState.pendingCount === 0) {
+      mutationState = { pendingCount: 0, confirmedOrder: previous.map((terminal) => terminal.id) };
+      terminalReorderStates.set(mutationKey, mutationState);
+    }
+    mutationState.pendingCount += 1;
+    terminalReorderMutationVersions.set(mutationKey, mutationVersion);
+    set((state) => ({
+      terminalsByGroup: { ...state.terminalsByGroup, [groupId]: optimistic },
+    }));
+
+    try {
+      const savedOrder = await enqueueWorkspaceMutation(async () => {
+        if (terminalStoreMutationEpoch !== mutationEpoch) {
+          throw new Error("terminal reorder superseded");
+        }
+        const currentState = get();
+        const terminalsByGroup = buildTerminalReorderWorkspaceInventory(
+          workspaceSessionId,
+          currentState.terminalsByGroup,
+          groupId,
+          optimistic
+        );
+        const assignments = Object.entries(terminalsByGroup).flatMap(([ownerGroupId, terminals]) =>
+          terminals.map((terminal) => ({
+            id: terminal.id,
+            group_id: ownerGroupId,
+            parent_id: terminal.parentId,
+          }))
+        );
+        await terminalApi.syncWorkspace(workspaceSessionId, assignments, {
+          terminalsByGroup,
+          activeTerminalByGroup: currentState.activeIdByGroup,
+          listManagerOpenByGroup: currentState.listManagerOpenByGroup,
+          terminalLayouts: currentState.terminalLayouts,
+          focusedIdByGroup: currentState.focusedIdByGroup,
+        });
+        if (terminalStoreMutationEpoch !== mutationEpoch) {
+          throw new Error("terminal reorder superseded");
+        }
+        const savedOrder = terminalsByGroup[groupId].map((terminal) => terminal.id);
+        mutationState.confirmedOrder = savedOrder;
+        return savedOrder;
+      });
+      if (terminalStoreMutationEpoch !== mutationEpoch) return false;
+      mutationState.confirmedOrder = savedOrder;
+      return true;
+    } catch (error) {
+      const current = get().terminalsByGroup[groupId] || [];
+      if (
+        terminalStoreMutationEpoch === mutationEpoch &&
+        terminalReorderMutationVersions.get(mutationKey) === mutationVersion &&
+        sameTerminalOrder(current, optimistic)
+      ) {
+        set((state) => ({
+          terminalsByGroup: {
+            ...state.terminalsByGroup,
+            [groupId]: restoreTerminalOrder(
+              state.terminalsByGroup[groupId] || [],
+              mutationState.confirmedOrder.map((id) => ({ id }))
+            ),
+          },
+        }));
+        throw error;
+      }
+      return false;
+    } finally {
+      mutationState.pendingCount -= 1;
+      if (mutationState.pendingCount === 0 && terminalReorderStates.get(mutationKey) === mutationState) {
+        terminalReorderStates.delete(mutationKey);
+        if (terminalReorderMutationVersions.get(mutationKey) === mutationVersion) {
+          terminalReorderMutationVersions.delete(mutationKey);
+        }
+      }
+    }
+  },
+
   splitTerminal: (rootId, targetPaneId, newTerminalId, direction) =>
     set((s) => {
       const layout = s.terminalLayouts[rootId];
@@ -445,12 +680,16 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     return t?.parentId || terminalId;
   },
 
-  reset: () =>
+  reset: () => {
+    terminalStoreMutationEpoch += 1;
+    terminalReorderMutationVersions.clear();
+    terminalReorderStates.clear();
     set({
       terminalsByGroup: {},
       activeIdByGroup: {},
       listManagerOpenByGroup: {},
       terminalLayouts: {},
       focusedIdByGroup: {},
-    }),
+    });
+  },
 }));

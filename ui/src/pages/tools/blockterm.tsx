@@ -17,7 +17,7 @@ registerPage({
   category: "tool",
   order: 15,
   singleton: true,
-  newPageDefaultVisible: false,
+  newPageDefaultVisible: true,
   tags: [{ labelKey: "pageTag.test" }],
   View: BlockTermView,
 });

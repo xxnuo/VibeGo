@@ -3,7 +3,7 @@ import { fileApi } from "@/api/file";
 import { type SessionInfo, sessionApi, type WorkspaceState } from "@/api/session";
 import { settingsApi } from "@/api/settings";
 import { terminalApi } from "@/api/terminal";
-import { cleanupAllTerminals } from "@/services/terminal-cleanup-service";
+import { detachAllTerminals } from "@/services/terminal-cleanup-service";
 import {
   type FileManagerState,
   getOrCreateFileManagerStore,
@@ -16,20 +16,58 @@ import {
 } from "@/stores/file-manager-store";
 import { type GenericGroup, type GroupPage, type ToolGroup, useFrameStore } from "@/stores/frame-store";
 import * as gitStoreModule from "@/stores/git-store";
-import { type LayoutNode, type TerminalSession, useTerminalStore } from "@/stores/terminal-store";
+import {
+  createWorkspaceSaveLatch,
+  getTerminalWorkspaceGroupIds,
+  sanitizeTerminalWorkspaceState,
+  saveLatestWorkspaceSnapshot,
+  type WorkspaceSaveLatch,
+} from "@/stores/session-workspace-guard";
+import { preservePendingTerminalReorder, type TerminalSession, useTerminalStore } from "@/stores/terminal-store";
+import { enqueueWorkspaceMutation } from "@/stores/workspace-mutation-queue";
+
+export { enqueueWorkspaceMutation } from "@/stores/workspace-mutation-queue";
 
 const CURRENT_SESSION_SETTING_KEY = "workspaceCurrentSessionId";
 
 let autoSaveUnsub: (() => void) | null = null;
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let fileManagerSyncTimer: ReturnType<typeof setTimeout> | null = null;
+let storedSessionWriteChain: Promise<void> = Promise.resolve();
+let workspaceContentMutationRevision = 0;
+let pendingWorkspaceTransitionSave: WorkspaceSaveLatch | null = null;
+let sessionListRequestSequence = 0;
+let sessionListMutationRevision = 0;
+let sessionReorderMutationVersion = 0;
+let sessionReorderState: { pendingCount: number; confirmedOrder: string[] } | null = null;
+const sessionRenameMutationVersions = new Map<string, number>();
+const sessionRenameStates = new Map<
+  string,
+  {
+    pendingCount: number;
+    confirmedName: string | null;
+    confirmedOverride: string | null;
+    optimisticName: string;
+  }
+>();
+const deletedWorkspaceSessionIds = new Set<string>();
+
+interface WorkspaceOperationGuard {
+  revision: number;
+  expectedSessionId?: string | null;
+  allowLoading?: boolean;
+}
 
 export type SessionState = WorkspaceState;
 
 interface SessionStoreState {
   currentSessionId: string | null;
+  currentWorkspaceNameOverride: string | null;
   sessions: SessionInfo[];
   loading: boolean;
+  sessionsLoading: boolean;
+  sessionInitialized: boolean;
+  workspaceRevision: number;
   error: string | null;
 
   loadSessions: () => Promise<void>;
@@ -40,13 +78,35 @@ interface SessionStoreState {
   closeFolderGroup: (groupId: string) => Promise<void>;
   switchSession: (id: string) => Promise<void>;
   refreshCurrentSession: () => Promise<void>;
-  saveCurrentSession: () => Promise<void>;
+  saveCurrentSession: (options?: {
+    revision?: number;
+    allowLoading?: boolean;
+    snapshot?: SessionState;
+  }) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
   clearAllSessions: () => Promise<void>;
   renameSession: (id: string, name: string) => Promise<void>;
+  reorderSessions: (ids: string[]) => Promise<boolean>;
   getCurrentSessionId: () => string | null;
+  getWorkspaceRevision: () => number;
   setCurrentSessionId: (id: string | null) => void;
   initAutoSave: () => void;
+}
+
+/**
+ * Returns whether an async workspace operation still belongs to the current
+ * workspace transition. A caller may additionally require the workspace to
+ * be idle before publishing a delayed write.
+ */
+export function isCurrentWorkspaceTransition(
+  revision: number,
+  expectedSessionId?: string | null,
+  requireIdle = false
+): boolean {
+  const state = useSessionStore.getState();
+  if (state.workspaceRevision !== revision) return false;
+  if (expectedSessionId !== undefined && state.currentSessionId !== expectedSessionId) return false;
+  return !requireIdle || !state.loading;
 }
 
 async function getStoredSessionId(): Promise<string | null> {
@@ -59,18 +119,45 @@ async function getStoredSessionId(): Promise<string | null> {
   }
 }
 
-async function setStoredSessionId(id: string | null): Promise<void> {
-  try {
-    if (id) {
-      await settingsApi.set(CURRENT_SESSION_SETTING_KEY, id);
-      return;
-    }
-    await settingsApi.delete(CURRENT_SESSION_SETTING_KEY);
-  } catch {}
+function isWorkspaceOperationCurrent(guard?: WorkspaceOperationGuard): boolean {
+  if (!guard) return true;
+  return isCurrentWorkspaceTransition(guard.revision, guard.expectedSessionId, !guard.allowLoading);
+}
+
+function markSessionListMutated(): void {
+  sessionListMutationRevision += 1;
+}
+
+function markWorkspaceContentMutated(): void {
+  workspaceContentMutationRevision += 1;
+}
+
+function clearPendingWorkspaceTransitionSave(latch: WorkspaceSaveLatch | null): void {
+  if (latch && pendingWorkspaceTransitionSave === latch) {
+    pendingWorkspaceTransitionSave = null;
+  }
+}
+
+async function setStoredSessionId(id: string | null, guard?: WorkspaceOperationGuard): Promise<void> {
+  const write = storedSessionWriteChain
+    .catch(() => {})
+    .then(async () => {
+      if (!isWorkspaceOperationCurrent(guard)) return;
+      try {
+        if (id) {
+          await settingsApi.set(CURRENT_SESSION_SETTING_KEY, id);
+          return;
+        }
+        await settingsApi.delete(CURRENT_SESSION_SETTING_KEY);
+      } catch {}
+    });
+  storedSessionWriteChain = write.catch(() => {});
+  await write;
 }
 
 function createEmptySessionState(): SessionState {
   return {
+    workspaceNameOverride: null,
     openGroups: [],
     openTools: [],
     taskbarOrder: [],
@@ -86,11 +173,47 @@ function createEmptySessionState(): SessionState {
 }
 
 function hasRestorableSessionContent(state: SessionState): boolean {
-  return state.openGroups.length > 0 || state.openTools.length > 0 || state.settingsOpen;
+  return (
+    state.workspaceNameOverride != null ||
+    (state.openGroups?.length ?? 0) > 0 ||
+    (state.openTools?.length ?? 0) > 0 ||
+    state.settingsOpen
+  );
+}
+
+function normalizeWorkspaceNameOverride(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized || null;
+}
+
+function normalizeWorkspaceRecord<T>(value: unknown): Record<string, T> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, T>) : {};
+}
+
+export function normalizeSessionWorkspaceState(state: SessionState): SessionState {
+  return {
+    workspaceNameOverride: normalizeWorkspaceNameOverride(state?.workspaceNameOverride),
+    openGroups: Array.isArray(state?.openGroups) ? state.openGroups : [],
+    openTools: Array.isArray(state?.openTools) ? state.openTools : [],
+    taskbarOrder: Array.isArray(state?.taskbarOrder) ? state.taskbarOrder : [],
+    terminalsByGroup: normalizeWorkspaceRecord<TerminalSession[]>(state?.terminalsByGroup),
+    activeTerminalByGroup: normalizeWorkspaceRecord<string | null>(state?.activeTerminalByGroup),
+    listManagerOpenByGroup: normalizeWorkspaceRecord<boolean>(state?.listManagerOpenByGroup),
+    terminalLayouts: normalizeWorkspaceRecord<SessionState["terminalLayouts"][string]>(state?.terminalLayouts),
+    focusedIdByGroup: normalizeWorkspaceRecord<string | null>(state?.focusedIdByGroup),
+    settingsOpen: state?.settingsOpen === true,
+    activeGroupId: typeof state?.activeGroupId === "string" ? state.activeGroupId : null,
+    fileManagerByGroup: normalizeWorkspaceRecord<SessionState["fileManagerByGroup"][string]>(state?.fileManagerByGroup),
+  };
 }
 
 function getFilesPagePath(group: { pages: GroupPage[] }): string {
   return group.pages.find((page) => page.type === "files")?.path || ".";
+}
+
+function isFolderWorkspaceGroup(group: GenericGroup): boolean {
+  return group.pages.some((page) => Boolean(page.path));
 }
 
 function getFolderName(path: string): string {
@@ -248,112 +371,15 @@ function buildTerminalWorkspaceAssignments(state: Pick<SessionState, "terminalsB
   );
 }
 
-function collectLayoutTerminalIds(node: LayoutNode): string[] {
-  if (node.type === "terminal") {
-    return [node.terminalId];
-  }
-  return [...collectLayoutTerminalIds(node.first), ...collectLayoutTerminalIds(node.second)];
-}
-
-function sanitizeLayoutNode(node: LayoutNode, validTerminalIDs: Set<string>): LayoutNode | null {
-  if (node.type === "terminal") {
-    return validTerminalIDs.has(node.terminalId) ? node : null;
-  }
-
-  const first = sanitizeLayoutNode(node.first, validTerminalIDs);
-  const second = sanitizeLayoutNode(node.second, validTerminalIDs);
-
-  if (!first && !second) {
-    return null;
-  }
-  if (!first) {
-    return second;
-  }
-  if (!second) {
-    return first;
-  }
-
-  return {
-    ...node,
-    first,
-    second,
-  };
-}
-
-function sanitizeTerminalWorkspaceState(
-  state: Pick<
-    SessionState,
-    "terminalsByGroup" | "activeTerminalByGroup" | "listManagerOpenByGroup" | "terminalLayouts" | "focusedIdByGroup"
-  >
-) {
-  const terminalsByGroup: Record<string, TerminalSession[]> = {};
-  const validTerminalIDs = new Set<string>();
-
-  for (const [groupId, terminals] of Object.entries(state.terminalsByGroup)) {
-    const deduped = new Map<string, TerminalSession>();
-    for (const terminal of terminals) {
-      if (!terminal.id || deduped.has(terminal.id)) {
-        continue;
-      }
-      deduped.set(terminal.id, { ...terminal });
-      validTerminalIDs.add(terminal.id);
-    }
-
-    const groupTerminalIDs = new Set(deduped.keys());
-    terminalsByGroup[groupId] = Array.from(deduped.values()).map((terminal) => ({
-      ...terminal,
-      parentId:
-        terminal.parentId && terminal.parentId !== terminal.id && groupTerminalIDs.has(terminal.parentId)
-          ? terminal.parentId
-          : undefined,
-    }));
-  }
-
-  const terminalLayouts: Record<string, LayoutNode> = {};
-  for (const [rootId, layout] of Object.entries(state.terminalLayouts)) {
-    const sanitized = sanitizeLayoutNode(layout, validTerminalIDs);
-    if (!sanitized) {
-      continue;
-    }
-    const layoutTerminalIDs = collectLayoutTerminalIds(sanitized);
-    if (layoutTerminalIDs.length === 0) {
-      continue;
-    }
-    const nextRootId = validTerminalIDs.has(rootId) ? rootId : layoutTerminalIDs[0];
-    terminalLayouts[nextRootId] = sanitized;
-  }
-
-  const activeTerminalByGroup: Record<string, string | null> = {};
-  const focusedIdByGroup: Record<string, string | null> = {};
-  const listManagerOpenByGroup: Record<string, boolean> = {};
-
-  for (const [groupId, terminals] of Object.entries(terminalsByGroup)) {
-    const groupTerminalIDs = new Set(terminals.map((terminal) => terminal.id));
-    const activeId = state.activeTerminalByGroup[groupId];
-    const focusedId = state.focusedIdByGroup[groupId];
-    activeTerminalByGroup[groupId] = activeId && groupTerminalIDs.has(activeId) ? activeId : null;
-    focusedIdByGroup[groupId] = focusedId && groupTerminalIDs.has(focusedId) ? focusedId : null;
-    listManagerOpenByGroup[groupId] =
-      terminals.filter((terminal) => !terminal.parentId).length === 0 ? true : !!state.listManagerOpenByGroup[groupId];
-  }
-
-  return {
-    terminalsByGroup,
-    activeTerminalByGroup,
-    listManagerOpenByGroup,
-    terminalLayouts,
-    focusedIdByGroup,
-  };
-}
-
-export async function syncTerminalWorkspaceState(
+async function syncTerminalWorkspaceStateNow(
   sessionID: string,
   state?: Pick<
     SessionState,
     "terminalsByGroup" | "activeTerminalByGroup" | "listManagerOpenByGroup" | "terminalLayouts" | "focusedIdByGroup"
-  >
+  >,
+  guard?: WorkspaceOperationGuard
 ): Promise<void> {
-  if (!sessionID) {
+  if (!sessionID || deletedWorkspaceSessionIds.has(sessionID) || !isWorkspaceOperationCurrent(guard)) {
     return;
   }
 
@@ -371,7 +397,19 @@ export async function syncTerminalWorkspaceState(
     >);
 
   const sanitized = sanitizeTerminalWorkspaceState(sourceState);
+  if (!isWorkspaceOperationCurrent(guard)) return;
   await terminalApi.syncWorkspace(sessionID, buildTerminalWorkspaceAssignments(sanitized), sanitized);
+}
+
+export function syncTerminalWorkspaceState(
+  sessionID: string,
+  state?: Pick<
+    SessionState,
+    "terminalsByGroup" | "activeTerminalByGroup" | "listManagerOpenByGroup" | "terminalLayouts" | "focusedIdByGroup"
+  >,
+  guard?: WorkspaceOperationGuard
+): Promise<void> {
+  return enqueueWorkspaceMutation(() => syncTerminalWorkspaceStateNow(sessionID, state, guard));
 }
 
 function buildFileManagerWorkspaceState(): SessionState["fileManagerByGroup"] {
@@ -389,6 +427,7 @@ function buildFileManagerWorkspaceState(): SessionState["fileManagerByGroup"] {
 
 function buildSessionWorkspacePatch(state: SessionState) {
   return {
+    workspaceNameOverride: normalizeWorkspaceNameOverride(state.workspaceNameOverride),
     openGroups: state.openGroups,
     openTools: state.openTools,
     taskbarOrder: state.taskbarOrder,
@@ -398,14 +437,73 @@ function buildSessionWorkspacePatch(state: SessionState) {
   };
 }
 
+async function saveSessionStateNow(
+  sessionID: string,
+  state: SessionState,
+  guard?: WorkspaceOperationGuard,
+  ignoreGuardAfterStart = false,
+  rethrowError = false
+): Promise<void> {
+  const shouldContinue = () => ignoreGuardAfterStart || isWorkspaceOperationCurrent(guard);
+  if (!sessionID || deletedWorkspaceSessionIds.has(sessionID) || !shouldContinue()) return;
+
+  const sessionName =
+    state.workspaceNameOverride == null && state.openGroups.length > 0
+      ? getAutoSessionName(state.openGroups)
+      : undefined;
+
+  try {
+    if (sessionName) {
+      await sessionApi.update(sessionID, { name: sessionName });
+      markSessionListMutated();
+      if (!shouldContinue()) return;
+    }
+
+    await sessionApi.patchWorkspace(sessionID, buildSessionWorkspacePatch(state));
+    if (!shouldContinue()) return;
+
+    await syncTerminalWorkspaceStateNow(
+      sessionID,
+      {
+        terminalsByGroup: state.terminalsByGroup,
+        activeTerminalByGroup: state.activeTerminalByGroup,
+        listManagerOpenByGroup: state.listManagerOpenByGroup,
+        terminalLayouts: state.terminalLayouts,
+        focusedIdByGroup: state.focusedIdByGroup,
+      },
+      ignoreGuardAfterStart ? undefined : guard
+    );
+    if (!shouldContinue()) return;
+
+    if (sessionName) {
+      useSessionStore.setState((store) => ({
+        sessions: updateSessionNameInList(store.sessions, sessionID, sessionName),
+      }));
+    }
+  } catch (e) {
+    if (isWorkspaceOperationCurrent(guard)) {
+      useSessionStore.setState({ error: (e as Error).message });
+    }
+    if (rethrowError) throw e;
+  }
+}
+
 function reconcileRemoteTerminals(
   localTerminalsByGroup: Record<string, TerminalSession[]>,
-  remoteTerminals: Awaited<ReturnType<typeof terminalApi.list>>["terminals"]
+  remoteTerminals: Awaited<ReturnType<typeof terminalApi.list>>["terminals"],
+  options?: {
+    markMissingExitedIds?: ReadonlySet<string>;
+    ignoredRemoteIds?: ReadonlySet<string>;
+    validGroupIds?: ReadonlySet<string>;
+  }
 ): Record<string, TerminalSession[]> {
   const result: Record<string, TerminalSession[]> = {};
   const seenRemoteIds = new Set(remoteTerminals.map((terminal) => terminal.id));
 
   for (const [groupId, terminals] of Object.entries(localTerminalsByGroup)) {
+    if (options?.validGroupIds && !options.validGroupIds.has(groupId)) {
+      continue;
+    }
     result[groupId] = terminals.map((terminal) => {
       const remote = remoteTerminals.find((item) => item.id === terminal.id);
       if (remote) {
@@ -414,18 +512,24 @@ function reconcileRemoteTerminals(
           capabilities: remote.capabilities || terminal.capabilities,
           currentCwd: remote.current_cwd || terminal.currentCwd,
           name: remote.name || terminal.name,
+          tabColor: remote.tab_color ?? terminal.tabColor,
+          tabIcon: remote.tab_icon ?? terminal.tabIcon,
           readonly: remote.readonly ?? terminal.readonly,
           runtimeType: remote.runtime_type || terminal.runtimeType,
+          sshProfileId: remote.ssh_profile_id || terminal.sshProfileId,
           shellIntegration: remote.shell_integration ?? terminal.shellIntegration,
           shellState: remote.shell_state || terminal.shellState,
           shellType: remote.shell_type || terminal.shellType,
           lastCommand: remote.last_command || terminal.lastCommand,
           lastCommandExitCode: remote.last_command_exit_code ?? terminal.lastCommandExitCode,
           status: remote.status || terminal.status,
-          parentId: remote.parent_id || terminal.parentId,
+          parentId: remote.parent_id || undefined,
         };
       }
-      if (!terminal.status || terminal.status === "running") {
+      if (
+        (!options?.markMissingExitedIds || options.markMissingExitedIds.has(terminal.id)) &&
+        (!terminal.status || terminal.status === "running")
+      ) {
         return { ...terminal, status: "exited" };
       }
       return terminal;
@@ -433,7 +537,11 @@ function reconcileRemoteTerminals(
   }
 
   for (const remote of remoteTerminals) {
-    if (!remote.group_id) {
+    if (
+      !remote.group_id ||
+      options?.ignoredRemoteIds?.has(remote.id) ||
+      (options?.validGroupIds && !options.validGroupIds.has(remote.group_id))
+    ) {
       continue;
     }
     if (seenRemoteIds.has(remote.id)) {
@@ -450,8 +558,11 @@ function reconcileRemoteTerminals(
       currentCwd: remote.current_cwd,
       id: remote.id,
       name: remote.name,
+      tabColor: remote.tab_color ?? "",
+      tabIcon: remote.tab_icon ?? "",
       readonly: remote.readonly,
       runtimeType: remote.runtime_type,
+      sshProfileId: remote.ssh_profile_id,
       shellIntegration: remote.shell_integration,
       shellState: remote.shell_state,
       shellType: remote.shell_type,
@@ -471,6 +582,7 @@ function buildSessionState(): SessionState {
   const genericGroups = frameState.groups.filter((group): group is GenericGroup => group.type === "group");
   const toolGroups = frameState.groups.filter((group): group is ToolGroup => group.type === "tool");
   const settingsGroup = frameState.groups.find((group) => group.type === "settings");
+  const validTerminalGroupIDs = getTerminalWorkspaceGroupIds(frameState.groups);
   const fileManagerByGroup: SessionState["fileManagerByGroup"] = {};
 
   genericGroups.forEach((group) => {
@@ -478,15 +590,19 @@ function buildSessionState(): SessionState {
     fileManagerByGroup[group.id] = readFileManagerSnapshot(group.id, filesPagePath);
   });
 
-  const sanitizedTerminalState = sanitizeTerminalWorkspaceState({
-    terminalsByGroup: terminalState.terminalsByGroup,
-    activeTerminalByGroup: terminalState.activeIdByGroup,
-    listManagerOpenByGroup: terminalState.listManagerOpenByGroup,
-    terminalLayouts: terminalState.terminalLayouts,
-    focusedIdByGroup: terminalState.focusedIdByGroup,
-  });
+  const sanitizedTerminalState = sanitizeTerminalWorkspaceState(
+    {
+      terminalsByGroup: terminalState.terminalsByGroup,
+      activeTerminalByGroup: terminalState.activeIdByGroup,
+      listManagerOpenByGroup: terminalState.listManagerOpenByGroup,
+      terminalLayouts: terminalState.terminalLayouts,
+      focusedIdByGroup: terminalState.focusedIdByGroup,
+    },
+    validTerminalGroupIDs
+  );
 
   return {
+    workspaceNameOverride: useSessionStore.getState().currentWorkspaceNameOverride,
     openGroups: genericGroups.map((group) => ({
       id: group.id,
       name: group.name,
@@ -513,17 +629,25 @@ function buildSessionState(): SessionState {
 }
 
 function restoreSessionState(state: SessionState): void {
+  state = normalizeSessionWorkspaceState(state);
   const frameStore = useFrameStore.getState();
   frameStore.initDefaultGroups();
   resetWorkspaceRuntimeState();
   useTerminalStore.getState().reset();
-  const sanitizedTerminalState = sanitizeTerminalWorkspaceState({
-    terminalsByGroup: state.terminalsByGroup || {},
-    activeTerminalByGroup: state.activeTerminalByGroup || {},
-    listManagerOpenByGroup: state.listManagerOpenByGroup || {},
-    terminalLayouts: state.terminalLayouts || {},
-    focusedIdByGroup: state.focusedIdByGroup || {},
-  });
+  const validTerminalGroupIDs = getTerminalWorkspaceGroupIds([
+    ...state.openGroups.map((group) => ({ ...group, type: "group" })),
+    ...state.openTools.map((tool) => ({ ...tool, type: "tool" })),
+  ]);
+  const sanitizedTerminalState = sanitizeTerminalWorkspaceState(
+    {
+      terminalsByGroup: state.terminalsByGroup || {},
+      activeTerminalByGroup: state.activeTerminalByGroup || {},
+      listManagerOpenByGroup: state.listManagerOpenByGroup || {},
+      terminalLayouts: state.terminalLayouts || {},
+      focusedIdByGroup: state.focusedIdByGroup || {},
+    },
+    validTerminalGroupIDs
+  );
 
   state.openGroups.forEach((group) => {
     frameStore.addFolderGroup(getFilesPagePath(group), group.name, group.id);
@@ -589,10 +713,67 @@ function updateSessionNameInList(sessions: SessionInfo[], sessionId: string, nam
   return sessions.map((session) => (session.id === sessionId ? { ...session, name } : session));
 }
 
+function sameSessionOrder(left: readonly SessionInfo[], right: readonly SessionInfo[]): boolean {
+  return left.length === right.length && left.every((session, index) => session.id === right[index]?.id);
+}
+
+function restoreSessionOrder(current: readonly SessionInfo[], previousOrder: readonly SessionInfo[]): SessionInfo[] {
+  const rank = new Map(previousOrder.map((session, index) => [session.id, index]));
+  return current
+    .map((session, index) => ({ session, index }))
+    .sort((left, right) => {
+      const leftRank = rank.get(left.session.id);
+      const rightRank = rank.get(right.session.id);
+      if (leftRank !== undefined && rightRank !== undefined) return leftRank - rightRank;
+      if (leftRank !== undefined) return -1;
+      if (rightRank !== undefined) return 1;
+      return left.index - right.index;
+    })
+    .map(({ session }, index) => ({ ...session, position: index + 1 }));
+}
+
+function reorderSessionInventory(sessions: readonly SessionInfo[], ids: readonly string[]): SessionInfo[] | null {
+  if (ids.length === 0) return null;
+  const byId = new Map(sessions.map((session) => [session.id, session]));
+  const seen = new Set<string>();
+  const ordered: SessionInfo[] = [];
+  for (const id of ids) {
+    if (!id || seen.has(id)) return null;
+    const session = byId.get(id);
+    if (!session) return null;
+    seen.add(id);
+    ordered.push(session);
+  }
+  for (const session of sessions) {
+    if (!seen.has(session.id)) ordered.push(session);
+  }
+  return ordered.map((session, index) => ({ ...session, position: index + 1 }));
+}
+
+function applyPendingSessionMutations(
+  remoteSessions: readonly SessionInfo[],
+  currentSessions: readonly SessionInfo[]
+): SessionInfo[] {
+  let next = [...remoteSessions];
+  if (sessionReorderState?.pendingCount) {
+    next = restoreSessionOrder(next, currentSessions);
+  }
+  for (const [sessionId, state] of sessionRenameStates) {
+    if (state.pendingCount > 0) {
+      next = updateSessionNameInList(next, sessionId, state.optimisticName);
+    }
+  }
+  return next;
+}
+
 export const useSessionStore = create<SessionStoreState>((set, get) => ({
   currentSessionId: null,
+  currentWorkspaceNameOverride: null,
   sessions: [],
   loading: false,
+  sessionsLoading: false,
+  sessionInitialized: false,
+  workspaceRevision: 0,
   error: null,
 
   initAutoSave: () => {
@@ -600,28 +781,73 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
     const scheduleAutoSave = () => {
       if (autoSaveTimer) clearTimeout(autoSaveTimer);
+      const { workspaceRevision: scheduledRevision, currentSessionId: scheduledSessionId, loading } = get();
+      if (!scheduledSessionId || loading) {
+        autoSaveTimer = null;
+        return;
+      }
       autoSaveTimer = setTimeout(() => {
-        get().saveCurrentSession();
+        autoSaveTimer = null;
+        if (!isCurrentWorkspaceTransition(scheduledRevision, scheduledSessionId, true)) return;
+        void get().saveCurrentSession({ revision: scheduledRevision });
       }, 1000);
     };
 
     const scheduleFileManagerSync = () => {
-      const scheduledSessionId = get().currentSessionId;
+      const { workspaceRevision: scheduledRevision, currentSessionId: scheduledSessionId, loading } = get();
       if (fileManagerSyncTimer) clearTimeout(fileManagerSyncTimer);
+      if (!scheduledSessionId || loading) {
+        fileManagerSyncTimer = null;
+        return;
+      }
       fileManagerSyncTimer = setTimeout(() => {
-        const currentSessionId = get().currentSessionId;
-        if (!currentSessionId || currentSessionId !== scheduledSessionId) {
-          return;
-        }
-        void sessionApi.patchWorkspace(currentSessionId, {
-          fileManagerByGroup: buildFileManagerWorkspaceState(),
+        fileManagerSyncTimer = null;
+        void enqueueWorkspaceMutation(async () => {
+          if (
+            deletedWorkspaceSessionIds.has(scheduledSessionId) ||
+            !isCurrentWorkspaceTransition(scheduledRevision, scheduledSessionId, true)
+          ) {
+            return;
+          }
+          try {
+            await sessionApi.patchWorkspace(scheduledSessionId, {
+              fileManagerByGroup: buildFileManagerWorkspaceState(),
+            });
+          } catch (e) {
+            if (isCurrentWorkspaceTransition(scheduledRevision, scheduledSessionId, true)) {
+              set({ error: (e as Error).message });
+            }
+          }
         });
       }, 300);
     };
 
-    const frameUnsub = useFrameStore.subscribe(scheduleAutoSave);
-    const terminalUnsub = useTerminalStore.subscribe(scheduleAutoSave);
-    const fileManagerUnsub = subscribeFileManagerStoreChanges(scheduleFileManagerSync);
+    const frameUnsub = useFrameStore.subscribe((state, previous) => {
+      if (
+        state.groups !== previous.groups ||
+        state.activeGroupId !== previous.activeGroupId ||
+        state.taskbarOrder !== previous.taskbarOrder
+      ) {
+        markWorkspaceContentMutated();
+      }
+      scheduleAutoSave();
+    });
+    const terminalUnsub = useTerminalStore.subscribe((state, previous) => {
+      if (
+        state.terminalsByGroup !== previous.terminalsByGroup ||
+        state.activeIdByGroup !== previous.activeIdByGroup ||
+        state.listManagerOpenByGroup !== previous.listManagerOpenByGroup ||
+        state.terminalLayouts !== previous.terminalLayouts ||
+        state.focusedIdByGroup !== previous.focusedIdByGroup
+      ) {
+        markWorkspaceContentMutated();
+      }
+      scheduleAutoSave();
+    });
+    const fileManagerUnsub = subscribeFileManagerStoreChanges(() => {
+      markWorkspaceContentMutated();
+      scheduleFileManagerSync();
+    });
 
     autoSaveUnsub = () => {
       frameUnsub();
@@ -631,85 +857,179 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   },
 
   loadSessions: async () => {
-    set({ loading: true, error: null });
+    const requestSequence = ++sessionListRequestSequence;
+    const requestMutationRevision = sessionListMutationRevision;
+    set({ sessionsLoading: true, error: null });
     try {
       const res = await sessionApi.list();
-      set({ sessions: res.sessions || [], loading: false });
+      if (requestSequence !== sessionListRequestSequence || requestMutationRevision !== sessionListMutationRevision) {
+        return;
+      }
+      set((state) => ({
+        sessions: applyPendingSessionMutations(res.sessions || [], state.sessions),
+      }));
     } catch (e) {
-      set({ error: (e as Error).message, loading: false });
+      if (requestSequence === sessionListRequestSequence) {
+        set({ error: (e as Error).message });
+      }
+    } finally {
+      if (requestSequence === sessionListRequestSequence) {
+        set({ sessionsLoading: false });
+      }
     }
   },
 
   initSession: async () => {
+    const requestRevision = get().workspaceRevision;
+    set({ loading: true, sessionInitialized: false, error: null });
     get().initAutoSave();
-    await get().loadSessions();
-    const storedSessionId = await getStoredSessionId();
-    const { sessions, switchSession } = get();
-    if (storedSessionId && sessions.some((session) => session.id === storedSessionId)) {
-      await switchSession(storedSessionId);
-      return get().currentSessionId !== null;
+    try {
+      await get().loadSessions();
+      if (!isCurrentWorkspaceTransition(requestRevision)) {
+        return false;
+      }
+      const storedSessionId = await getStoredSessionId();
+      if (!isCurrentWorkspaceTransition(requestRevision)) {
+        return false;
+      }
+      const { sessions, switchSession } = get();
+      if (storedSessionId && sessions.some((session) => session.id === storedSessionId)) {
+        await switchSession(storedSessionId);
+        const state = get();
+        return state.currentSessionId === storedSessionId && state.sessionInitialized && !state.loading;
+      }
+      if (storedSessionId) {
+        await setStoredSessionId(null, {
+          revision: requestRevision,
+          expectedSessionId: get().currentSessionId,
+          allowLoading: true,
+        });
+      }
+      if (!isCurrentWorkspaceTransition(requestRevision)) {
+        return false;
+      }
+      set({
+        currentSessionId: null,
+        currentWorkspaceNameOverride: null,
+        loading: false,
+        sessionInitialized: true,
+      });
+      return false;
+    } catch (e) {
+      if (isCurrentWorkspaceTransition(requestRevision)) {
+        set({
+          currentSessionId: null,
+          currentWorkspaceNameOverride: null,
+          loading: false,
+          sessionInitialized: true,
+          error: (e as Error).message,
+        });
+      }
+      return false;
     }
-    if (storedSessionId) {
-      await setStoredSessionId(null);
-    }
-    set({ currentSessionId: null });
-    return false;
   },
 
   createSession: async (name: string) => {
-    try {
-      const res = await sessionApi.create(name);
+    const requestRevision = get().workspaceRevision;
+    const expectedSessionId = get().currentSessionId;
+    const sessionId = await enqueueWorkspaceMutation(async () => {
+      if (!isCurrentWorkspaceTransition(requestRevision, expectedSessionId, true)) return "";
+      try {
+        const res = await sessionApi.create(name);
+        deletedWorkspaceSessionIds.delete(res.id);
+        markSessionListMutated();
+        if (!isCurrentWorkspaceTransition(requestRevision, expectedSessionId, true)) return res.id;
+        set({ currentSessionId: res.id, currentWorkspaceNameOverride: null });
+        await setStoredSessionId(res.id, {
+          revision: requestRevision,
+          expectedSessionId: res.id,
+        });
+        return res.id;
+      } catch (e) {
+        if (isCurrentWorkspaceTransition(requestRevision, expectedSessionId, true)) {
+          set({ error: (e as Error).message });
+        }
+        throw e;
+      }
+    });
+    if (sessionId) {
       await get().loadSessions();
-      set({ currentSessionId: res.id });
-      await setStoredSessionId(res.id);
-      return res.id;
-    } catch (e) {
-      set({ error: (e as Error).message });
-      throw e;
     }
+    return sessionId;
   },
 
   openFolder: async (folderPath: string) => {
+    const requestRevision = get().workspaceRevision;
     try {
       const folder = await fileApi.list(folderPath);
       const resolvedPath = folder.path || folderPath;
       const folderName = getFolderName(resolvedPath);
-      const frameStore = useFrameStore.getState();
-      const existingGroup = frameStore.groups.find(
-        (group): group is GenericGroup => group.type === "group" && getFilesPagePath(group) === resolvedPath
-      );
+      const sessionId = await enqueueWorkspaceMutation(async () => {
+        if (!isCurrentWorkspaceTransition(requestRevision, undefined, true)) return "";
+        const frameStore = useFrameStore.getState();
+        const existingGroup = frameStore.groups.find(
+          (group): group is GenericGroup =>
+            group.type === "group" && isFolderWorkspaceGroup(group) && getFilesPagePath(group) === resolvedPath
+        );
 
-      if (existingGroup) {
-        frameStore.setActiveGroup(existingGroup.id);
-        return get().currentSessionId || "";
+        if (existingGroup) {
+          frameStore.setActiveGroup(existingGroup.id);
+          return get().currentSessionId || "";
+        }
+
+        let sessionId = get().currentSessionId;
+        if (!sessionId) {
+          const created = await sessionApi.create(folderName);
+          deletedWorkspaceSessionIds.delete(created.id);
+          markSessionListMutated();
+          if (!isCurrentWorkspaceTransition(requestRevision, undefined, true)) {
+            await sessionApi.delete(created.id).catch(() => {});
+            deletedWorkspaceSessionIds.add(created.id);
+            markSessionListMutated();
+            return "";
+          }
+          sessionId = created.id;
+          set({ currentSessionId: sessionId, currentWorkspaceNameOverride: null });
+          await setStoredSessionId(sessionId, {
+            revision: requestRevision,
+            expectedSessionId: sessionId,
+          });
+          if (!isCurrentWorkspaceTransition(requestRevision, sessionId, true)) return "";
+        }
+
+        const guard: WorkspaceOperationGuard = {
+          revision: requestRevision,
+          expectedSessionId: sessionId,
+        };
+        const groupId = frameStore.addFolderGroup(resolvedPath, folderName);
+        applyFileManagerSnapshot(groupId, undefined, resolvedPath);
+
+        const state = buildSessionState();
+        const sessionName = state.workspaceNameOverride == null ? getAutoSessionName(state.openGroups) : undefined;
+
+        if (sessionName) {
+          await sessionApi.update(sessionId, { name: sessionName });
+          markSessionListMutated();
+          if (!isWorkspaceOperationCurrent(guard)) return sessionId;
+        }
+        await sessionApi.patchWorkspace(sessionId, buildSessionWorkspacePatch(state));
+        if (!isWorkspaceOperationCurrent(guard)) return sessionId;
+
+        set((store) => ({
+          currentSessionId: sessionId,
+          sessions: sessionName ? updateSessionNameInList(store.sessions, sessionId, sessionName) : store.sessions,
+        }));
+        await setStoredSessionId(sessionId, guard);
+        return sessionId;
+      });
+      if (sessionId) {
+        await get().loadSessions();
       }
-
-      let sessionId = get().currentSessionId;
-      if (!sessionId) {
-        const created = await sessionApi.create(folderName);
-        sessionId = created.id;
-        set({ currentSessionId: sessionId });
-        await setStoredSessionId(sessionId);
-      }
-
-      const groupId = frameStore.addFolderGroup(resolvedPath, folderName);
-      applyFileManagerSnapshot(groupId, undefined, resolvedPath);
-
-      const state = buildSessionState();
-      const sessionName = getAutoSessionName(state.openGroups);
-
-      await sessionApi.update(sessionId, { name: sessionName });
-      await sessionApi.patchWorkspace(sessionId, buildSessionWorkspacePatch(state));
-
-      set((store) => ({
-        currentSessionId: sessionId,
-        sessions: updateSessionNameInList(store.sessions, sessionId, sessionName),
-      }));
-      await setStoredSessionId(sessionId);
-      await get().loadSessions();
       return sessionId;
     } catch (e) {
-      set({ error: (e as Error).message });
+      if (isCurrentWorkspaceTransition(requestRevision, undefined, true)) {
+        set({ error: (e as Error).message });
+      }
       throw e;
     }
   },
@@ -719,164 +1039,350 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   },
 
   closeFolderGroup: async (groupId: string) => {
-    const frameStore = useFrameStore.getState();
-    const targetGroup = frameStore.groups.find(
-      (group): group is GenericGroup => group.type === "group" && group.id === groupId
-    );
+    const operationRevision = get().workspaceRevision;
+    const changed = await enqueueWorkspaceMutation(async () => {
+      if (!isCurrentWorkspaceTransition(operationRevision, undefined, true)) return false;
+      const frameStore = useFrameStore.getState();
+      const targetGroup = frameStore.groups.find(
+        (group): group is GenericGroup => group.type === "group" && group.id === groupId
+      );
 
-    if (!targetGroup) {
-      frameStore.removeGroup(groupId);
-      return;
-    }
-
-    const folderGroups = frameStore.groups.filter((group): group is GenericGroup => group.type === "group");
-    const { currentSessionId } = get();
-
-    try {
-      if (!currentSessionId || folderGroups.length <= 1) {
+      if (!targetGroup) {
         frameStore.removeGroup(groupId);
-        clearGroupRuntimeState(groupId);
-
-        if (currentSessionId) {
-          await sessionApi.delete(currentSessionId);
-          await terminalApi.syncWorkspace(currentSessionId, []);
-        }
-
-        set((store) => ({
-          currentSessionId: null,
-          sessions: currentSessionId
-            ? store.sessions.filter((session) => session.id !== currentSessionId)
-            : store.sessions,
-        }));
-        await setStoredSessionId(null);
-        resetWorkspaceRuntimeState();
-        await get().loadSessions();
-        return;
+        return false;
       }
 
+      const currentSessionId = get().currentSessionId;
+      const targetIsFolder = isFolderWorkspaceGroup(targetGroup);
       frameStore.removeGroup(groupId);
       clearGroupRuntimeState(groupId);
 
+      if (!currentSessionId) return false;
+
+      const guard: WorkspaceOperationGuard = {
+        revision: operationRevision,
+        expectedSessionId: currentSessionId,
+      };
       const state = buildSessionState();
-      const sessionName = getAutoSessionName(state.openGroups);
 
-      await sessionApi.update(currentSessionId, { name: sessionName });
-      await sessionApi.patchWorkspace(currentSessionId, buildSessionWorkspacePatch(state));
-      await syncTerminalWorkspaceState(currentSessionId, {
-        terminalsByGroup: state.terminalsByGroup,
-        activeTerminalByGroup: state.activeTerminalByGroup,
-        listManagerOpenByGroup: state.listManagerOpenByGroup,
-        terminalLayouts: state.terminalLayouts,
-        focusedIdByGroup: state.focusedIdByGroup,
-      });
+      try {
+        if (targetIsFolder && !hasRestorableSessionContent(state)) {
+          await sessionApi.delete(currentSessionId);
+          deletedWorkspaceSessionIds.add(currentSessionId);
+          markSessionListMutated();
+          set((store) => ({
+            sessions: store.sessions.filter((session) => session.id !== currentSessionId),
+          }));
 
-      set((store) => ({
-        sessions: updateSessionNameInList(store.sessions, currentSessionId, sessionName),
-      }));
+          const current = get();
+          if (current.currentSessionId === currentSessionId && !current.loading) {
+            const nextRevision = current.workspaceRevision + 1;
+            set({
+              currentSessionId: null,
+              currentWorkspaceNameOverride: null,
+              workspaceRevision: nextRevision,
+              loading: true,
+              sessionInitialized: false,
+            });
+            detachAllTerminals();
+            await setStoredSessionId(null, {
+              revision: nextRevision,
+              expectedSessionId: null,
+              allowLoading: true,
+            });
+            if (isCurrentWorkspaceTransition(nextRevision, null)) {
+              useFrameStore.getState().initDefaultGroups();
+              resetWorkspaceRuntimeState();
+              set({ loading: false, sessionInitialized: true });
+            }
+          }
+          return true;
+        }
+
+        const sessionName =
+          state.workspaceNameOverride == null && state.openGroups.length > 0
+            ? getAutoSessionName(state.openGroups)
+            : undefined;
+        if (sessionName) {
+          await sessionApi.update(currentSessionId, { name: sessionName });
+          markSessionListMutated();
+          if (!isWorkspaceOperationCurrent(guard)) return true;
+        }
+        await sessionApi.patchWorkspace(currentSessionId, buildSessionWorkspacePatch(state));
+        if (!isWorkspaceOperationCurrent(guard)) return true;
+        await syncTerminalWorkspaceStateNow(
+          currentSessionId,
+          {
+            terminalsByGroup: state.terminalsByGroup,
+            activeTerminalByGroup: state.activeTerminalByGroup,
+            listManagerOpenByGroup: state.listManagerOpenByGroup,
+            terminalLayouts: state.terminalLayouts,
+            focusedIdByGroup: state.focusedIdByGroup,
+          },
+          guard
+        );
+        if (sessionName && isWorkspaceOperationCurrent(guard)) {
+          set((store) => ({
+            sessions: updateSessionNameInList(store.sessions, currentSessionId, sessionName),
+          }));
+        }
+        return true;
+      } catch (e) {
+        if (isWorkspaceOperationCurrent(guard)) {
+          set({ error: (e as Error).message });
+        }
+        return false;
+      }
+    });
+    if (changed) {
       await get().loadSessions();
-    } catch (e) {
-      set({ error: (e as Error).message });
     }
   },
 
   switchSession: async (id: string) => {
-    set({ loading: true, error: null });
-    try {
-      const previousSessionId = get().currentSessionId;
-      if (previousSessionId && previousSessionId !== id) {
-        await get().saveCurrentSession();
-      }
+    get().initAutoSave();
+    const initialState = get();
+    const previousSessionId = initialState.currentSessionId;
+    if ((!initialState.loading && previousSessionId === id) || deletedWorkspaceSessionIds.has(id)) return;
 
-      await cleanupAllTerminals();
-
-      let remoteState: SessionState | null = null;
+    const wasLoading = initialState.loading;
+    const shouldSavePreviousWorkspace = !wasLoading && !!previousSessionId;
+    let transitionSave =
+      wasLoading && previousSessionId && pendingWorkspaceTransitionSave?.sessionId === previousSessionId
+        ? pendingWorkspaceTransitionSave
+        : null;
+    const ownsTransitionSave = shouldSavePreviousWorkspace;
+    if (shouldSavePreviousWorkspace && previousSessionId) {
+      transitionSave = createWorkspaceSaveLatch(previousSessionId);
+      pendingWorkspaceTransitionSave = transitionSave;
+    }
+    const revision = initialState.workspaceRevision + 1;
+    const transitionGuard: WorkspaceOperationGuard = {
+      revision,
+      expectedSessionId: previousSessionId,
+      allowLoading: true,
+    };
+    set({ workspaceRevision: revision, loading: true, sessionInitialized: false, error: null });
+    await enqueueWorkspaceMutation(async () => {
+      let workspaceDetached = false;
       try {
-        const detail = await sessionApi.get(id);
-        if (detail.workspace_state && hasRestorableSessionContent(detail.workspace_state)) {
-          remoteState = detail.workspace_state;
+        // Capture only after earlier terminal mutations have finished. A newer
+        // switch may supersede this one, but this idle workspace snapshot still
+        // has to be saved before the newer transition restores another session.
+        if (transitionSave) {
+          if (ownsTransitionSave) {
+            if (previousSessionId && !deletedWorkspaceSessionIds.has(previousSessionId)) {
+              try {
+                await saveLatestWorkspaceSnapshot(
+                  () => workspaceContentMutationRevision,
+                  buildSessionState,
+                  (snapshot) => saveSessionStateNow(previousSessionId, snapshot, transitionGuard, true, true)
+                );
+                transitionSave.resolve();
+              } catch (e) {
+                transitionSave.reject(e);
+                throw e;
+              }
+            } else {
+              transitionSave.resolve();
+            }
+          } else {
+            await transitionSave.promise;
+          }
         }
-      } catch {
-        set({ currentSessionId: null, loading: false });
-        await setStoredSessionId(null);
+        if (!isWorkspaceOperationCurrent(transitionGuard)) return;
+
+        if (deletedWorkspaceSessionIds.has(id)) {
+          const fallbackSessionId =
+            previousSessionId && !deletedWorkspaceSessionIds.has(previousSessionId) ? previousSessionId : null;
+          set({
+            currentSessionId: fallbackSessionId,
+            currentWorkspaceNameOverride:
+              fallbackSessionId && fallbackSessionId === previousSessionId
+                ? initialState.currentWorkspaceNameOverride
+                : null,
+            loading: false,
+            sessionInitialized: true,
+          });
+          await setStoredSessionId(fallbackSessionId, {
+            revision,
+            expectedSessionId: fallbackSessionId,
+          });
+          if (!fallbackSessionId && isCurrentWorkspaceTransition(revision, null, true)) {
+            detachAllTerminals();
+            useFrameStore.getState().initDefaultGroups();
+            resetWorkspaceRuntimeState();
+          }
+          clearPendingWorkspaceTransitionSave(transitionSave);
+          return;
+        }
+
+        // Switching workspace detaches browser terminals but keeps their PTYs
+        // alive. The target workspace can then reattach and replay them.
+        detachAllTerminals();
+        workspaceDetached = true;
+        if (!isWorkspaceOperationCurrent(transitionGuard)) return;
+
+        let remoteState: SessionState | null = null;
+        try {
+          const detail = await sessionApi.get(id);
+          if (!isWorkspaceOperationCurrent(transitionGuard)) return;
+          if (detail.workspace_state && hasRestorableSessionContent(detail.workspace_state)) {
+            remoteState = normalizeSessionWorkspaceState(detail.workspace_state);
+          }
+        } catch {
+          if (!isWorkspaceOperationCurrent(transitionGuard)) return;
+          set({
+            currentSessionId: null,
+            currentWorkspaceNameOverride: null,
+            loading: false,
+            sessionInitialized: true,
+          });
+          await setStoredSessionId(null, { revision, expectedSessionId: null });
+          if (!isCurrentWorkspaceTransition(revision, null)) return;
+          useFrameStore.getState().initDefaultGroups();
+          resetWorkspaceRuntimeState();
+          await get().loadSessions();
+          clearPendingWorkspaceTransitionSave(transitionSave);
+          return;
+        }
+
+        // Fetch all remote data before mutating the local workspace. This keeps
+        // a superseded transition from leaving a partially restored workspace
+        // for the next queued transition to serialize.
+        let terminalList: Awaited<ReturnType<typeof terminalApi.list>> | null = null;
+        try {
+          terminalList = await terminalApi.list({ workspace_session_id: id });
+          if (!isWorkspaceOperationCurrent(transitionGuard)) return;
+        } catch {
+          if (!isWorkspaceOperationCurrent(transitionGuard)) return;
+        }
+
+        const restoreCandidates: SessionState[] = [];
+
+        if (remoteState) {
+          restoreCandidates.push(remoteState);
+        }
+
+        if (restoreCandidates.length === 0) {
+          restoreCandidates.push(createEmptySessionState());
+        }
+
+        let restoredState = createEmptySessionState();
+        let restored = false;
+        for (const candidate of restoreCandidates) {
+          if (!isWorkspaceOperationCurrent(transitionGuard)) return;
+          try {
+            restoreSessionState(candidate);
+            restoredState = candidate;
+            restored = true;
+            break;
+          } catch {}
+        }
+
+        if (!restored) {
+          if (!isWorkspaceOperationCurrent(transitionGuard)) return;
+          restoreSessionState(restoredState);
+        }
+
+        if (terminalList) {
+          const terminalStore = useTerminalStore.getState();
+          const validGroupIds = getTerminalWorkspaceGroupIds(useFrameStore.getState().groups);
+          const normalized = reconcileRemoteTerminals(terminalStore.terminalsByGroup, terminalList.terminals, {
+            validGroupIds,
+          });
+          const sanitized = sanitizeTerminalWorkspaceState(
+            {
+              terminalsByGroup: normalized,
+              activeTerminalByGroup: terminalStore.activeIdByGroup,
+              listManagerOpenByGroup: terminalStore.listManagerOpenByGroup,
+              terminalLayouts: terminalStore.terminalLayouts,
+              focusedIdByGroup: terminalStore.focusedIdByGroup,
+            },
+            validGroupIds
+          );
+
+          useTerminalStore.setState({
+            terminalsByGroup: sanitized.terminalsByGroup,
+            activeIdByGroup: sanitized.activeTerminalByGroup,
+            listManagerOpenByGroup: sanitized.listManagerOpenByGroup,
+            terminalLayouts: sanitized.terminalLayouts,
+            focusedIdByGroup: sanitized.focusedIdByGroup,
+          });
+        }
+
+        if (!isWorkspaceOperationCurrent(transitionGuard)) return;
+        set({
+          currentSessionId: id,
+          currentWorkspaceNameOverride: restoredState.workspaceNameOverride ?? null,
+          loading: false,
+          sessionInitialized: true,
+        });
+        await setStoredSessionId(id, { revision, expectedSessionId: id });
+        clearPendingWorkspaceTransitionSave(transitionSave);
+      } catch (e) {
+        if (!isWorkspaceOperationCurrent(transitionGuard)) return;
+        if (!workspaceDetached) {
+          set({ error: (e as Error).message, loading: false, sessionInitialized: true });
+          clearPendingWorkspaceTransitionSave(transitionSave);
+          return;
+        }
+        set({
+          currentSessionId: null,
+          currentWorkspaceNameOverride: null,
+          error: (e as Error).message,
+          loading: false,
+          sessionInitialized: true,
+        });
+        await setStoredSessionId(null, { revision, expectedSessionId: null });
+        if (!isCurrentWorkspaceTransition(revision, null)) return;
         useFrameStore.getState().initDefaultGroups();
         resetWorkspaceRuntimeState();
-        await get().loadSessions();
+        clearPendingWorkspaceTransitionSave(transitionSave);
+      }
+    });
+  },
+
+  refreshCurrentSession: async () => {
+    const { currentSessionId, workspaceRevision, loading, sessionInitialized } = get();
+    if (!currentSessionId || loading || !sessionInitialized) {
+      return;
+    }
+    const requestTerminalIds = new Set(
+      Object.values(useTerminalStore.getState().terminalsByGroup).flatMap((terminals) =>
+        terminals.map((terminal) => terminal.id)
+      )
+    );
+
+    try {
+      const terminalList = await terminalApi.list({ workspace_session_id: currentSessionId });
+      if (!isCurrentWorkspaceTransition(workspaceRevision, currentSessionId, true) || !get().sessionInitialized) {
         return;
       }
-
-      const restoreCandidates: SessionState[] = [];
-
-      if (remoteState) {
-        restoreCandidates.push(remoteState);
-      }
-
-      if (restoreCandidates.length === 0) {
-        restoreCandidates.push(createEmptySessionState());
-      }
-
-      let restoredState = createEmptySessionState();
-      let restored = false;
-      for (const candidate of restoreCandidates) {
-        try {
-          restoreSessionState(candidate);
-          restoredState = candidate;
-          restored = true;
-          break;
-        } catch {}
-      }
-
-      if (!restored) {
-        restoreSessionState(restoredState);
-      }
-
-      try {
-        const terminalList = await terminalApi.list({ workspace_session_id: id });
-        const terminalStore = useTerminalStore.getState();
-        const normalized = reconcileRemoteTerminals(terminalStore.terminalsByGroup, terminalList.terminals);
-        const sanitized = sanitizeTerminalWorkspaceState({
-          terminalsByGroup: normalized,
+      const terminalStore = useTerminalStore.getState();
+      const currentTerminalIds = new Set(
+        Object.values(terminalStore.terminalsByGroup).flatMap((terminals) => terminals.map((terminal) => terminal.id))
+      );
+      const removedDuringRequest = new Set(
+        Array.from(requestTerminalIds).filter((terminalId) => !currentTerminalIds.has(terminalId))
+      );
+      const validGroupIds = getTerminalWorkspaceGroupIds(useFrameStore.getState().groups);
+      const normalized = reconcileRemoteTerminals(terminalStore.terminalsByGroup, terminalList.terminals, {
+        markMissingExitedIds: requestTerminalIds,
+        ignoredRemoteIds: removedDuringRequest,
+        validGroupIds,
+      });
+      const ordered = preservePendingTerminalReorder(currentSessionId, terminalStore.terminalsByGroup, normalized);
+      const sanitized = sanitizeTerminalWorkspaceState(
+        {
+          terminalsByGroup: ordered,
           activeTerminalByGroup: terminalStore.activeIdByGroup,
           listManagerOpenByGroup: terminalStore.listManagerOpenByGroup,
           terminalLayouts: terminalStore.terminalLayouts,
           focusedIdByGroup: terminalStore.focusedIdByGroup,
-        });
-
-        useTerminalStore.setState({
-          terminalsByGroup: sanitized.terminalsByGroup,
-          activeIdByGroup: sanitized.activeTerminalByGroup,
-          listManagerOpenByGroup: sanitized.listManagerOpenByGroup,
-          terminalLayouts: sanitized.terminalLayouts,
-          focusedIdByGroup: sanitized.focusedIdByGroup,
-        });
-      } catch {}
-
-      set({ currentSessionId: id, loading: false });
-      await setStoredSessionId(id);
-    } catch (e) {
-      set({ currentSessionId: null, error: (e as Error).message, loading: false });
-      await setStoredSessionId(null);
-      useFrameStore.getState().initDefaultGroups();
-      resetWorkspaceRuntimeState();
-    }
-  },
-
-  refreshCurrentSession: async () => {
-    const { currentSessionId } = get();
-    if (!currentSessionId) {
-      return;
-    }
-
-    try {
-      const terminalList = await terminalApi.list({ workspace_session_id: currentSessionId });
-      const terminalStore = useTerminalStore.getState();
-      const normalized = reconcileRemoteTerminals(terminalStore.terminalsByGroup, terminalList.terminals);
-      const sanitized = sanitizeTerminalWorkspaceState({
-        terminalsByGroup: normalized,
-        activeTerminalByGroup: terminalStore.activeIdByGroup,
-        listManagerOpenByGroup: terminalStore.listManagerOpenByGroup,
-        terminalLayouts: terminalStore.terminalLayouts,
-        focusedIdByGroup: terminalStore.focusedIdByGroup,
-      });
+        },
+        validGroupIds
+      );
 
       useTerminalStore.setState({
         terminalsByGroup: sanitized.terminalsByGroup,
@@ -888,86 +1394,257 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     } catch {}
   },
 
-  saveCurrentSession: async () => {
-    const { currentSessionId } = get();
+  saveCurrentSession: async (options) => {
+    const { currentSessionId, workspaceRevision } = get();
     if (!currentSessionId) return;
-
-    const state = buildSessionState();
-    const sessionName = state.openGroups.length > 0 ? getAutoSessionName(state.openGroups) : undefined;
-
-    try {
-      await sessionApi.update(currentSessionId, { name: sessionName });
-      await sessionApi.patchWorkspace(currentSessionId, buildSessionWorkspacePatch(state));
-      await syncTerminalWorkspaceState(currentSessionId, {
-        terminalsByGroup: state.terminalsByGroup,
-        activeTerminalByGroup: state.activeTerminalByGroup,
-        listManagerOpenByGroup: state.listManagerOpenByGroup,
-        terminalLayouts: state.terminalLayouts,
-        focusedIdByGroup: state.focusedIdByGroup,
-      });
-
-      if (sessionName) {
-        set((store) => ({
-          sessions: updateSessionNameInList(store.sessions, currentSessionId, sessionName),
-        }));
-      }
-    } catch (e) {
-      set({ error: (e as Error).message });
-    }
+    const revision = options?.revision ?? workspaceRevision;
+    const expectedSessionId = currentSessionId;
+    const guard: WorkspaceOperationGuard = {
+      revision,
+      expectedSessionId,
+      allowLoading: options?.allowLoading,
+    };
+    await enqueueWorkspaceMutation(async () => {
+      if (deletedWorkspaceSessionIds.has(expectedSessionId)) return;
+      if (!options?.snapshot && !isWorkspaceOperationCurrent(guard)) return;
+      const state = options?.snapshot || buildSessionState();
+      await saveSessionStateNow(expectedSessionId, state, guard, !!options?.snapshot);
+    });
   },
 
   deleteSession: async (id: string) => {
-    try {
-      await sessionApi.delete(id);
-      await terminalApi.syncWorkspace(id, []);
-      const { currentSessionId, sessions } = get();
-      if (currentSessionId === id) {
-        const remaining = sessions.filter((session) => session.id !== id);
-        const nextSessionId = remaining[0]?.id || null;
-        set({ currentSessionId: nextSessionId });
-        await setStoredSessionId(nextSessionId);
-        if (nextSessionId) {
-          await get().switchSession(nextSessionId);
-        } else {
-          useFrameStore.getState().initDefaultGroups();
-          resetWorkspaceRuntimeState();
+    let nextTransition: { id: string; revision: number } | null = null;
+    const deleted = await enqueueWorkspaceMutation(async () => {
+      try {
+        await sessionApi.delete(id);
+      } catch (e) {
+        set({ error: (e as Error).message });
+        return false;
+      }
+
+      deletedWorkspaceSessionIds.add(id);
+      markSessionListMutated();
+      set((store) => ({
+        sessions: store.sessions.filter((session) => session.id !== id),
+      }));
+
+      const current = get();
+      if (current.currentSessionId === id && !current.loading) {
+        const nextSessionId = current.sessions[0]?.id || null;
+        const nextRevision = current.workspaceRevision + 1;
+        set({
+          currentSessionId: null,
+          currentWorkspaceNameOverride: null,
+          workspaceRevision: nextRevision,
+          loading: true,
+          sessionInitialized: false,
+        });
+        detachAllTerminals();
+        await setStoredSessionId(null, {
+          revision: nextRevision,
+          expectedSessionId: null,
+          allowLoading: true,
+        });
+        if (isCurrentWorkspaceTransition(nextRevision, null)) {
+          if (nextSessionId) {
+            nextTransition = { id: nextSessionId, revision: nextRevision };
+          } else {
+            useFrameStore.getState().initDefaultGroups();
+            resetWorkspaceRuntimeState();
+            set({ loading: false, sessionInitialized: true });
+          }
         }
       }
+      return true;
+    });
+    const transition = nextTransition as { id: string; revision: number } | null;
+    if (transition && isCurrentWorkspaceTransition(transition.revision, null)) {
+      await get().switchSession(transition.id);
+    }
+    if (deleted) {
       await get().loadSessions();
-    } catch (e) {
-      set({ error: (e as Error).message });
     }
   },
 
   clearAllSessions: async () => {
-    const { sessions } = get();
-    try {
+    const deletedAny = await enqueueWorkspaceMutation(async () => {
+      const initialState = get();
+      const sessions = [...initialState.sessions].sort((a, b) => {
+        if (a.id === initialState.currentSessionId) return -1;
+        if (b.id === initialState.currentSessionId) return 1;
+        return 0;
+      });
+      let deletedAny = false;
+      let transitionRevision: number | null = null;
+
       for (const session of sessions) {
-        await sessionApi.delete(session.id);
-        await terminalApi.syncWorkspace(session.id, []);
+        try {
+          await sessionApi.delete(session.id);
+        } catch (e) {
+          set({ error: (e as Error).message });
+          break;
+        }
+
+        deletedAny = true;
+        deletedWorkspaceSessionIds.add(session.id);
+        markSessionListMutated();
+        set((store) => ({
+          sessions: store.sessions.filter((item) => item.id !== session.id),
+        }));
+
+        const current = get();
+        if (current.currentSessionId === session.id && !current.loading) {
+          transitionRevision = current.workspaceRevision + 1;
+          set({
+            currentSessionId: null,
+            currentWorkspaceNameOverride: null,
+            workspaceRevision: transitionRevision,
+            loading: true,
+            sessionInitialized: false,
+          });
+          detachAllTerminals();
+          await setStoredSessionId(null, {
+            revision: transitionRevision,
+            expectedSessionId: null,
+            allowLoading: true,
+          });
+        }
       }
-      set({ currentSessionId: null, sessions: [] });
-      await setStoredSessionId(null);
-      useFrameStore.getState().initDefaultGroups();
-      resetWorkspaceRuntimeState();
-    } catch (e) {
-      set({ error: (e as Error).message });
+
+      if (transitionRevision !== null && isCurrentWorkspaceTransition(transitionRevision, null)) {
+        useFrameStore.getState().initDefaultGroups();
+        resetWorkspaceRuntimeState();
+        set({ loading: false, sessionInitialized: true });
+      }
+      return deletedAny;
+    });
+    if (deletedAny) {
+      await get().loadSessions();
     }
   },
 
   renameSession: async (id: string, name: string) => {
+    if (deletedWorkspaceSessionIds.has(id)) return;
+    const normalizedName = name.trim();
+    const previousState = get();
+    const previousSession = previousState.sessions.find((session) => session.id === id);
+    const previousOverride = previousState.currentWorkspaceNameOverride;
+    const mutationVersion = (sessionRenameMutationVersions.get(id) || 0) + 1;
+    let mutationState = sessionRenameStates.get(id);
+    if (!mutationState || mutationState.pendingCount === 0) {
+      mutationState = {
+        pendingCount: 0,
+        confirmedName: previousSession?.name ?? null,
+        confirmedOverride: previousState.currentSessionId === id ? previousOverride : null,
+        optimisticName: normalizedName,
+      };
+      sessionRenameStates.set(id, mutationState);
+    }
+    mutationState.pendingCount += 1;
+    mutationState.optimisticName = normalizedName;
+    sessionRenameMutationVersions.set(id, mutationVersion);
+    markSessionListMutated();
+    set((store) => ({
+      sessions: updateSessionNameInList(store.sessions, id, normalizedName),
+      currentWorkspaceNameOverride: store.currentSessionId === id ? normalizedName : store.currentWorkspaceNameOverride,
+    }));
+
     try {
-      await sessionApi.update(id, { name });
-      await get().loadSessions();
-    } catch (e) {
-      set({ error: (e as Error).message });
+      const updated = await enqueueWorkspaceMutation(async () => {
+        if (deletedWorkspaceSessionIds.has(id)) return false;
+        await sessionApi.update(id, {
+          name: normalizedName,
+          workspaceNameOverride: normalizedName,
+        });
+        mutationState.confirmedName = normalizedName;
+        mutationState.confirmedOverride = normalizedName;
+        return true;
+      });
+      if (!updated) return;
+    } catch (error) {
+      const current = get();
+      const currentSession = current.sessions.find((session) => session.id === id);
+      const listStillOptimistic = !previousSession || currentSession?.name === normalizedName;
+      const overrideStillOptimistic =
+        current.currentSessionId !== id || current.currentWorkspaceNameOverride === normalizedName;
+      if (sessionRenameMutationVersions.get(id) === mutationVersion && listStillOptimistic && overrideStillOptimistic) {
+        set((store) => ({
+          sessions:
+            mutationState.confirmedName != null
+              ? updateSessionNameInList(store.sessions, id, mutationState.confirmedName)
+              : store.sessions,
+          currentWorkspaceNameOverride:
+            store.currentSessionId === id ? mutationState.confirmedOverride : store.currentWorkspaceNameOverride,
+          error: (error as Error).message,
+        }));
+      }
+      throw error;
+    } finally {
+      mutationState.pendingCount -= 1;
+      markSessionListMutated();
+      if (mutationState.pendingCount === 0 && sessionRenameStates.get(id) === mutationState) {
+        sessionRenameStates.delete(id);
+        if (sessionRenameMutationVersions.get(id) === mutationVersion) {
+          sessionRenameMutationVersions.delete(id);
+        }
+      }
+    }
+  },
+
+  reorderSessions: async (ids: string[]) => {
+    const previous = get().sessions;
+    const optimistic = reorderSessionInventory(previous, ids);
+    if (!optimistic || sameSessionOrder(previous, optimistic)) return false;
+
+    const mutationVersion = ++sessionReorderMutationVersion;
+    if (!sessionReorderState || sessionReorderState.pendingCount === 0) {
+      sessionReorderState = { pendingCount: 0, confirmedOrder: previous.map((session) => session.id) };
+    }
+    const mutationState = sessionReorderState;
+    mutationState.pendingCount += 1;
+    markSessionListMutated();
+    set({ sessions: optimistic });
+
+    try {
+      await enqueueWorkspaceMutation(async () => {
+        await sessionApi.reorder(optimistic.map((session) => session.id));
+        mutationState.confirmedOrder = optimistic.map((session) => session.id);
+      });
+      return true;
+    } catch (error) {
+      const current = get().sessions;
+      if (sessionReorderMutationVersion === mutationVersion && sameSessionOrder(current, optimistic)) {
+        set((store) => ({
+          sessions: restoreSessionOrder(
+            store.sessions,
+            mutationState.confirmedOrder.map((id) => ({ id })) as SessionInfo[]
+          ),
+          error: (error as Error).message,
+        }));
+        throw error;
+      }
+      return false;
+    } finally {
+      mutationState.pendingCount -= 1;
+      markSessionListMutated();
+      if (mutationState.pendingCount === 0 && sessionReorderState === mutationState) {
+        sessionReorderState = null;
+      }
     }
   },
 
   getCurrentSessionId: () => get().currentSessionId,
 
+  getWorkspaceRevision: () => get().workspaceRevision,
+
   setCurrentSessionId: (id: string | null) => {
-    set({ currentSessionId: id });
-    void setStoredSessionId(id);
+    const current = get();
+    const revision = current.workspaceRevision + 1;
+    set({
+      currentSessionId: id,
+      currentWorkspaceNameOverride: id === current.currentSessionId ? current.currentWorkspaceNameOverride : null,
+      workspaceRevision: revision,
+    });
+    void setStoredSessionId(id, { revision, expectedSessionId: id });
   },
 }));

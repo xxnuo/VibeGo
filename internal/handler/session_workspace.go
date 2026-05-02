@@ -2,14 +2,23 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/xxnuo/vibego/internal/model"
+	terminalservice "github.com/xxnuo/vibego/internal/service/terminal"
 	"gorm.io/gorm"
 )
 
+var (
+	errWorkspaceStateStoredInvalid = errors.New("invalid persisted workspace state")
+	errWorkspaceStatePatchInvalid  = errors.New("invalid workspace state patch")
+)
+
 type WorkspaceState struct {
+	WorkspaceNameOverride  *string                               `json:"workspaceNameOverride"`
 	OpenGroups             []WorkspaceGroup                      `json:"openGroups"`
 	OpenTools              []WorkspaceTool                       `json:"openTools"`
 	TaskbarOrder           []string                              `json:"taskbarOrder"`
@@ -59,6 +68,8 @@ type WorkspaceTool struct {
 type WorkspaceTerminalSession struct {
 	ID       string  `json:"id"`
 	Name     string  `json:"name"`
+	TabColor string  `json:"tabColor,omitempty"`
+	TabIcon  string  `json:"tabIcon,omitempty"`
 	Pinned   *bool   `json:"pinned,omitempty"`
 	Status   *string `json:"status,omitempty"`
 	ParentID *string `json:"parentId,omitempty"`
@@ -87,6 +98,7 @@ type WorkspaceFileManagerState struct {
 }
 
 type WorkspaceStatePatch struct {
+	WorkspaceNameOverride  optionalStringPatch                    `json:"workspaceNameOverride,omitempty"`
 	OpenGroups             *[]WorkspaceGroup                      `json:"openGroups,omitempty"`
 	OpenTools              *[]WorkspaceTool                       `json:"openTools,omitempty"`
 	TaskbarOrder           *[]string                              `json:"taskbarOrder,omitempty"`
@@ -172,6 +184,10 @@ func marshalWorkspaceStateFromString(raw string) (string, error) {
 }
 
 func normalizeWorkspaceState(state *WorkspaceState) {
+	if state.WorkspaceNameOverride != nil {
+		value := strings.TrimSpace(*state.WorkspaceNameOverride)
+		state.WorkspaceNameOverride = &value
+	}
 	if state.OpenGroups == nil {
 		state.OpenGroups = []WorkspaceGroup{}
 	}
@@ -220,7 +236,17 @@ func normalizeWorkspaceState(state *WorkspaceState) {
 	for key, value := range state.TerminalsByGroup {
 		if value == nil {
 			state.TerminalsByGroup[key] = []WorkspaceTerminalSession{}
+			continue
 		}
+		for i := range value {
+			if normalized, err := terminalservice.NormalizeTabColor(value[i].TabColor); err == nil {
+				value[i].TabColor = normalized
+			}
+			if normalized, err := terminalservice.NormalizeTabIcon(value[i].TabIcon); err == nil {
+				value[i].TabIcon = normalized
+			}
+		}
+		state.TerminalsByGroup[key] = value
 	}
 
 	for key, value := range state.FileManagerByGroup {
@@ -263,6 +289,12 @@ func normalizeWorkspaceState(state *WorkspaceState) {
 }
 
 func validateWorkspaceState(state WorkspaceState) error {
+	if state.WorkspaceNameOverride != nil {
+		if _, err := normalizeSessionName(*state.WorkspaceNameOverride); err != nil {
+			return fmt.Errorf("invalid workspaceNameOverride: %w", err)
+		}
+	}
+
 	for _, group := range state.OpenGroups {
 		if group.ID == "" {
 			return fmt.Errorf("openGroups.id is required")
@@ -306,6 +338,12 @@ func validateWorkspaceState(state WorkspaceState) error {
 				default:
 					return fmt.Errorf("invalid terminal status: %s", *terminal.Status)
 				}
+			}
+			if _, err := terminalservice.NormalizeTabColor(terminal.TabColor); err != nil {
+				return err
+			}
+			if _, err := terminalservice.NormalizeTabIcon(terminal.TabIcon); err != nil {
+				return err
 			}
 		}
 	}
@@ -357,6 +395,9 @@ func validateWorkspaceLayoutNode(node WorkspaceLayoutNode) error {
 }
 
 func applyWorkspaceStatePatch(state *WorkspaceState, patch WorkspaceStatePatch) {
+	if patch.WorkspaceNameOverride.Set {
+		state.WorkspaceNameOverride = patch.WorkspaceNameOverride.Value
+	}
 	if patch.OpenGroups != nil {
 		state.OpenGroups = *patch.OpenGroups
 	}
@@ -400,22 +441,37 @@ func updateSessionWorkspaceState(db *gorm.DB, sessionID string, patch WorkspaceS
 
 	state, err := parseWorkspaceState(session.State)
 	if err != nil {
-		return WorkspaceState{}, err
+		return WorkspaceState{}, fmt.Errorf("%w: %v", errWorkspaceStateStoredInvalid, err)
 	}
 
 	applyWorkspaceStatePatch(&state, patch)
+	if patch.WorkspaceNameOverride.Set && state.WorkspaceNameOverride != nil {
+		name, err := normalizeSessionName(*state.WorkspaceNameOverride)
+		if err != nil {
+			return WorkspaceState{}, fmt.Errorf("%w: %v", errWorkspaceStatePatchInvalid, err)
+		}
+		state.WorkspaceNameOverride = &name
+	}
 	rawState, err := marshalWorkspaceState(state)
 	if err != nil {
-		return WorkspaceState{}, err
+		return WorkspaceState{}, fmt.Errorf("%w: %v", errWorkspaceStatePatchInvalid, err)
 	}
 
 	now := time.Now().Unix()
-	if err := db.Model(&session).Updates(map[string]any{
+	updates := map[string]any{
 		"state":          rawState,
 		"updated_at":     now,
 		"last_active_at": now,
-	}).Error; err != nil {
-		return WorkspaceState{}, err
+	}
+	if patch.WorkspaceNameOverride.Set && state.WorkspaceNameOverride != nil {
+		updates["name"] = *state.WorkspaceNameOverride
+	}
+	result := db.Model(&model.UserSession{}).Where("id = ?", sessionID).Updates(updates)
+	if result.Error != nil {
+		return WorkspaceState{}, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return WorkspaceState{}, gorm.ErrRecordNotFound
 	}
 
 	return state, nil

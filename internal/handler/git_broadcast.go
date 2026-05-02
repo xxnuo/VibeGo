@@ -76,9 +76,15 @@ func (h *GitHandler) broadcastDraftScoped(path string, workspaceSessionID string
 	h.wsHandler.BroadcastScoped(path, workspaceSessionID, groupID, GitWSEvent{
 		Type: "draft_changed",
 		Data: GitDraftResponse{
-			Summary:     draft.Summary,
-			Description: draft.Description,
-			IsAmend:     draft.IsAmend,
+			Summary:          draft.Summary,
+			Description:      draft.Description,
+			IsAmend:          draft.IsAmend,
+			NoVerify:         draft.NoVerify,
+			SignOff:          draft.SignOff,
+			AllowEmpty:       draft.AllowEmpty,
+			SkipCommitHooks:  draft.NoVerify,
+			SignOffCommits:   draft.SignOff,
+			AllowEmptyCommit: draft.AllowEmpty,
 		},
 	})
 }

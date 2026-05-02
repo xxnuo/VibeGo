@@ -43,7 +43,12 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({ isOpen, onClose, onSe
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/55 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-stretch justify-center p-0 sm:p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("directoryPicker.title")}
+        className="fixed inset-0 z-50 flex items-stretch justify-center p-0 sm:p-4"
+      >
         <div className="flex h-full w-full flex-col overflow-hidden bg-ide-panel sm:h-[84vh] sm:max-h-[84vh] sm:max-w-5xl sm:rounded-2xl sm:border sm:border-ide-border sm:shadow-2xl">
           <div className="flex items-center justify-between gap-3 border-b border-ide-border px-4 py-3">
             <div className="min-w-0">

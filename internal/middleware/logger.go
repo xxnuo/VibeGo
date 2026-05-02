@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +14,7 @@ func Logger() gin.HandlerFunc {
 
 		start := time.Now()
 		path := c.Request.URL.Path
-		raw := c.Request.URL.RawQuery
+		raw := redactQuery(c.Request.URL.RawQuery)
 
 		c.Next()
 
@@ -46,4 +48,29 @@ func Logger() gin.HandlerFunc {
 			Str("ip", clientIP).
 			Msg("Request")
 	}
+}
+
+func redactQuery(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	sensitive := map[string]struct{}{
+		"key": {}, "sig": {}, "signature": {},
+		// OAuth authorization codes and state values are bearer-like secrets
+		// that must not be retained in request logs.
+		"code": {}, "state": {}, "error": {}, "error_description": {},
+		"access_token": {}, "refresh_token": {}, "client_secret": {}, "device_code": {},
+	}
+	parts := strings.Split(raw, "&")
+	for i, part := range parts {
+		key, _, _ := strings.Cut(part, "=")
+		decodedKey, err := url.QueryUnescape(key)
+		if err == nil {
+			if _, ok := sensitive[strings.ToLower(decodedKey)]; !ok {
+				continue
+			}
+			parts[i] = key + "=REDACTED"
+		}
+	}
+	return strings.Join(parts, "&")
 }

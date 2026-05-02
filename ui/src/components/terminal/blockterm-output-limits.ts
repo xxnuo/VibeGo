@@ -1,0 +1,1 @@
+export const BLOCKTERM_OUTPUT_MAX_BYTES = 16 * 1024 * 1024;

@@ -149,7 +149,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			})
 			return
 		}
-		session := h.createSession(user.ID, "")
+		session, err := h.createSession(user.ID, "")
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to create login session")
+			c.JSON(http.StatusInternalServerError, LoginResponse{
+				OK:    false,
+				Error: "failed to create session",
+			})
+			return
+		}
 		c.JSON(http.StatusOK, LoginResponse{
 			OK:        true,
 			SessionID: session.ID,
@@ -201,7 +209,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		})
 		return
 	}
-	session := h.createSession(user.ID, "")
+	session, err := h.createSession(user.ID, "")
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create login session")
+		c.JSON(http.StatusInternalServerError, LoginResponse{
+			OK:    false,
+			Error: "failed to create session",
+		})
+		return
+	}
 	c.JSON(http.StatusOK, LoginResponse{
 		OK:        true,
 		SessionID: session.ID,
@@ -291,7 +307,7 @@ func (h *AuthHandler) getOrCreateUser(username, key string) *model.User {
 	return &user
 }
 
-func (h *AuthHandler) createSession(userID, sessionName string) *model.UserSession {
+func (h *AuthHandler) createSession(userID, sessionName string) (*model.UserSession, error) {
 	now := time.Now().Unix()
 	expiredAt := now + 7*24*60*60
 	name := sessionName
@@ -308,8 +324,17 @@ func (h *AuthHandler) createSession(userID, sessionName string) *model.UserSessi
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
-	h.db.Create(&session)
-	return &session
+	if err := h.db.Transaction(func(tx *gorm.DB) error {
+		position, err := nextSessionPosition(tx)
+		if err != nil {
+			return err
+		}
+		session.Position = position
+		return tx.Create(&session).Error
+	}); err != nil {
+		return nil, err
+	}
+	return &session, nil
 }
 
 func hashKey(key string) string {

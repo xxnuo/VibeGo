@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { gitApi } from "@/api/git";
+import { type GitCommitOptions, gitApi } from "@/api/git";
 import { useGitStore } from "@/stores";
 
 export const gitKeys = {
@@ -59,8 +59,17 @@ export function useGitCommit(groupId: string) {
   const queryClient = useQueryClient();
   const currentPath = useGitStore(groupId, (s) => s.currentPath);
   return useMutation({
-    mutationFn: ({ message, author, email }: { message: string; author?: string; email?: string }) =>
-      gitApi.commit(currentPath!, message, author, email),
+    mutationFn: ({
+      message,
+      author,
+      email,
+      options,
+    }: {
+      message: string;
+      author?: string;
+      email?: string;
+      options?: GitCommitOptions;
+    }) => gitApi.commit(currentPath!, message, author, email, options),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: gitKeys.status(currentPath!) });
       queryClient.invalidateQueries({ queryKey: gitKeys.log(currentPath!) });

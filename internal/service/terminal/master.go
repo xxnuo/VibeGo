@@ -70,7 +70,9 @@ func (m *wsMaster) Ping() error {
 }
 
 func (m *wsMaster) Close() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// Gorilla documents Conn.Close as safe to call concurrently with writes.
+	// Do not take m.mu here: a blocked Write may be holding it, and waiting for
+	// that lock would prevent Close from closing the underlying socket and
+	// unblocking the write.
 	return m.conn.Close()
 }

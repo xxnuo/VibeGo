@@ -50,6 +50,10 @@ jobs:
         with:
           version: 10
 
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: false
+
       - name: Install Go test dependencies
         run: |
           sudo apt-get update
@@ -64,6 +68,9 @@ jobs:
 
       - name: Go tests
         run: go test ./...
+
+      - name: Release packaging tests
+        run: uv run python scripts/test_release_packages.py
 
   build:
     needs: [meta, verify]
@@ -189,7 +196,7 @@ jobs:
             bin="${bin}.exe"
           fi
           tar_name="${bin%.exe}.tar.gz"
-          tar -C dist -czf "artifacts/${tar_name}" "${bin}"
+          bash scripts/package_release_archive.sh dist "artifacts/${tar_name}" "${bin}"
 
       - uses: actions/upload-artifact@v4
         with:

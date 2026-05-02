@@ -122,6 +122,25 @@ func (hb *historyBuffer) Reset() {
 	hb.startCursor = hb.endCursor
 }
 
+// Restore seeds a live ring from a persisted absolute-cursor snapshot.
+func (hb *historyBuffer) Restore(data []byte, cursor uint64) {
+	hb.mu.Lock()
+	defer hb.mu.Unlock()
+
+	if cursor < uint64(len(data)) {
+		cursor = uint64(len(data))
+	}
+	if len(data) > hb.capacity {
+		data = data[len(data)-hb.capacity:]
+	}
+
+	hb.start = 0
+	hb.length = len(data)
+	copy(hb.buf, data)
+	hb.endCursor = cursor
+	hb.startCursor = cursor - uint64(len(data))
+}
+
 func (hb *historyBuffer) Len() int {
 	hb.mu.RLock()
 	defer hb.mu.RUnlock()

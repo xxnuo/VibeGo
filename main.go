@@ -27,6 +27,9 @@ import (
 	"github.com/xxnuo/vibego/internal/middleware"
 	"github.com/xxnuo/vibego/internal/model"
 	"github.com/xxnuo/vibego/internal/service/asr"
+	"github.com/xxnuo/vibego/internal/service/blocktermmodel"
+	"github.com/xxnuo/vibego/internal/service/sshconnection"
+	"github.com/xxnuo/vibego/internal/service/terminal"
 	"github.com/xxnuo/vibego/internal/svcctl"
 	vibegoTls "github.com/xxnuo/vibego/internal/tls"
 	"github.com/xxnuo/vibego/internal/transport"
@@ -154,23 +157,62 @@ func runServer(ctx context.Context) error {
 		&model.UserSetting{},
 		&model.TerminalSession{},
 		&model.TerminalHistory{},
+		&model.SSHConnectionProfile{},
+		&model.SSHKnownHost{},
 	)
+	if err := config.MigrateBlockTerm(db); err != nil {
+		return fmt.Errorf("migrate BlockTerm data: %w", err)
+	}
+	sshService := sshconnection.New(db)
+	defer sshService.Close()
+	terminalManager := terminal.NewManager(db, &terminal.ManagerConfig{
+		Shell:          cfg.DefaultShell,
+		RuntimeFactory: sshService,
+	})
+	terminalManager.CleanupOnStart()
+	blockTermModelService := blocktermmodel.NewWithOptions(db, blocktermmodel.Options{
+		MutationGate:     terminalManager.BlockTermMutationGate(),
+		TerminalMutation: terminalManager.WithRunningTerminal,
+		TerminalRunning: func(id string) bool {
+			info, ok := terminalManager.Get(id)
+			return ok && info.Status == model.StatusRunning && !info.Readonly
+		},
+	})
+	if err := blockTermModelService.CleanupOnStart(); err != nil {
+		return fmt.Errorf("cleanup stale BlockTerm model runs: %w", err)
+	}
+	defer blockTermModelService.Close()
+	fileViews, err := middleware.NewFileViewAuthorizer()
+	if err != nil {
+		return err
+	}
 
 	api := r.Group("/api")
 
 	authHandler := handler.NewAuthHandler(db, cfg.Key, cfg.NeedKey)
 	authHandler.Register(api)
+	githubHandler := handler.NewGitHubHandler(db)
+	// OAuth providers redirect directly to this callback and cannot include the
+	// VibeGo API key. State validation in the handler provides the callback
+	// authentication boundary.
+	githubHandler.RegisterPublicAuthRoutes(api)
 
 	if cfg.NeedKey {
-		r.Use(middleware.Auth(cfg.Key))
+		api.Use(middleware.Auth(cfg.Key, fileViews))
 	}
 
 	handler.NewSettingsHandler(db).Register(api)
 	handler.NewASRHandler(asrService).Register(api)
-	handler.NewSessionHandler(db).Register(api)
+	handler.NewSessionHandler(db, terminalManager).Register(api)
 	handler.NewAISessionHandler(db).Register(api)
-	handler.NewFileHandler().Register(api)
-	handler.NewTerminalHandler(db, cfg.DefaultShell).Register(api)
+	fileHandler := handler.NewFileHandler(fileViews)
+	fileHandler.SetRemoteFileProvider(sshService)
+	fileHandler.Register(api)
+	handler.NewTerminalHandler(terminalManager).Register(api)
+	handler.NewBlockTermHandler(terminalManager).Register(api)
+	handler.NewBlockTermModelHandler(blockTermModelService).Register(api)
+	handler.NewSSHHandler(sshService).Register(api)
+	githubHandler.RegisterProtectedRoutes(api)
 	gitHandler := handler.NewGitHandler(db)
 	gitHandler.Register(api)
 	gitWSHandler := handler.NewGitWSHandler(gitHandler)

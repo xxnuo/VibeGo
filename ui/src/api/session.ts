@@ -7,11 +7,13 @@ export interface SessionInfo {
   id: string;
   user_id: string;
   name: string;
+  position?: number;
   created_at: number;
   updated_at: number;
 }
 
 export interface WorkspaceState {
+  workspaceNameOverride?: string | null;
   openGroups: Array<{
     id: string;
     name: string;
@@ -54,6 +56,7 @@ export interface SessionDetail {
   id: string;
   user_id: string;
   name: string;
+  position?: number;
   state: string;
   workspace_state: WorkspaceState;
   created_at: number;
@@ -61,13 +64,13 @@ export interface SessionDetail {
 }
 
 export const sessionApi = {
-  list: (page = 1, pageSize = 50) =>
+  list: (page = 1, pageSize = 50, options?: { signal?: AbortSignal }) =>
     request<{
       sessions: SessionInfo[];
       page: number;
       page_size: number;
       total: number;
-    }>(`/session?page=${page}&page_size=${pageSize}`),
+    }>(`/session?page=${page}&page_size=${pageSize}`, { signal: options?.signal }),
 
   create: (name: string) =>
     request<{ ok: boolean; id: string }>("/session", {
@@ -75,12 +78,23 @@ export const sessionApi = {
       body: JSON.stringify({ name }),
     }),
 
-  get: (id: string) => request<SessionDetail>(`/session/${id}`),
+  get: (id: string, options?: { signal?: AbortSignal; touch?: boolean }) => {
+    const params = new URLSearchParams();
+    if (options?.touch === false) params.set("touch", "false");
+    const query = params.toString();
+    return request<SessionDetail>(`/session/${id}${query ? `?${query}` : ""}`, { signal: options?.signal });
+  },
 
-  update: (id: string, data: { name?: string }) =>
+  update: (id: string, data: { name?: string; workspaceNameOverride?: string | null }) =>
     request<{ ok: boolean }>(`/session/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
+    }),
+
+  reorder: (ids: string[]) =>
+    request<{ ok: boolean }>("/session/reorder", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
     }),
 
   patchWorkspace: (
@@ -88,6 +102,7 @@ export const sessionApi = {
     data: Partial<
       Pick<
         WorkspaceState,
+        | "workspaceNameOverride"
         | "openGroups"
         | "openTools"
         | "taskbarOrder"

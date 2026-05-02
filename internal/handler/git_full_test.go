@@ -684,6 +684,9 @@ func TestGitFullCommitClearsDraft(t *testing.T) {
 		"summary":              "feat: clear draft",
 		"description":          "before commit",
 		"isAmend":              true,
+		"noVerify":             true,
+		"signOff":              true,
+		"allowEmpty":           true,
 	})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
@@ -710,6 +713,12 @@ func TestGitFullCommitClearsDraft(t *testing.T) {
 	assert.Empty(t, draftResp.Summary)
 	assert.Empty(t, draftResp.Description)
 	assert.False(t, draftResp.IsAmend)
+	assert.True(t, draftResp.NoVerify)
+	assert.True(t, draftResp.SignOff)
+	assert.False(t, draftResp.AllowEmpty)
+	assert.True(t, draftResp.SkipCommitHooks)
+	assert.True(t, draftResp.SignOffCommits)
+	assert.False(t, draftResp.AllowEmptyCommit)
 }
 
 func TestGitFullStashViaAPI(t *testing.T) {
@@ -726,9 +735,15 @@ func TestGitFullStashViaAPI(t *testing.T) {
 	var stashResp struct {
 		OK      bool   `json:"ok"`
 		Message string `json:"message"`
+		Status  struct {
+			Files   []StructuredFile `json:"files"`
+			Summary StatusSummary    `json:"summary"`
+		} `json:"status"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &stashResp)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &stashResp))
 	assert.True(t, stashResp.OK)
+	assert.Empty(t, stashResp.Status.Files)
+	assert.Zero(t, stashResp.Status.Summary.Changed)
 
 	content, _ := os.ReadFile(filepath.Join(dir, "hello.txt"))
 	assert.Equal(t, "hello world\n", string(content))
@@ -743,6 +758,16 @@ func TestGitFullStashViaAPI(t *testing.T) {
 
 	w = postJSON(r, "/git/stash-pop", map[string]interface{}{"path": dir, "index": 0})
 	assert.Equal(t, http.StatusOK, w.Code)
+	var popResp struct {
+		Status struct {
+			Files   []StructuredFile `json:"files"`
+			Summary StatusSummary    `json:"summary"`
+		} `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &popResp))
+	require.Len(t, popResp.Status.Files, 1)
+	assert.Equal(t, "modified", popResp.Status.Files[0].ChangeType)
+	assert.Equal(t, 1, popResp.Status.Summary.Changed)
 
 	content, _ = os.ReadFile(filepath.Join(dir, "hello.txt"))
 	assert.Equal(t, "stash me\n", string(content))
@@ -778,6 +803,138 @@ func TestGitFullStashFiles(t *testing.T) {
 	cmd = exec.Command("git", "stash", "drop")
 	cmd.Dir = dir
 	cmd.Run()
+}
+
+func TestGitFullStashFilesRename(t *testing.T) {
+	dir := setupFullRepo(t)
+	defer os.RemoveAll(dir)
+	r, _ := setupRouter()
+
+	cmd := exec.Command("git", "mv", "hello.txt", "renamed.txt")
+	cmd.Dir = dir
+	require.NoError(t, cmd.Run())
+	cmd = exec.Command("git", "stash", "push", "-m", "for stash rename test")
+	cmd.Dir = dir
+	require.NoError(t, cmd.Run())
+
+	w := postJSON(r, "/git/stash-files", map[string]interface{}{"path": dir, "index": 0})
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp struct {
+		Files []StashFileInfo `json:"files"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Len(t, resp.Files, 1)
+	assert.Equal(t, "renamed.txt", resp.Files[0].Path)
+	assert.Equal(t, "renamed", resp.Files[0].Status)
+}
+
+func TestGitFullStashUntrackedFileDetails(t *testing.T) {
+	dir := setupFullRepo(t)
+	defer os.RemoveAll(dir)
+	r, _ := setupRouter()
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "untracked.txt"), []byte("new from stash\n"), 0644))
+	cmd := exec.Command("git", "stash", "push", "--include-untracked", "-m", "for untracked stash test")
+	cmd.Dir = dir
+	require.NoError(t, cmd.Run())
+
+	w := postJSON(r, "/git/stash-files", map[string]interface{}{"path": dir, "index": 0})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var filesResp struct {
+		Files []StashFileInfo `json:"files"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &filesResp))
+	require.Len(t, filesResp.Files, 1)
+	assert.Equal(t, "untracked.txt", filesResp.Files[0].Path)
+	assert.Equal(t, "added", filesResp.Files[0].Status)
+
+	w = postJSON(r, "/git/stash-diff", map[string]interface{}{
+		"path": dir, "index": 0, "filePath": "untracked.txt",
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var diffResp InteractiveDiff
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &diffResp))
+	assert.Empty(t, diffResp.Old)
+	assert.Equal(t, "new from stash\n", diffResp.New)
+	assert.NotEmpty(t, diffResp.Hunks)
+	assert.Contains(t, diffResp.Patch, "+new from stash")
+
+	cmd = exec.Command("git", "stash", "drop")
+	cmd.Dir = dir
+	require.NoError(t, cmd.Run())
+}
+
+func TestGitFullStashDetailsUseStableOIDAfterIndexShift(t *testing.T) {
+	dir := setupFullRepo(t)
+	defer os.RemoveAll(dir)
+	r, _ := setupRouter()
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "hello.txt"), []byte("older stash\n"), 0644))
+	runGitCommand(t, dir, "stash", "push", "-m", "older")
+	olderOID := runGitCommand(t, dir, "rev-parse", "refs/stash")
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), []byte("package shifted\n"), 0644))
+	runGitCommand(t, dir, "stash", "push", "-m", "newer")
+
+	w := postJSON(r, "/git/stash-files", map[string]interface{}{
+		"path": dir, "index": 0, "oid": olderOID,
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var filesResp struct {
+		Files []StashFileInfo `json:"files"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &filesResp))
+	require.Len(t, filesResp.Files, 1)
+	assert.Equal(t, "hello.txt", filesResp.Files[0].Path)
+
+	w = postJSON(r, "/git/stash-diff", map[string]interface{}{
+		"path": dir, "index": 0, "oid": olderOID, "filePath": "hello.txt",
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var diffResp InteractiveDiff
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &diffResp))
+	assert.Equal(t, "older stash\n", diffResp.New)
+	assert.NotContains(t, diffResp.New, "package shifted")
+
+	w = postJSON(r, "/git/stash-drop", map[string]interface{}{
+		"path": dir, "index": 0, "oid": olderOID,
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.NotContains(t, runGitCommand(t, dir, "stash", "list"), "older")
+	assert.Contains(t, runGitCommand(t, dir, "stash", "list"), "newer")
+}
+
+func TestGitFullStashDetailsSupportLiteralControlCharacterPaths(t *testing.T) {
+	dir := setupFullRepo(t)
+	defer os.RemoveAll(dir)
+	r, _ := setupRouter()
+
+	filePath := "tab\tand-newline\nfile.txt"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, filePath), []byte("literal path\n"), 0644))
+	runGitCommand(t, dir, "stash", "push", "--include-untracked", "-m", "literal path")
+	stashOID := runGitCommand(t, dir, "rev-parse", "refs/stash")
+
+	w := postJSON(r, "/git/stash-files", map[string]interface{}{
+		"path": dir, "index": 0, "oid": stashOID,
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var filesResp struct {
+		Files []StashFileInfo `json:"files"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &filesResp))
+	require.Len(t, filesResp.Files, 1)
+	assert.Equal(t, filePath, filesResp.Files[0].Path)
+	assert.Equal(t, "added", filesResp.Files[0].Status)
+
+	w = postJSON(r, "/git/stash-diff", map[string]interface{}{
+		"path": dir, "index": 0, "oid": stashOID, "filePath": filePath,
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var diffResp InteractiveDiff
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &diffResp))
+	assert.Empty(t, diffResp.Old)
+	assert.Equal(t, "literal path\n", diffResp.New)
+	assert.Contains(t, diffResp.Patch, "+literal path")
 }
 
 func TestGitFullStashDiff(t *testing.T) {
