@@ -628,6 +628,7 @@
     "pasteImageUploading": "正在上传图片...",
     "pasteImageInserted": "已插入图片路径",
     "pasteImageFailed": "粘贴图片失败",
+    "pasteClipboardFailed": "无法读取剪贴板，请允许浏览器访问剪贴板后重试",
     "new": "新建终端",
     "list": "终端列表",
     "backToTerminal": "返回终端",

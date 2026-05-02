@@ -23,6 +23,7 @@ import {
   armTerminalBrowserUnloadGuard,
   setTerminalBrowserShortcutFocus,
 } from "@/services/terminal-browser-shortcut-guard";
+import { bindTerminalMousePaste } from "@/services/terminal-mouse-paste";
 import { notifyTerminal } from "@/services/terminal-notification-service";
 import {
   readTerminalSessionCache,
@@ -1094,9 +1095,11 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
           terminalRef.current.paste(text);
           return true;
         }
-      } catch {}
+      } catch {
+        toast.error(t("terminal.pasteClipboardFailed"));
+      }
       return false;
-    }, []);
+    }, [t]);
 
     const pasteImageFiles = useCallback(
       async (files: File[]) => {
@@ -1149,6 +1152,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
     }, []);
 
     const pasteFromClipboard = useCallback(async () => {
+      if (callbacksRef.current.isExited || callbacksRef.current.isReadonly || !inputReadyRef.current) return false;
       const images = await readClipboardImages();
       if (images && images.length > 0) {
         return pasteImageFiles(images);
@@ -1384,6 +1388,9 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
       });
 
       terminal.open(containerRef.current);
+      const unbindMousePaste = bindTerminalMousePaste(containerRef.current, terminal, () => {
+        void pasteFromClipboard();
+      });
       terminal.textarea?.setAttribute("id", `terminal-input-${terminalId}`);
       terminal.textarea?.setAttribute("name", `terminal-input-${terminalId}`);
       terminal.unicode.activeVersion = "11";
@@ -1601,6 +1608,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
           } catch {}
         }
         disposeOscHandlers();
+        unbindMousePaste();
         terminal.dispose();
         terminalRef.current = null;
         fitAddonRef.current = null;

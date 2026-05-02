@@ -619,6 +619,7 @@
     "pasteImageUploading": "Uploading image...",
     "pasteImageInserted": "Image path inserted",
     "pasteImageFailed": "Failed to paste image",
+    "pasteClipboardFailed": "Cannot read the clipboard. Allow clipboard access in your browser and try again.",
     "new": "New Terminal",
     "list": "Terminal List",
     "backToTerminal": "Back to Terminal",
