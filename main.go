@@ -216,8 +216,9 @@ func runServer(ctx context.Context) error {
 	}
 
 	srv := &http.Server{
-		Addr:    fmt.Sprintf("%s:%s", cfg.Host, cfg.Port),
-		Handler: r,
+		Addr:     fmt.Sprintf("%s:%s", cfg.Host, cfg.Port),
+		Handler:  r,
+		ErrorLog: transport.NewServerErrorLog(os.Stderr),
 	}
 
 	var (
@@ -254,7 +255,8 @@ func runServer(ctx context.Context) error {
 
 		mux = transport.NewProtocolMux(listener)
 		upgradeSrv = &http.Server{
-			Handler: upgradeHandler,
+			Handler:  upgradeHandler,
+			ErrorLog: transport.NewServerErrorLog(os.Stderr),
 		}
 		srv.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
