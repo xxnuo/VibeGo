@@ -16,6 +16,7 @@ type Config struct {
 	LogLevel  string
 	HomeDir   string
 	ConfigDir string
+	TlsDir    string
 	LogDir    string
 
 	Host        string
@@ -53,6 +54,7 @@ func defaultConfig() *Config {
 
 	cfg.HomeDir = filepath.Join(homeDir, ".config", "vibego")
 	cfg.ConfigDir = filepath.Join(cfg.HomeDir, "server")
+	cfg.TlsDir = cfg.ConfigDir
 	cfg.LogDir = filepath.Join(cfg.HomeDir, "logs")
 	return cfg
 }

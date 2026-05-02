@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"encoding/pem"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -8,6 +9,44 @@ import (
 	"testing"
 	"testing/fstest"
 )
+
+func TestHTTPSUpgradeHandlerServesCertificate(t *testing.T) {
+	t.Parallel()
+
+	certificate := []byte("certificate-der")
+	handler, err := NewHTTPSUpgradeHandler(HTTPSUpgradeHandlerConfig{
+		DistFS: fstest.MapFS{
+			"http-upgrade.html": {Data: []byte("<!doctype html>")},
+		},
+		Certificate: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certificate}),
+	})
+	if err != nil {
+		t.Fatalf("NewHTTPSUpgradeHandler: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com:1984"+CertificateDownloadPath, nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	res := rec.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusOK)
+	}
+	if contentType := res.Header.Get("Content-Type"); contentType != "application/x-x509-ca-cert" {
+		t.Fatalf("Content-Type = %q", contentType)
+	}
+	if disposition := res.Header.Get("Content-Disposition"); disposition != `attachment; filename="vibego.crt"` {
+		t.Fatalf("Content-Disposition = %q", disposition)
+	}
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if string(body) != string(certificate) {
+		t.Fatalf("body = %q, want certificate DER", body)
+	}
+}
 
 func TestHTTPSUpgradeHandlerServesUpgradePageForHTMLRequests(t *testing.T) {
 	t.Parallel()

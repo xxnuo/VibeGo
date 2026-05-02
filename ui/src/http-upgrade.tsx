@@ -1,4 +1,4 @@
-import { ArrowRight, Languages, Moon, Sun } from "lucide-react";
+import { ArrowRight, Download, Languages, Moon, Sun } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource-variable/jetbrains-mono";
@@ -10,6 +10,7 @@ import { getTranslation, type Locale } from "@/lib/i18n";
 
 const REDIRECT_DELAY_SECONDS = 30;
 const DISABLE_FLAG = "--no-tls";
+const CERTIFICATE_PATH = "/vibego.crt";
 
 function detectLocale(): Locale {
   const params = new URLSearchParams(window.location.search);
@@ -155,15 +156,27 @@ function HttpUpgradePage() {
                 {formatTemplate(t("httpUpgrade.countdown"), { seconds: secondsRemaining })}
               </label>
             </div>
-            <Button
-              asChild
-              className="flex h-11 w-full items-center justify-center gap-2 bg-ide-accent px-6 text-sm text-ide-on-accent hover:opacity-90 sm:h-10 sm:w-auto sm:text-base"
-            >
-              <a href={redirectTarget}>
-                <span>{t("httpUpgrade.openNow")}</span>
-                <ArrowRight size={16} />
-              </a>
-            </Button>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <Button
+                asChild
+                variant="outline"
+                className="h-11 w-full border-ide-border bg-transparent px-4 text-sm text-ide-text hover:bg-ide-bg sm:h-10 sm:w-auto sm:text-base"
+              >
+                <a href={CERTIFICATE_PATH} download="vibego.crt" onClick={() => setAutoRedirect(false)}>
+                  <Download size={16} />
+                  <span>{t("httpUpgrade.installCertificate")}</span>
+                </a>
+              </Button>
+              <Button
+                asChild
+                className="flex h-11 w-full items-center justify-center gap-2 bg-ide-accent px-6 text-sm text-ide-on-accent hover:opacity-90 sm:h-10 sm:w-auto sm:text-base"
+              >
+                <a href={redirectTarget}>
+                  <span>{t("httpUpgrade.openNow")}</span>
+                  <ArrowRight size={16} />
+                </a>
+              </Button>
+            </div>
           </CardFooter>
         </Card>
       </div>

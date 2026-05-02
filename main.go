@@ -223,17 +223,22 @@ func runServer(ctx context.Context) error {
 	}
 
 	var (
-		certFile   string
-		keyFile    string
-		upgradeSrv *http.Server
-		mux        *transport.ProtocolMux
+		certFile      string
+		keyFile       string
+		trustCertFile string
+		upgradeSrv    *http.Server
+		mux           *transport.ProtocolMux
 	)
 
 	if !cfg.NoTLS {
 		var err error
-		certFile, keyFile, err = resolveTLSCert(cfg)
+		certFile, keyFile, trustCertFile, err = resolveTLSCert(cfg)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Failed to setup TLS certificate")
+		}
+		trustCert, err := os.ReadFile(trustCertFile)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to read TLS trust certificate")
 		}
 
 		listener, listenErr := net.Listen("tcp", srv.Addr)
@@ -249,6 +254,7 @@ func runServer(ctx context.Context) error {
 			DistFS:          distFS,
 			Fallback:        r,
 			UpgradePagePath: "http-upgrade.html",
+			Certificate:     trustCert,
 		})
 		if upgradeErr != nil {
 			log.Fatal().Err(upgradeErr).Msg("Failed to setup HTTP upgrade page")
@@ -309,14 +315,18 @@ func runServer(ctx context.Context) error {
 	return nil
 }
 
-func resolveTLSCert(cfg *config.Config) (certFile, keyFile string, err error) {
+func resolveTLSCert(cfg *config.Config) (certFile, keyFile, trustCertFile string, err error) {
 	if cfg.TlsCert != "" && cfg.TlsKey != "" {
-		return cfg.TlsCert, cfg.TlsKey, nil
+		return cfg.TlsCert, cfg.TlsKey, cfg.TlsCert, nil
 	}
-	certFile, keyFile, err = vibegoTls.EnsureCert(cfg.ConfigDir)
+	tlsDir := cfg.TlsDir
+	if tlsDir == "" {
+		tlsDir = cfg.ConfigDir
+	}
+	certFile, keyFile, trustCertFile, err = vibegoTls.EnsureCert(tlsDir)
 	if err != nil {
-		return "", "", fmt.Errorf("auto-generate self-signed cert: %w", err)
+		return "", "", "", fmt.Errorf("auto-generate local TLS certificate: %w", err)
 	}
-	log.Info().Str("cert", certFile).Str("key", keyFile).Msg("Using self-signed TLS certificate")
+	log.Info().Str("cert", certFile).Str("key", keyFile).Str("ca", trustCertFile).Msg("Using local TLS certificate")
 	return
 }

@@ -817,14 +817,15 @@
     "description": "Some browser capabilities are restricted to secure contexts, so VibeGo needs to switch this session to HTTPS first.",
     "secureContextTitle": "Browser capability limits",
     "secureContextDescription": "For example, voice input needs microphone access and only works in secure contexts such as HTTPS.",
-    "certificateTitle": "Automatic self-signed certificate",
-    "certificateDescription": "VibeGo generates a secure random self-signed certificate for this service and then redirects you to the HTTPS address.",
-    "trustTitle": "Manual trust is still required",
-    "trustDescription": "If the next page shows a certificate warning, trust it in the browser and continue to the HTTPS site.",
+    "certificateTitle": "Automatic local certificate",
+    "certificateDescription": "VibeGo uses a dedicated local CA to issue this service certificate and automatically keeps its local network addresses current.",
+    "trustTitle": "Avoid future certificate warnings",
+    "trustDescription": "Only if you trust this VibeGo service, install its certificate in your system trust store; system confirmation is required. You can also open HTTPS directly and continue past the browser warning.",
     "targetLabel": "Next address",
     "disableHint": "To disable this behavior, start VibeGo with {flag}",
     "countdown": "Redirecting automatically in {seconds}s",
-    "openNow": "Open HTTPS Now"
+    "openNow": "Open HTTPS Now",
+    "installCertificate": "Install Local Certificate"
   },
   "newGroup": {
     "openFolderDescription": "Browse and open a folder",

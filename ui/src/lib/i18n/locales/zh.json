@@ -832,13 +832,14 @@
     "description": "部分浏览器能力受安全上下文限制，必须切换到 HTTPS 后才能正常使用。",
     "secureContextTitle": "浏览器能力限制",
     "secureContextDescription": "例如语音输入需要访问麦克风，只能在 HTTPS 等安全上下文中启用。",
-    "certificateTitle": "自动生成自签证书",
-    "certificateDescription": "VibeGo 会为当前服务生成安全的随机自签证书，并自动跳转到 HTTPS 地址。",
-    "trustTitle": "下一步需要手动确认",
-    "trustDescription": "跳转后的页面如果出现证书风险提示，请在浏览器中点击信任并继续访问。",
+    "certificateTitle": "自动生成本地证书",
+    "certificateDescription": "VibeGo 会使用专属的本地 CA 为当前服务签发证书，并自动更新其中的本机网络地址。",
+    "trustTitle": "安装后不再提示风险",
+    "trustDescription": "仅在你信任此 VibeGo 服务时，将证书安装到系统的受信任证书存储区；安装过程需要系统确认。也可以直接前往 HTTPS 并在浏览器中继续访问。",
     "targetLabel": "即将前往",
     "disableHint": "如需关闭此行为，请在启动时传入 {flag}",
     "countdown": "{seconds} 秒后自动跳转",
-    "openNow": "立即前往 HTTPS"
+    "openNow": "立即前往 HTTPS",
+    "installCertificate": "安装本机证书"
   }
 }

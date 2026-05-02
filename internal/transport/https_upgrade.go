@@ -1,6 +1,8 @@
 package transport
 
 import (
+	"encoding/pem"
+	"fmt"
 	"io/fs"
 	"net"
 	"net/http"
@@ -9,10 +11,13 @@ import (
 	"strings"
 )
 
+const CertificateDownloadPath = "/vibego.crt"
+
 type HTTPSUpgradeHandlerConfig struct {
 	DistFS          fs.FS
 	Fallback        http.Handler
 	UpgradePagePath string
+	Certificate     []byte
 }
 
 type httpsUpgradeHandler struct {
@@ -20,6 +25,7 @@ type httpsUpgradeHandler struct {
 	fallback        http.Handler
 	fileServer      http.Handler
 	upgradePagePath string
+	certificate     []byte
 }
 
 func NewHTTPSUpgradeHandler(cfg HTTPSUpgradeHandlerConfig) (http.Handler, error) {
@@ -32,17 +38,27 @@ func NewHTTPSUpgradeHandler(cfg HTTPSUpgradeHandlerConfig) (http.Handler, error)
 		return nil, err
 	}
 
+	certificate := cfg.Certificate
+	if block, _ := pem.Decode(certificate); block != nil && block.Type == "CERTIFICATE" {
+		certificate = block.Bytes
+	}
+
 	return &httpsUpgradeHandler{
 		distFS:          cfg.DistFS,
 		fallback:        cfg.Fallback,
 		fileServer:      http.FileServer(http.FS(cfg.DistFS)),
 		upgradePagePath: upgradePagePath,
+		certificate:     certificate,
 	}, nil
 }
 
 func (h *httpsUpgradeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.shouldServeFallback(r) {
 		h.fallback.ServeHTTP(w, r)
+		return
+	}
+	if r.URL.Path == CertificateDownloadPath {
+		h.serveCertificate(w, r)
 		return
 	}
 
@@ -64,6 +80,28 @@ func (h *httpsUpgradeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	req := cloneRequestWithPath(r, "/"+h.upgradePagePath)
 	w.Header().Set("Cache-Control", "no-store")
 	h.fileServer.ServeHTTP(w, req)
+}
+
+func (h *httpsUpgradeHandler) serveCertificate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
+	if len(h.certificate) == 0 {
+		http.NotFound(w, r)
+		return
+	}
+
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Disposition", `attachment; filename="vibego.crt"`)
+	w.Header().Set("Content-Type", "application/x-x509-ca-cert")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Length", fmt.Sprint(len(h.certificate)))
+	w.WriteHeader(http.StatusOK)
+	if r.Method == http.MethodGet {
+		_, _ = w.Write(h.certificate)
+	}
 }
 
 func (h *httpsUpgradeHandler) shouldServeFallback(r *http.Request) bool {
