@@ -119,3 +119,8 @@ prepare-test:
 
 test:
 	go test -v -count=1 ./internal/handler/ -run TestGit -timeout 120s
+
+thirdparty:
+	@mkdir -p thirdparty
+	@cd thirdparty && git clone https://github.com/desktop/desktop.git && git checkout development
+	@cd thirdparty && git clone https://github.com/wavetermdev/waveterm.git && git checkout main-legacy

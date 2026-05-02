@@ -9,4 +9,5 @@ ui/CLAUDE.md
 /testdata
 /scripts/__pycache__
 /assets/sherpa/
-/thirdparty/blockterm-demo
+/thirdparty/desktop
+/thirdparty/waveterm
