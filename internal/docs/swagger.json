@@ -4,7 +4,7 @@
         "description": "VibeGo 后端服务 API",
         "title": "VibeGo API",
         "contact": {},
-        "version": "0.3.0"
+        "version": "0.3.1"
     },
     "host": "localhost:1984",
     "basePath": "/api",
