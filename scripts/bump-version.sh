@@ -106,7 +106,7 @@ replace_regex "internal/docs/swagger.yaml" '(^  version: ).*$' "\\g<1>${version}
 
 git add ui/package.json ui/package-lock.json main.go internal/docs/swagger.json internal/docs/swagger.yaml
 git commit -m "chore: bump version ${tag}"
-git tag "${tag}"
+git tag -a "${tag}" -m "${tag}"
 
 if ! make verify-release; then
 	echo "verify-release failed, rollback to previous version" >&2
