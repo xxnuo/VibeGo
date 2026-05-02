@@ -36,6 +36,14 @@ func (s *Session) Configure(cfg Config) Config {
 	}
 	s.config.FPS = cfg.FPS
 	s.config.Quality = cfg.Quality
+	s.config.FitMode = cfg.FitMode
+	s.config.ScalePercent = cfg.ScalePercent
+	s.config.ScrollMode = cfg.ScrollMode
+	s.config.QualityPreset = cfg.QualityPreset
+	s.config.ControlMode = cfg.ControlMode
+	s.config.KeyboardMode = cfg.KeyboardMode
+	s.config.ShowLocalCursor = cfg.ShowLocalCursor
+	s.config.ClipboardSync = cfg.ClipboardSync
 	out := s.config
 	s.mu.Unlock()
 	return out
@@ -134,26 +142,32 @@ func (s *Session) WriteClipboard(text string) error {
 }
 
 type ClientMessage struct {
-	Type          string   `json:"type"`
-	Version       int      `json:"version,omitempty"`
-	DisplayID     *int     `json:"displayId,omitempty"`
-	FPS           int      `json:"fps,omitempty"`
-	Quality       int      `json:"quality,omitempty"`
-	FitMode       string   `json:"fitMode,omitempty"`
-	ControlMode   string   `json:"controlMode,omitempty"`
-	ClipboardSync *bool    `json:"clipboardSync,omitempty"`
-	X             float64  `json:"x,omitempty"`
-	Y             float64  `json:"y,omitempty"`
-	Button        string   `json:"button,omitempty"`
-	Down          *bool    `json:"down,omitempty"`
-	DeltaX        int      `json:"deltaX,omitempty"`
-	DeltaY        int      `json:"deltaY,omitempty"`
-	Key           string   `json:"key,omitempty"`
-	Modifiers     []string `json:"modifiers,omitempty"`
-	Text          string   `json:"text,omitempty"`
-	Seq           uint64   `json:"seq,omitempty"`
-	RenderMs      int64    `json:"renderMs,omitempty"`
-	ReceivedAt    int64    `json:"receivedAt,omitempty"`
+	Type            string   `json:"type"`
+	Version         int      `json:"version,omitempty"`
+	DisplayID       *int     `json:"displayId,omitempty"`
+	FPS             int      `json:"fps,omitempty"`
+	Quality         int      `json:"quality,omitempty"`
+	FitMode         string   `json:"fitMode,omitempty"`
+	ScalePercent    int      `json:"scalePercent,omitempty"`
+	ScrollMode      string   `json:"scrollMode,omitempty"`
+	QualityPreset   string   `json:"qualityPreset,omitempty"`
+	ControlMode     string   `json:"controlMode,omitempty"`
+	KeyboardMode    string   `json:"keyboardMode,omitempty"`
+	ShowLocalCursor *bool    `json:"showLocalCursor,omitempty"`
+	ClipboardSync   *bool    `json:"clipboardSync,omitempty"`
+	X               float64  `json:"x,omitempty"`
+	Y               float64  `json:"y,omitempty"`
+	Button          string   `json:"button,omitempty"`
+	Down            *bool    `json:"down,omitempty"`
+	DeltaX          int      `json:"deltaX,omitempty"`
+	DeltaY          int      `json:"deltaY,omitempty"`
+	Key             string   `json:"key,omitempty"`
+	Modifiers       []string `json:"modifiers,omitempty"`
+	Text            string   `json:"text,omitempty"`
+	SpecialKey      string   `json:"specialKey,omitempty"`
+	Seq             uint64   `json:"seq,omitempty"`
+	RenderMs        int64    `json:"renderMs,omitempty"`
+	ReceivedAt      int64    `json:"receivedAt,omitempty"`
 }
 
 func ParseClientMessage(data []byte) (ClientMessage, error) {

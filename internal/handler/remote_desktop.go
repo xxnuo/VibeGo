@@ -297,8 +297,23 @@ func (h *RemoteDesktopHandler) handleClientMessage(session *remotedesktop.Sessio
 		if msg.FitMode != "" {
 			cfg.FitMode = msg.FitMode
 		}
+		if msg.ScalePercent > 0 {
+			cfg.ScalePercent = msg.ScalePercent
+		}
+		if msg.ScrollMode != "" {
+			cfg.ScrollMode = msg.ScrollMode
+		}
+		if msg.QualityPreset != "" {
+			cfg.QualityPreset = msg.QualityPreset
+		}
 		if msg.ControlMode != "" {
 			cfg.ControlMode = msg.ControlMode
+		}
+		if msg.KeyboardMode != "" {
+			cfg.KeyboardMode = msg.KeyboardMode
+		}
+		if msg.ShowLocalCursor != nil {
+			cfg.ShowLocalCursor = *msg.ShowLocalCursor
 		}
 		if msg.ClipboardSync != nil {
 			cfg.ClipboardSync = *msg.ClipboardSync
@@ -345,6 +360,15 @@ func (h *RemoteDesktopHandler) handleClientMessage(session *remotedesktop.Sessio
 		if err := session.Text(msg.Text); err != nil {
 			queueRemoteDesktopError(send, "text_failed", err.Error(), true)
 		}
+	case "specialKey":
+		if session.Config().ControlMode == "view" {
+			return
+		}
+		if err := h.specialKey(session, msg.SpecialKey); err != nil {
+			queueRemoteDesktopError(send, "special_key_failed", err.Error(), true)
+		}
+	case "releaseInput":
+		h.releaseInput(session, send)
 	case "frameAck":
 		delayMs := time.Now().UnixMilli() - msg.ReceivedAt
 		if msg.ReceivedAt <= 0 {
@@ -370,6 +394,37 @@ func (h *RemoteDesktopHandler) handleClientMessage(session *remotedesktop.Sessio
 	case "resume":
 		paused.Store(false)
 		queueRemoteDesktopJSON(send, "status", gin.H{"paused": false})
+	}
+}
+
+func (h *RemoteDesktopHandler) specialKey(session *remotedesktop.Session, key string) error {
+	press := func(k string, mods ...string) error {
+		if err := session.Key(k, true, mods); err != nil {
+			return err
+		}
+		return session.Key(k, false, mods)
+	}
+	switch key {
+	case "ctrlAltDel":
+		return press("delete", "ctrl", "alt")
+	case "lock":
+		return press("l", "cmd")
+	case "esc":
+		return press("esc")
+	case "tab":
+		return press("tab")
+	case "enter":
+		return press("enter")
+	case "up":
+		return press("arrowup")
+	case "down":
+		return press("arrowdown")
+	case "left":
+		return press("arrowleft")
+	case "right":
+		return press("arrowright")
+	default:
+		return nil
 	}
 }
 

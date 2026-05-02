@@ -56,8 +56,16 @@ export interface RemoteDesktopConfig {
   displayId: number;
   fps: number;
   quality: number;
-  fitMode: "contain" | "cover" | string;
+  fitMode: "contain" | "original" | "custom" | string;
+  scalePercent: number;
+  scrollMode: "auto" | "scrollbar" | "edge" | string;
+  qualityPreset: "smooth" | "balanced" | "sharp" | "custom" | string;
   controlMode: "control" | "view" | string;
+  keyboardMode: "legacy" | "text" | string;
+  showLocalCursor: boolean;
+  mobileInputMode?: "touch" | "mouse" | string;
+  showVirtualMouse?: boolean;
+  virtualMouseScale?: number;
   clipboardSync: boolean;
 }
 

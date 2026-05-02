@@ -82,12 +82,17 @@ type ClipboardProvider interface {
 }
 
 type Config struct {
-	DisplayID     int    `json:"displayId"`
-	FPS           int    `json:"fps"`
-	Quality       int    `json:"quality"`
-	FitMode       string `json:"fitMode"`
-	ControlMode   string `json:"controlMode"`
-	ClipboardSync bool   `json:"clipboardSync"`
+	DisplayID       int    `json:"displayId"`
+	FPS             int    `json:"fps"`
+	Quality         int    `json:"quality"`
+	FitMode         string `json:"fitMode"`
+	ScalePercent    int    `json:"scalePercent"`
+	ScrollMode      string `json:"scrollMode"`
+	QualityPreset   string `json:"qualityPreset"`
+	ControlMode     string `json:"controlMode"`
+	KeyboardMode    string `json:"keyboardMode"`
+	ShowLocalCursor bool   `json:"showLocalCursor"`
+	ClipboardSync   bool   `json:"clipboardSync"`
 }
 
 type FrameMetadata struct {
@@ -123,11 +128,36 @@ func NormalizeConfig(cfg Config) Config {
 	if cfg.FitMode == "" {
 		cfg.FitMode = "contain"
 	}
+	if cfg.FitMode != "contain" && cfg.FitMode != "original" && cfg.FitMode != "custom" {
+		cfg.FitMode = "contain"
+	}
+	if cfg.ScalePercent <= 0 {
+		cfg.ScalePercent = 100
+	}
+	cfg.ScalePercent = clampInt(cfg.ScalePercent, 25, 300)
+	if cfg.ScrollMode == "" {
+		cfg.ScrollMode = "auto"
+	}
+	if cfg.ScrollMode != "auto" && cfg.ScrollMode != "scrollbar" && cfg.ScrollMode != "edge" {
+		cfg.ScrollMode = "auto"
+	}
+	if cfg.QualityPreset == "" {
+		cfg.QualityPreset = "balanced"
+	}
+	if cfg.QualityPreset != "smooth" && cfg.QualityPreset != "balanced" && cfg.QualityPreset != "sharp" && cfg.QualityPreset != "custom" {
+		cfg.QualityPreset = "balanced"
+	}
 	if cfg.ControlMode == "" {
 		cfg.ControlMode = "control"
 	}
 	if cfg.ControlMode != "control" && cfg.ControlMode != "view" {
 		cfg.ControlMode = "control"
+	}
+	if cfg.KeyboardMode == "" {
+		cfg.KeyboardMode = "legacy"
+	}
+	if cfg.KeyboardMode != "legacy" && cfg.KeyboardMode != "text" {
+		cfg.KeyboardMode = "legacy"
 	}
 	return cfg
 }

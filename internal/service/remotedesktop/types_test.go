@@ -51,15 +51,20 @@ func TestEncodeDecodeFrame(t *testing.T) {
 }
 
 func TestNormalizeConfig(t *testing.T) {
-	cfg := NormalizeConfig(Config{FPS: 200, Quality: 1})
+	cfg := NormalizeConfig(Config{FPS: 200, Quality: 1, FitMode: "bad", ScalePercent: 900, ScrollMode: "bad", QualityPreset: "bad", ControlMode: "bad", KeyboardMode: "bad"})
 	require.Equal(t, MaxFPS, cfg.FPS)
 	require.Equal(t, MinQuality, cfg.Quality)
 	require.Equal(t, "contain", cfg.FitMode)
+	require.Equal(t, 300, cfg.ScalePercent)
+	require.Equal(t, "auto", cfg.ScrollMode)
+	require.Equal(t, "balanced", cfg.QualityPreset)
 	require.Equal(t, "control", cfg.ControlMode)
+	require.Equal(t, "legacy", cfg.KeyboardMode)
 
 	cfg = NormalizeConfig(Config{})
 	require.Equal(t, DefaultFPS, cfg.FPS)
 	require.Equal(t, DefaultQuality, cfg.Quality)
+	require.Equal(t, 100, cfg.ScalePercent)
 }
 
 func TestSessionCaptureFrame(t *testing.T) {

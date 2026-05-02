@@ -47,7 +47,7 @@ func TestRemoteDesktopWebSocketHelloPauseResume(t *testing.T) {
 
 	require.NoError(t, conn.WriteJSON(map[string]any{"type": "configure", "fps": 20, "quality": 90, "controlMode": "view", "clipboardSync": true}))
 	data = readTextMessageContaining(t, conn, `"type":"status"`)
-	require.Contains(t, string(data), `"control"`)
+	require.Contains(t, string(data), `"controlMode":"view"`)
 
 	require.NoError(t, conn.WriteJSON(map[string]any{"type": "frameAck", "seq": 1, "receivedAt": timeNowMilli()}))
 	data = readTextMessageContaining(t, conn, `"type":"qos"`)
@@ -64,6 +64,59 @@ func TestRemoteDesktopWebSocketHelloPauseResume(t *testing.T) {
 	require.NoError(t, conn.WriteJSON(map[string]any{"type": "clipboardRead"}))
 	data = readTextMessageContaining(t, conn, `"type":"clipboard"`)
 	require.Contains(t, string(data), `"text":"clip"`)
+}
+
+func TestRemoteDesktopWebSocketExtendedConfigAndInputRelease(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	api := r.Group("/api")
+	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	input := &handlerFakeInput{}
+	h := NewRemoteDesktopHandlerWithProviders(
+		&handlerFakeCapture{
+			displays: []remotedesktop.Display{{ID: 0, Width: 2, Height: 2}},
+			img:      img,
+		},
+		input,
+		&handlerFakeClipboard{},
+	)
+	h.Register(api)
+
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/api/remote-desktop/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, _, err = conn.ReadMessage()
+	require.NoError(t, err)
+
+	require.NoError(t, conn.WriteJSON(map[string]any{
+		"type":            "configure",
+		"fitMode":         "custom",
+		"scalePercent":    125,
+		"scrollMode":      "edge",
+		"qualityPreset":   "sharp",
+		"keyboardMode":    "text",
+		"showLocalCursor": false,
+	}))
+	data := readTextMessageContaining(t, conn, `"type":"status"`)
+	require.Contains(t, string(data), `"fitMode":"custom"`)
+	require.Contains(t, string(data), `"scalePercent":125`)
+	require.Contains(t, string(data), `"scrollMode":"edge"`)
+	require.Contains(t, string(data), `"keyboardMode":"text"`)
+
+	require.NoError(t, conn.WriteJSON(map[string]any{"type": "specialKey", "specialKey": "ctrlAltDel"}))
+	require.Eventually(t, func() bool {
+		return input.keyEvents >= 2
+	}, time.Second, 10*time.Millisecond)
+
+	require.NoError(t, conn.WriteJSON(map[string]any{"type": "releaseInput"}))
+	require.Eventually(t, func() bool {
+		return input.buttonEvents >= 3
+	}, time.Second, 10*time.Millisecond)
 }
 
 func timeNowMilli() int64 {
@@ -101,15 +154,24 @@ func (f *handlerFakeCapture) Capture(displayID int) (image.Image, remotedesktop.
 	return nil, remotedesktop.Display{}, remotedesktop.ErrDisplayNotFound
 }
 
-type handlerFakeInput struct{}
+type handlerFakeInput struct {
+	keyEvents    int
+	buttonEvents int
+}
 
-func (f *handlerFakeInput) Available() error                                    { return nil }
-func (f *handlerFakeInput) Move(x, y int) error                                 { return nil }
-func (f *handlerFakeInput) Button(button string, down bool) error               { return nil }
-func (f *handlerFakeInput) Click(button string) error                           { return nil }
-func (f *handlerFakeInput) Wheel(x, y int) error                                { return nil }
-func (f *handlerFakeInput) Key(key string, down bool, modifiers []string) error { return nil }
-func (f *handlerFakeInput) Text(text string) error                              { return nil }
+func (f *handlerFakeInput) Available() error    { return nil }
+func (f *handlerFakeInput) Move(x, y int) error { return nil }
+func (f *handlerFakeInput) Button(button string, down bool) error {
+	f.buttonEvents++
+	return nil
+}
+func (f *handlerFakeInput) Click(button string) error { return nil }
+func (f *handlerFakeInput) Wheel(x, y int) error      { return nil }
+func (f *handlerFakeInput) Key(key string, down bool, modifiers []string) error {
+	f.keyEvents++
+	return nil
+}
+func (f *handlerFakeInput) Text(text string) error { return nil }
 
 type handlerFakeClipboard struct {
 	text string
