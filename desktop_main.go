@@ -132,7 +132,7 @@ func startDesktopServer() (*exec.Cmd, string, error) {
 	args := []string{}
 	if _, err := os.Stat(serverPath); err != nil {
 		serverPath = "go"
-		args = []string{"run", "-tags", "desktop_server", "."}
+		args = []string{"run", "-tags", "desktop_server,debug", "."}
 	}
 	cmd := exec.Command(serverPath, args...)
 	desktopServerPort := strings.TrimSpace(os.Getenv("VG_DESKTOP_PORT"))

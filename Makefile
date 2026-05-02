@@ -38,7 +38,7 @@ desktop-dev:
 	(cd $(UI_DIR) && pnpm run dev --host 127.0.0.1) & \
 	ui_pid=$$!; \
 	trap 'kill $$ui_pid 2>/dev/null || true' EXIT INT TERM; \
-	VG_DESKTOP_PORT=11984 VG_DESKTOP_DEV_UI=http://127.0.0.1:15173 CGO_ENABLED=1 go run -tags "desktop" .
+	VG_DEV=true VG_DESKTOP_PORT=11984 VG_DESKTOP_DEV_UI=http://127.0.0.1:15173 CGO_ENABLED=1 go run -tags "desktop,debug" .
 
 desktop-build:
 	$(MAKE) build-frontend

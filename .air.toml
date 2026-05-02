@@ -8,7 +8,7 @@ tmp_dir = "temp"
 [build]
   args_bin = ["--log-level", "debug", "--host", "0.0.0.0", "--port", "11984", "--config-dir", "./temp/dev/server", "--log-dir", "./temp/dev/logs", "--dev-ui", "http://localhost:15173"]
   bin = "./temp/main"
-  cmd = "go build -o ./temp/main ."
+  cmd = "go build -tags debug -o ./temp/main ."
   delay = 1000
   entrypoint = ["./temp/main"]
   exclude_dir = ["assets", "temp", "vendor", "testdata", "ui"]

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/xxnuo/vibego/internal/utils"
 	"github.com/xxnuo/vibego/internal/version"
@@ -52,7 +53,11 @@ func defaultConfig() *Config {
 		panic(err)
 	}
 
-	cfg.HomeDir = filepath.Join(homeDir, ".config", "vibego")
+	appDir := "vibego"
+	if debugBuild || utils.GetBoolEnv("VG_DEV", false) || strings.TrimSpace(os.Getenv("VG_DESKTOP_DEV_UI")) != "" {
+		appDir = "vibego-dev"
+	}
+	cfg.HomeDir = filepath.Join(homeDir, ".config", appDir)
 	cfg.ConfigDir = filepath.Join(cfg.HomeDir, "server")
 	cfg.TlsDir = cfg.ConfigDir
 	cfg.LogDir = filepath.Join(cfg.HomeDir, "logs")
@@ -140,6 +145,7 @@ func GetConfig() *Config {
 		writeUsage(os.Stderr, os.Args[0], flag.CommandLine.PrintDefaults)
 	}
 	flag.Parse()
+	cfg.TlsDir = cfg.ConfigDir
 
 	if *versionFlag || *versionShortFlag {
 		fmt.Printf("%s\n", version.Version)
