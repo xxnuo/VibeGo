@@ -27,12 +27,6 @@ import {
   useFrameStore,
 } from "@/stores/frame-store";
 
-const PAGE_TYPE_ICONS: Record<PageType, React.ReactNode> = {
-  files: <NavIcon icon={pageRegistry.get("files")?.icon} size={24} />,
-  git: <NavIcon icon={pageRegistry.get("git")?.icon} size={24} />,
-  terminal: <NavIcon icon={pageRegistry.get("terminal")?.icon} size={24} />,
-};
-
 interface SideBarProps {
   onMenuClick?: () => void;
   onNewPage?: () => void;
@@ -58,6 +52,11 @@ interface GroupButtonProps {
 
 const getToolIcon = (pageId: string): React.ReactNode => {
   const page = pageRegistry.get(pageId);
+  return <NavIcon icon={page?.icon} size={24} />;
+};
+
+const getPageTypeIcon = (pageType: PageType): React.ReactNode => {
+  const page = pageRegistry.get(pageType);
   return <NavIcon icon={page?.icon} size={24} />;
 };
 
@@ -93,7 +92,7 @@ const GroupButton: React.FC<GroupButtonProps> = ({
               }`}
               title={workspacePath ? `${getPageTitle(page.type)} - ${workspacePath}` : getPageTitle(page.type)}
             >
-              {PAGE_TYPE_ICONS[page.type] || <Box size={24} />}
+              {getPageTypeIcon(page.type)}
             </button>
           ))}
         </div>
