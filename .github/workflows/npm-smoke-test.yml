@@ -1,0 +1,118 @@
+name: npm-smoke-test
+
+on:
+  repository_dispatch:
+    types:
+      - npm-smoke-test
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: release tag like v0.0.3
+        required: true
+        type: string
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - id: meta
+        env:
+          TAG_NAME: ${{ github.event.client_payload.tag || inputs.tag || '' }}
+          VERSION_NAME: ${{ github.event.client_payload.version || '' }}
+        run: |
+          set -euo pipefail
+          tag="${TAG_NAME}"
+          if [[ -z "${tag}" ]]; then
+            echo "missing tag"
+            exit 1
+          fi
+
+          version="${VERSION_NAME}"
+          if [[ -z "${version}" ]]; then
+            version="${tag#v}"
+          fi
+
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+  smoke-test:
+    needs: meta
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Wait for npm packages
+        shell: bash
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          case "$(uname -s):$(uname -m)" in
+            Linux:x86_64) platform_package="@vibego/vibego-linux-x64" ;;
+            Linux:aarch64|Linux:arm64) platform_package="@vibego/vibego-linux-arm64" ;;
+            Darwin:x86_64) platform_package="@vibego/vibego-darwin-x64" ;;
+            Darwin:arm64) platform_package="@vibego/vibego-darwin-arm64" ;;
+            MINGW*:x86_64|MSYS*:x86_64|CYGWIN*:x86_64) platform_package="@vibego/vibego-win32-x64" ;;
+            MINGW*:aarch64|MSYS*:aarch64|CYGWIN*:aarch64|MINGW*:arm64|MSYS*:arm64|CYGWIN*:arm64) platform_package="@vibego/vibego-win32-arm64" ;;
+            *)
+              echo "unsupported smoke-test host: $(uname -s) $(uname -m)"
+              exit 1
+              ;;
+          esac
+
+          wait_for_package() {
+            package="$1"
+            deadline=$((SECONDS + 900))
+            attempt=1
+            while true; do
+              if actual="$(npm view "${package}@${VERSION}" version --registry=https://registry.npmjs.org --json 2>/dev/null | tr -d '\"\r\n')" && [ "${actual}" = "${VERSION}" ]; then
+                echo "${package}@${VERSION} is visible"
+                return 0
+              fi
+
+              if [ "${SECONDS}" -ge "${deadline}" ]; then
+                echo "timed out waiting for ${package}@${VERSION}"
+                npm view "${package}@${VERSION}" version --registry=https://registry.npmjs.org || true
+                return 1
+              fi
+
+              sleep_for=$((attempt * 5))
+              if [ "${sleep_for}" -gt 60 ]; then
+                sleep_for=60
+              fi
+              echo "waiting for ${package}@${VERSION}, retrying in ${sleep_for}s"
+              sleep "${sleep_for}"
+              attempt=$((attempt + 1))
+            done
+          }
+
+          wait_for_package "vibego"
+          wait_for_package "${platform_package}"
+
+      - name: Install and verify
+        shell: bash
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          npm i -g "vibego@${VERSION}" --registry=https://registry.npmjs.org
+          actual="$(vibego -v | tr -d '\r\n')"
+          expected="v${VERSION}"
+          if [ "$actual" != "$expected" ]; then
+            echo "unexpected version: $actual"
+            exit 1
+          fi

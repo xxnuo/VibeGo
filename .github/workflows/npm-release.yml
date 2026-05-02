@@ -141,33 +141,29 @@ jobs:
           done
           publish_one "dist/npm/vibego-npm-${VERSION}.tgz" "public"
 
-  smoke-test:
+  trigger-smoke-test:
     if: ${{ needs.meta.outputs.should_publish_npm == 'true' }}
     needs: [meta, publish-npm]
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-
-      - name: Install and verify
-        shell: bash
+      - name: Trigger npm smoke test
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.meta.outputs.tag }}
           VERSION: ${{ needs.meta.outputs.version }}
         run: |
           set -euo pipefail
-          npm i -g "vibego@${VERSION}"
-          actual="$(vibego -v | tr -d '\r\n')"
-          expected="v${VERSION}"
-          if [ "$actual" != "$expected" ]; then
-            echo "unexpected version: $actual"
-            exit 1
-          fi
+          payload_file="$(mktemp)"
+          cat > "${payload_file}" <<JSON
+          {
+            "event_type": "npm-smoke-test",
+            "client_payload": {
+              "tag": "${TAG}",
+              "version": "${VERSION}"
+            }
+          }
+          JSON
+          gh api repos/${GITHUB_REPOSITORY}/dispatches --method POST --input "${payload_file}"
