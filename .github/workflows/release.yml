@@ -86,14 +86,14 @@ jobs:
             cgo_enabled: 1
             msystem: UCRT64
             msys_packages: mingw-w64-ucrt-x86_64-gcc
-            cc: gcc
+            cc: C:\msys64\ucrt64\bin\gcc.exe
           - runner: windows-11-arm
             goos: windows
             goarch: arm64
             cgo_enabled: 1
             msystem: CLANGARM64
             msys_packages: mingw-w64-clang-aarch64-clang
-            cc: clang
+            cc: C:\msys64\clangarm64\bin\clang.exe
 
     steps:
       - uses: actions/checkout@v6
@@ -132,6 +132,19 @@ jobs:
           cd ui
           pnpm install --frozen-lockfile
           pnpm run build
+
+      - name: Verify Android desktop dependency isolation
+        if: ${{ matrix.goos == 'android' }}
+        shell: bash
+        env:
+          CGO_ENABLED: ${{ matrix.cgo_enabled }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          if go list -deps ./ | grep -qx 'github.com/go-vgo/robotgo'; then
+            echo "android build must not depend on github.com/go-vgo/robotgo"
+            exit 1
+          fi
 
       - name: Build backend
         shell: bash
