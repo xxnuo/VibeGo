@@ -284,6 +284,11 @@
       "optionDefault": "Default",
       "optionJetBrainsMono": "JetBrains Mono"
     },
+    "fontFallbackFamily": {
+      "label": "Fallback Font",
+      "description": "Used when the primary font does not include a character set, such as pairing an English font with a Chinese font.",
+      "optionDefault": "Use default fallback"
+    },
     "showHiddenFiles": {
       "label": "Show Hidden Files",
       "description": "Display hidden files in file manager"
@@ -311,6 +316,11 @@
       "description": "Choose the monospace font used by terminal sessions",
       "optionDefault": "Default terminal font",
       "optionSystemMono": "Follow UI monospace font"
+    },
+    "terminalFontFallbackFamily": {
+      "label": "Terminal Fallback Font",
+      "description": "Used when the terminal primary font lacks characters, such as pairing an English monospace font with a Chinese monospace font.",
+      "optionDefault": "Use default fallback"
     },
     "terminalDesktopNotifications": {
       "label": "Desktop Notifications",

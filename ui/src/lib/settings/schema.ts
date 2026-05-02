@@ -62,6 +62,15 @@ export const SETTINGS_SCHEMA: SettingSchema[] = [
     ],
   },
   {
+    key: "fontFallbackFamily",
+    type: "select",
+    category: "appearance",
+    labelKey: "settings.fontFallbackFamily.label",
+    descriptionKey: "settings.fontFallbackFamily.description",
+    defaultValue: "default",
+    options: [{ value: "default", label: "settings.fontFallbackFamily.optionDefault" }],
+  },
+  {
     key: "showHiddenFiles",
     type: "toggle",
     category: "fileManager",
@@ -124,6 +133,15 @@ export const SETTINGS_SCHEMA: SettingSchema[] = [
       { value: "jetbrains-mono", label: "JetBrains Mono" },
       { value: "system-mono", label: "settings.terminalFontFamily.optionSystemMono" },
     ],
+  },
+  {
+    key: "terminalFontFallbackFamily",
+    type: "select",
+    category: "terminal",
+    labelKey: "settings.terminalFontFallbackFamily.label",
+    descriptionKey: "settings.terminalFontFallbackFamily.description",
+    defaultValue: "default",
+    options: [{ value: "default", label: "settings.terminalFontFallbackFamily.optionDefault" }],
   },
   {
     key: "terminalDesktopNotifications",

@@ -93,7 +93,7 @@ const CodePreview: React.FC<CodePreviewProps> = ({ onSave }) => {
             readOnly: !editMode,
             minimap: { enabled: false },
             fontSize: isMobile ? 12 : 13,
-            fontFamily: "JetBrains Mono, Fira Code, monospace",
+            fontFamily: "var(--font-mono)",
             scrollBeyondLastLine: false,
             wordWrap: "on",
             lineNumbers: isMobile ? "off" : "on",

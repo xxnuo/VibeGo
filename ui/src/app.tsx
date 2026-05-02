@@ -5,6 +5,7 @@ import { DirectoryPicker, NewPageMenu, ProjectMenu } from "@/components/common";
 import { AppFrame, NewGroupMenu } from "@/components/frame";
 import { getStoredAuthKey, LoginPage, setStoredAuthKey } from "@/components/login-page";
 import { Toaster } from "@/components/ui/sonner";
+import { isCustomFontValue, resolveFontFamily } from "@/lib/fonts";
 import { useTranslation } from "@/lib/i18n";
 import { useSettingsStore } from "@/lib/settings";
 import { pageRegistry } from "@/pages/registry";
@@ -35,6 +36,7 @@ const App: React.FC = () => {
   const themeSetting = useSettingsStore((s) => s.settings.theme);
   const localeSetting = useSettingsStore((s) => s.settings.locale);
   const fontFamily = useSettingsStore((s) => s.settings.fontFamily);
+  const fontFallbackFamily = useSettingsStore((s) => s.settings.fontFallbackFamily);
 
   const activeGroup = useFrameStore((s) => s.getActiveGroup());
   const currentPage = useFrameStore((s) => s.getCurrentPage());
@@ -141,12 +143,31 @@ const App: React.FC = () => {
   }, [localeSetting, setLocale]);
 
   useEffect(() => {
-    if (fontFamily && fontFamily !== "default") {
+    if (isCustomFontValue(fontFamily)) {
+      const resolvedFontFamily = resolveFontFamily(fontFamily, undefined, fontFallbackFamily);
+      document.body.removeAttribute("data-font");
+      document.body.style.setProperty("--font-sans", resolvedFontFamily);
+      document.body.style.setProperty("--font-mono", resolvedFontFamily);
+      document.body.style.fontFamily = resolvedFontFamily;
+    } else if (fontFamily && fontFamily !== "default") {
+      const resolvedFontFamily = resolveFontFamily(fontFamily, undefined, fontFallbackFamily);
       document.body.setAttribute("data-font", fontFamily);
+      document.body.style.setProperty("--font-sans", resolvedFontFamily);
+      document.body.style.setProperty("--font-mono", resolvedFontFamily);
+      document.body.style.removeProperty("font-family");
+    } else if (fontFallbackFamily && fontFallbackFamily !== "default") {
+      const resolvedFontFamily = resolveFontFamily(fontFamily, undefined, fontFallbackFamily);
+      document.body.removeAttribute("data-font");
+      document.body.style.setProperty("--font-sans", resolvedFontFamily);
+      document.body.style.setProperty("--font-mono", resolvedFontFamily);
+      document.body.style.fontFamily = resolvedFontFamily;
     } else {
       document.body.removeAttribute("data-font");
+      document.body.style.removeProperty("--font-sans");
+      document.body.style.removeProperty("--font-mono");
+      document.body.style.removeProperty("font-family");
     }
-  }, [fontFamily]);
+  }, [fontFamily, fontFallbackFamily]);
 
   useEffect(() => {
     const root = document.documentElement;

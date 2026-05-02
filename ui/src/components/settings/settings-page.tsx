@@ -1,6 +1,7 @@
 import {
   AlignLeft,
   Bell,
+  Check,
   CloudDownload,
   Download,
   Eye,
@@ -9,6 +10,7 @@ import {
   List,
   Mail,
   RefreshCw,
+  Search,
   Settings,
   Smartphone,
   Trash2,
@@ -23,21 +25,367 @@ import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { deleteSpeechModelAssets, preloadSpeechModel, speechAssetStates } from "@/components/keyboard/core/sherpa-asr";
 import { useFrameController } from "@/framework/frame/controller";
+import {
+  customFontFamily,
+  detectCandidateFontFamilies,
+  type FontOption,
+  recommendedFontOptions,
+  resolveFontFamily,
+  scanLocalFontFamilies,
+  supportsLocalFontScan,
+  toFontOptions,
+} from "@/lib/fonts";
 import { type Locale, useTranslation } from "@/lib/i18n";
 import { getNewPageVisibilitySettingKey, isPageVisibleInNewPage } from "@/lib/page-visibility";
-import { getSettingsByCategory, SETTING_CATEGORIES, type SettingSchema, useSettingsStore } from "@/lib/settings";
+import {
+  getSettingsByCategory,
+  SETTING_CATEGORIES,
+  SETTINGS_SCHEMA,
+  type SettingSchema,
+  useSettingsStore,
+} from "@/lib/settings";
 import { pageRegistry } from "@/pages/registry";
 import type { PageDefinition } from "@/pages/types";
 import { requestTerminalNotificationPermission } from "@/services/terminal-notification-service";
 import { useFrameStore } from "@/stores/frame-store";
 
+const FONT_SAMPLE = {
+  ui: "VibeGo 设置 0123",
+  terminal: "$ pnpm dev --host 0.0.0.0",
+};
+
+const FONT_SOURCE_LABELS: Record<FontOption["source"], string> = {
+  recommended: "推荐",
+  installed: "本机",
+  candidate: "候选",
+};
+
+function mergeFontOptions(options: FontOption[]) {
+  const seen = new Set<string>();
+  const result: FontOption[] = [];
+  for (const option of options) {
+    if (seen.has(option.value)) continue;
+    seen.add(option.value);
+    result.push(option);
+  }
+  return result;
+}
+
+const FontSettingItem: React.FC<{
+  schema: SettingSchema;
+  value: string;
+  fallbackSchema?: SettingSchema;
+  fallbackValue?: string;
+  onChange: (value: string) => void;
+  onFallbackChange?: (value: string) => void;
+  t: (key: string) => string;
+}> = ({ schema, value, fallbackSchema, fallbackValue = "default", onChange, onFallbackChange, t }) => {
+  const [fontOptions, setFontOptions] = useState<FontOption[]>([]);
+  const [fontScanBusy, setFontScanBusy] = useState(false);
+  const [fontScanDone, setFontScanDone] = useState(false);
+  const [fontSearch, setFontSearch] = useState("");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [fallbackSearch, setFallbackSearch] = useState("");
+  const isTerminalFont = schema.key === "terminalFontFamily";
+  const scanSupported = supportsLocalFontScan();
+  const recommendedOptions = recommendedFontOptions(isTerminalFont).map((opt) => ({
+    ...opt,
+    label: schema.options?.find((item) => item.value === opt.value)?.label || opt.label,
+  }));
+  const selectedCustomOption =
+    value.startsWith("custom:") && !fontOptions.some((opt) => opt.value === value)
+      ? [
+          {
+            value,
+            label: customFontFamily(value),
+            family: resolveFontFamily(value),
+            source: "installed" as const,
+          },
+        ]
+      : [];
+  const allFontOptions = mergeFontOptions([...recommendedOptions, ...selectedCustomOption, ...fontOptions]);
+  const selectedFontOption = allFontOptions.find((opt) => opt.value === value) || allFontOptions[0];
+  const selectedFallbackOption =
+    allFontOptions.find((opt) => opt.value === fallbackValue) ||
+    (fallbackValue.startsWith("custom:")
+      ? {
+          value: fallbackValue,
+          label: customFontFamily(fallbackValue),
+          family: resolveFontFamily(fallbackValue),
+          source: "installed" as const,
+        }
+      : allFontOptions[0]);
+  const normalizedSearch = fontSearch.trim().toLowerCase();
+  const filteredFontOptions = normalizedSearch
+    ? allFontOptions.filter((opt) => opt.label.toLowerCase().includes(normalizedSearch))
+    : allFontOptions;
+  const normalizedFallbackSearch = fallbackSearch.trim().toLowerCase();
+  const fallbackOptions = allFontOptions.filter((opt) => opt.value !== value);
+  const filteredFallbackOptions = normalizedFallbackSearch
+    ? fallbackOptions.filter((opt) => opt.label.toLowerCase().includes(normalizedFallbackSearch))
+    : fallbackOptions;
+  const sample = isTerminalFont ? FONT_SAMPLE.terminal : FONT_SAMPLE.ui;
+  const combinedPreviewFamily = resolveFontFamily(value, undefined, fallbackValue);
+  const canResetPrimary = value !== (schema.defaultValue || "default");
+  const canResetFallback = fallbackSchema && fallbackValue !== (fallbackSchema.defaultValue || "default");
+
+  const scanFonts = async () => {
+    if (fontScanBusy) return;
+    setFontScanBusy(true);
+    try {
+      const families = scanSupported ? await scanLocalFontFamilies() : await detectCandidateFontFamilies();
+      setFontOptions(toFontOptions(families, scanSupported ? "installed" : "candidate"));
+      setFontScanDone(true);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "无法读取本机字体");
+    } finally {
+      setFontScanBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!scanSupported) void scanFonts();
+  }, [scanSupported]);
+
+  return (
+    <div className="p-4 bg-ide-bg rounded-lg border border-ide-border">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="text-ide-mute">
+            <Type size={18} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-ide-text">{t(schema.labelKey)}</div>
+            {schema.descriptionKey && <div className="text-xs text-ide-mute">{t(schema.descriptionKey)}</div>}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onChange(schema.defaultValue || "default")}
+            disabled={!canResetPrimary}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md border transition-all bg-ide-panel text-ide-text border-ide-border hover:border-ide-accent disabled:opacity-50 disabled:hover:border-ide-border"
+          >
+            恢复默认
+          </button>
+          <button
+            type="button"
+            onClick={() => void scanFonts()}
+            disabled={fontScanBusy}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md border transition-all bg-ide-panel text-ide-text border-ide-border hover:border-ide-accent disabled:opacity-60"
+          >
+            <RefreshCw size={13} className={fontScanBusy ? "animate-spin" : ""} />
+            {scanSupported ? "扫描本机" : "检测候选"}
+          </button>
+        </div>
+      </div>
+      {selectedFontOption && (
+        <div className="mb-3 p-3 bg-ide-panel border border-ide-border rounded-md">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-xs font-medium text-ide-text truncate">
+                {selectedFontOption.label.startsWith("settings.")
+                  ? t(selectedFontOption.label)
+                  : selectedFontOption.label}
+              </div>
+              <div className="text-[11px] leading-4 text-ide-mute">{FONT_SOURCE_LABELS[selectedFontOption.source]}</div>
+            </div>
+            <span className="shrink-0 text-[11px] text-ide-accent">当前</span>
+          </div>
+          <div
+            className="mt-2 truncate text-base leading-6 text-ide-text"
+            style={{ fontFamily: combinedPreviewFamily }}
+          >
+            {sample}
+          </div>
+          <div
+            className="mt-1 truncate text-[11px] leading-4 text-ide-mute"
+            style={{ fontFamily: combinedPreviewFamily }}
+          >
+            Aa Bb Cc 中文 1234567890
+          </div>
+        </div>
+      )}
+      <div className="mb-2 flex items-center gap-2 rounded-md border border-ide-border bg-ide-panel px-2.5 py-1.5 focus-within:border-ide-accent">
+        <Search size={14} className="shrink-0 text-ide-mute" />
+        <input
+          type="search"
+          value={fontSearch}
+          onChange={(e) => setFontSearch(e.target.value)}
+          placeholder="搜索字体"
+          className="min-w-0 flex-1 bg-transparent text-xs text-ide-text outline-none placeholder:text-ide-mute"
+        />
+        <span className="shrink-0 text-[11px] text-ide-mute">{filteredFontOptions.length}</span>
+      </div>
+      <div className="max-h-80 overflow-y-auto rounded-md border border-ide-border bg-ide-panel custom-scrollbar">
+        {filteredFontOptions.map((opt) => {
+          const label = opt.label.startsWith("settings.") ? t(opt.label) : opt.label;
+          const selected = value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onChange(opt.value)}
+              className={`flex w-full min-w-0 items-center gap-3 border-b border-ide-border px-3 py-2 text-left transition-all last:border-b-0 ${
+                selected ? "bg-ide-accent/10 text-ide-text" : "bg-transparent text-ide-text hover:bg-ide-bg"
+              }`}
+            >
+              <span
+                className={`h-5 w-5 shrink-0 inline-flex items-center justify-center rounded border ${
+                  selected ? "border-ide-accent bg-ide-accent text-ide-on-accent" : "border-ide-border text-transparent"
+                }`}
+              >
+                <Check size={13} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="min-w-0 truncate text-xs font-medium">{label}</span>
+                  <span className="shrink-0 text-[10px] leading-4 text-ide-mute">{FONT_SOURCE_LABELS[opt.source]}</span>
+                </div>
+                <div className="truncate text-[11px] leading-4 text-ide-mute" style={{ fontFamily: opt.family }}>
+                  Aa Bb Cc 中文 1234567890
+                </div>
+              </div>
+              <div
+                className="hidden min-w-0 flex-[0.8] truncate text-xs leading-5 text-ide-text sm:block"
+                style={{ fontFamily: opt.family }}
+              >
+                {sample}
+              </div>
+            </button>
+          );
+        })}
+        {filteredFontOptions.length === 0 && (
+          <div className="px-3 py-6 text-center text-xs text-ide-mute">没有匹配的字体</div>
+        )}
+      </div>
+      {fontScanDone && fontOptions.length === 0 && (
+        <div className="mt-3 text-xs leading-5 text-ide-mute">没有读取到可用字体，当前浏览器可能限制字体访问。</div>
+      )}
+      {fallbackSchema && onFallbackChange && (
+        <div className="mt-3 border-t border-ide-border pt-3">
+          <button
+            type="button"
+            onClick={() => setAdvancedOpen((open) => !open)}
+            className="flex w-full items-center justify-between gap-3 text-left text-xs text-ide-text"
+          >
+            <span className="font-medium">高级设置</span>
+            <span className="text-ide-mute">{advancedOpen ? "收起" : "展开"}</span>
+          </button>
+          {advancedOpen && (
+            <div className="mt-3">
+              <div className="mb-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs font-medium text-ide-text">{t(fallbackSchema.labelKey)}</div>
+                  <button
+                    type="button"
+                    onClick={() => onFallbackChange(fallbackSchema.defaultValue || "default")}
+                    disabled={!canResetFallback}
+                    className="shrink-0 text-[11px] text-ide-mute hover:text-ide-text disabled:opacity-50 disabled:hover:text-ide-mute"
+                  >
+                    恢复默认
+                  </button>
+                </div>
+                {fallbackSchema.descriptionKey && (
+                  <div className="mt-1 text-[11px] leading-4 text-ide-mute">{t(fallbackSchema.descriptionKey)}</div>
+                )}
+              </div>
+              {selectedFallbackOption && fallbackValue !== "default" && (
+                <div className="mb-2 flex items-center justify-between gap-3 rounded-md border border-ide-border bg-ide-panel px-3 py-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-xs text-ide-text">
+                      {selectedFallbackOption.label.startsWith("settings.")
+                        ? t(selectedFallbackOption.label)
+                        : selectedFallbackOption.label}
+                    </div>
+                    <div
+                      className="truncate text-[11px] leading-4 text-ide-mute"
+                      style={{ fontFamily: selectedFallbackOption.family }}
+                    >
+                      Aa Bb Cc 中文 1234567890
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onFallbackChange("default")}
+                    className="shrink-0 text-[11px] text-ide-mute hover:text-ide-text"
+                  >
+                    清除
+                  </button>
+                </div>
+              )}
+              <div className="mb-2 flex items-center gap-2 rounded-md border border-ide-border bg-ide-panel px-2.5 py-1.5 focus-within:border-ide-accent">
+                <Search size={14} className="shrink-0 text-ide-mute" />
+                <input
+                  type="search"
+                  value={fallbackSearch}
+                  onChange={(e) => setFallbackSearch(e.target.value)}
+                  placeholder="搜索备选字体"
+                  className="min-w-0 flex-1 bg-transparent text-xs text-ide-text outline-none placeholder:text-ide-mute"
+                />
+                <span className="shrink-0 text-[11px] text-ide-mute">{filteredFallbackOptions.length}</span>
+              </div>
+              <div className="max-h-56 overflow-y-auto rounded-md border border-ide-border bg-ide-panel custom-scrollbar">
+                {filteredFallbackOptions.map((opt) => {
+                  const label = opt.label.startsWith("settings.") ? t(opt.label) : opt.label;
+                  const selected = fallbackValue === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => onFallbackChange(opt.value)}
+                      className={`flex w-full min-w-0 items-center gap-3 border-b border-ide-border px-3 py-2 text-left transition-all last:border-b-0 ${
+                        selected ? "bg-ide-accent/10 text-ide-text" : "bg-transparent text-ide-text hover:bg-ide-bg"
+                      }`}
+                    >
+                      <span
+                        className={`h-5 w-5 shrink-0 inline-flex items-center justify-center rounded border ${
+                          selected
+                            ? "border-ide-accent bg-ide-accent text-ide-on-accent"
+                            : "border-ide-border text-transparent"
+                        }`}
+                      >
+                        <Check size={13} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="min-w-0 truncate text-xs font-medium">{label}</span>
+                          <span className="shrink-0 text-[10px] leading-4 text-ide-mute">
+                            {FONT_SOURCE_LABELS[opt.source]}
+                          </span>
+                        </div>
+                        <div
+                          className="truncate text-[11px] leading-4 text-ide-mute"
+                          style={{ fontFamily: opt.family }}
+                        >
+                          Aa Bb Cc 中文 1234567890
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+                {filteredFallbackOptions.length === 0 && (
+                  <div className="px-3 py-6 text-center text-xs text-ide-mute">没有匹配的字体</div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const SettingItem: React.FC<{
   schema: SettingSchema;
   value: string;
+  settings?: Record<string, string>;
+  schemas?: SettingSchema[];
   onChange: (value: string) => void;
+  onSettingChange?: (key: string, value: string) => void;
   t: (key: string) => string;
   onDeleteSpeechAssets?: () => void;
-}> = ({ schema, value, onChange, t, onDeleteSpeechAssets }) => {
+}> = ({ schema, value, settings, schemas, onChange, onSettingChange, t, onDeleteSpeechAssets }) => {
   const getIcon = () => {
     switch (schema.key) {
       case "showHiddenFiles":
@@ -94,6 +442,26 @@ const SettingItem: React.FC<{
           />
         </button>
       </div>
+    );
+  }
+
+  if (
+    schema.type === "select" &&
+    schema.options &&
+    (schema.key === "fontFamily" || schema.key === "terminalFontFamily")
+  ) {
+    const fallbackKey = schema.key === "fontFamily" ? "fontFallbackFamily" : "terminalFontFallbackFamily";
+    const fallbackSchema = schemas?.find((item) => item.key === fallbackKey);
+    return (
+      <FontSettingItem
+        schema={schema}
+        value={value}
+        fallbackSchema={fallbackSchema}
+        fallbackValue={settings?.[fallbackKey] || fallbackSchema?.defaultValue}
+        onChange={onChange}
+        onFallbackChange={onSettingChange ? (nextValue) => onSettingChange(fallbackKey, nextValue) : undefined}
+        t={t}
+      />
     );
   }
 
@@ -357,7 +725,12 @@ const SettingsPage: React.FC = () => {
     );
   }
 
-  const categorySettings = getSettingsByCategory(activeTab).filter((schema) => schema.key !== "speechAssets");
+  const categorySettings = getSettingsByCategory(activeTab).filter(
+    (schema) =>
+      schema.key !== "speechAssets" &&
+      schema.key !== "fontFallbackFamily" &&
+      schema.key !== "terminalFontFallbackFamily"
+  );
   const renderSpeechModelCard = () => {
     if (!speechModelSchema?.options) return null;
     const selectedModel = settings.speechModel || speechModelSchema.defaultValue;
@@ -513,7 +886,10 @@ const SettingsPage: React.FC = () => {
                       key={schema.key}
                       schema={schema}
                       value={settings[schema.key] || schema.defaultValue}
+                      settings={settings}
+                      schemas={SETTINGS_SCHEMA}
                       onChange={(v) => void handleSettingChange(schema.key, v)}
+                      onSettingChange={(key, v) => void handleSettingChange(key, v)}
                       t={t}
                     />
                   )

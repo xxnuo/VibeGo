@@ -293,6 +293,11 @@
       "optionDefault": "默认",
       "optionJetBrainsMono": "JetBrains Mono"
     },
+    "fontFallbackFamily": {
+      "label": "备选字体",
+      "description": "当首选字体没有对应字符集时使用，比如首选英文字体、备选中文字体。",
+      "optionDefault": "使用默认备选"
+    },
     "showHiddenFiles": {
       "label": "显示隐藏文件",
       "description": "在文件管理器中显示隐藏文件"
@@ -320,6 +325,11 @@
       "description": "选择终端会话使用的等宽字体",
       "optionDefault": "默认终端字体",
       "optionSystemMono": "跟随界面等宽字体"
+    },
+    "terminalFontFallbackFamily": {
+      "label": "终端备选字体",
+      "description": "当终端首选字体缺少字符时使用，比如英文等宽字体搭配中文等宽字体。",
+      "optionDefault": "使用默认备选"
     },
     "terminalDesktopNotifications": {
       "label": "桌面通知",

@@ -20,7 +20,7 @@
   --tk-font-main-small: 13px;
   --tk-font-sub: 10px;
   --tk-side-pad: 4px;
-  --tk-font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --tk-font-family: var(--font-sans);
   --tk-swipe-preview-bg: color-mix(in srgb, var(--ide-accent) 20%, transparent);
   --tk-unit: calc((100% - var(--tk-side-pad) * 2 - var(--tk-gap-x) * 9) / 10);
 }

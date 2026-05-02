@@ -373,7 +373,7 @@ const KeyboardTestView: React.FC<PageViewProps> = () => {
             flex: 1,
             padding: "16px",
             paddingBottom: "260px", // space for floating keyboard
-            fontFamily: "'SF Mono', 'Menlo', 'Consolas', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: "14px",
             lineHeight: 1.6,
             color: "var(--ide-text)",
@@ -393,7 +393,7 @@ const KeyboardTestView: React.FC<PageViewProps> = () => {
             overflowY: "auto",
             padding: "12px 8px 260px", // bottom padding so list can scroll past keyboard
             fontSize: "12px",
-            fontFamily: "'SF Mono', 'Menlo', 'Consolas', monospace",
+            fontFamily: "var(--font-mono)",
             color: "var(--ide-mute)",
             background: "var(--ide-bg)",
             borderLeft: "1px solid var(--ide-border)",

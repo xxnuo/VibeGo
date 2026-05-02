@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import "@xterm/xterm/css/xterm.css";
 import { fileApi } from "@/api/file";
 import { type TerminalCapabilities, terminalApi } from "@/api/terminal";
-import { getTerminalFontFamily } from "@/components/terminal/fonts";
+import { getResolvedTerminalFontFamily } from "@/components/terminal/fonts";
 import TerminalSelectionMenu from "@/components/terminal/terminal-selection-menu";
 import { useTranslation } from "@/lib/i18n";
 import { useSettingsStore } from "@/lib/settings";
@@ -564,6 +564,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
     const theme = useAppStore((s) => s.theme);
     const locale = useAppStore((s) => s.locale);
     const terminalFontFamily = useSettingsStore((s) => s.settings.terminalFontFamily);
+    const terminalFontFallbackFamily = useSettingsStore((s) => s.settings.terminalFontFallbackFamily);
     const t = useTranslation(locale);
 
     useEffect(() => {
@@ -1324,9 +1325,9 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
       const terminal = terminalRef.current;
       const fitAddon = fitAddonRef.current;
       if (!terminal) return;
-      terminal.options.fontFamily = getTerminalFontFamily(terminalFontFamily);
+      terminal.options.fontFamily = getResolvedTerminalFontFamily(terminalFontFamily, terminalFontFallbackFamily);
       requestAnimationFrame(() => fitAddon?.fit());
-    }, [terminalFontFamily]);
+    }, [terminalFontFamily, terminalFontFallbackFamily]);
 
     useEffect(() => {
       if (!searchAddonRef.current || !searchTerm) return;
@@ -1352,7 +1353,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
       const terminal = new Terminal({
         cursorBlink: true,
         fontSize: 14,
-        fontFamily: getTerminalFontFamily(terminalFontFamily),
+        fontFamily: getResolvedTerminalFontFamily(terminalFontFamily, terminalFontFallbackFamily),
         theme: getXtermTheme(theme),
         scrollback: 5000,
         allowProposedApi: true,
