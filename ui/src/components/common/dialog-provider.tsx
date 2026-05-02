@@ -178,7 +178,7 @@ export const DialogProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           <DialogContent
             showCloseButton={false}
             onKeyDown={handleKeyDown}
-            style={{ bottom: viewportInset ? `${viewportInset}px` : undefined }}
+            style={{ "--dialog-bottom": viewportInset ? `${viewportInset}px` : undefined } as React.CSSProperties}
             className="md:max-w-md"
           >
             <DialogHeader>
