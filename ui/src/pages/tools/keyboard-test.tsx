@@ -3,7 +3,6 @@ import React, { useCallback, useRef, useState } from "react";
 import type { KeyEvent } from "@/components/keyboard";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTranslation } from "@/lib/i18n";
-import { registerPage } from "@/pages/registry";
 import type { PageViewProps } from "@/pages/types";
 import { useAppStore } from "@/stores/app-store";
 import { useKeyboardStore } from "@/stores/keyboard-store";
@@ -488,19 +487,5 @@ const KeyboardTestView: React.FC<PageViewProps> = () => {
     </div>
   );
 };
-
-registerPage({
-  id: "keyboard-test",
-  name: "Keyboard Test",
-  nameKey: "plugin.keyboardTest.name",
-  descriptionKey: "plugin.keyboardTest.description",
-  icon: KeyboardIcon,
-  order: 20,
-  category: "tool",
-  singleton: true,
-  newPageDefaultVisible: false,
-  tags: [{ labelKey: "pageTag.test" }],
-  View: KeyboardTestView,
-});
 
 export default KeyboardTestView;

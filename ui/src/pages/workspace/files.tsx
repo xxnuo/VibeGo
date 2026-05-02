@@ -1,8 +1,6 @@
-import { Files } from "lucide-react";
 import React, { useCallback } from "react";
 import { FileManager } from "@/components/file";
 import { FilePreview } from "@/components/preview";
-import { registerPage } from "@/pages/registry";
 import type { PageViewProps } from "@/pages/types";
 import { type FileItem, useFrameStore } from "@/stores";
 
@@ -49,15 +47,5 @@ const FilesView: React.FC<PageViewProps> = ({ context }) => {
 
   return <FileManager groupId={context.groupId} initialPath={pagePath} onFileOpen={handleFileOpen} />;
 };
-
-registerPage({
-  id: "files",
-  name: "Files",
-  nameKey: "sidebar.files",
-  icon: Files,
-  category: "workspace",
-  order: 10,
-  View: FilesView,
-});
 
 export default FilesView;

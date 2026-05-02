@@ -39,7 +39,6 @@ import {
   useToggleForward,
 } from "@/hooks/use-port";
 import { useTranslation } from "@/lib/i18n";
-import { registerPage } from "@/pages/registry";
 import type { PageViewProps } from "@/pages/types";
 import { useAppStore } from "@/stores/app-store";
 
@@ -689,17 +688,5 @@ const PortManagerView: React.FC<PageViewProps> = () => {
     </div>
   );
 };
-
-registerPage({
-  id: "port-manager",
-  name: "Port Manager",
-  nameKey: "plugin.portManager.name",
-  descriptionKey: "plugin.portManager.description",
-  icon: Network,
-  order: 12,
-  category: "tool",
-  singleton: true,
-  View: PortManagerView,
-});
 
 export default PortManagerView;

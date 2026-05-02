@@ -1,8 +1,6 @@
-import { GitGraph } from "lucide-react";
 import React, { useCallback } from "react";
 import type { GitDiff, GitSubmoduleStatus } from "@/api/git";
 import { ConflictView, DiffView, GitView } from "@/components/git";
-import { registerPage } from "@/pages/registry";
 import type { PageViewProps } from "@/pages/types";
 import { getOrCreateGitStore, useFrameStore } from "@/stores";
 import { useAppStore } from "@/stores/app-store";
@@ -141,15 +139,5 @@ const GitViewPage: React.FC<PageViewProps> = ({ context }) => {
 
   return null;
 };
-
-registerPage({
-  id: "git",
-  name: "Git",
-  nameKey: "sidebar.git",
-  icon: GitGraph,
-  category: "workspace",
-  order: 20,
-  View: GitViewPage,
-});
 
 export default GitViewPage;

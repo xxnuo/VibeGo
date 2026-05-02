@@ -1,8 +1,9 @@
-import Editor, { type OnMount } from "@monaco-editor/react";
+import type { OnMount } from "@monaco-editor/react";
 import { Loader2, Save } from "lucide-react";
 import React, { useEffect, useMemo, useRef } from "react";
 import { fileApi } from "@/api/file";
 import MobileToolbar from "@/components/common/mobile-toolbar";
+import Editor from "@/components/preview/lazy-editor";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTranslation } from "@/lib/i18n";
 import { useAppStore } from "@/stores/app-store";

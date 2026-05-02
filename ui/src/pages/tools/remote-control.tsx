@@ -1,21 +1,8 @@
-import {
-  Minus,
-  Monitor,
-  MonitorOff,
-  Play,
-  Plus,
-  Radius,
-  SkipBack,
-  SkipForward,
-  Volume1,
-  Volume2,
-  VolumeX,
-} from "lucide-react";
+import { Minus, Monitor, MonitorOff, Play, Plus, SkipBack, SkipForward, Volume1, Volume2, VolumeX } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { remoteApi } from "@/api/remote";
 import { usePageTopBar } from "@/hooks/use-page-top-bar";
 import { useTranslation } from "@/lib/i18n";
-import { registerPage } from "@/pages/registry";
 import type { PageViewProps } from "@/pages/types";
 import { useAppStore } from "@/stores/app-store";
 
@@ -251,17 +238,5 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
     </div>
   );
 };
-
-registerPage({
-  id: "remote-control",
-  name: "Remote Control",
-  nameKey: "plugin.remoteControl.name",
-  descriptionKey: "plugin.remoteControl.description",
-  icon: Radius,
-  order: 15,
-  category: "tool",
-  singleton: true,
-  View: RemoteControlView,
-});
 
 export default RemoteControlView;

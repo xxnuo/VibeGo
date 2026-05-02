@@ -1,10 +1,11 @@
 import { FolderOpen, X } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import React, { lazy, Suspense, useEffect, useState } from "react";
 import { useStore } from "zustand";
-import { FileManager } from "@/components/file";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { type Locale, useTranslation } from "@/lib/i18n";
 import { createFileManagerStore } from "@/stores/file-manager-store";
+
+const FileManager = lazy(() => import("@/components/file/file-manager"));
 
 interface DirectoryPickerProps {
   isOpen: boolean;
@@ -76,7 +77,15 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
         </div>
 
         <div className="min-h-0 flex-1">
-          <FileManager initialPath={initialPath} mode="directory-picker" store={pickerStore} />
+          <Suspense
+            fallback={
+              <div role="status" className="p-4 text-sm text-ide-mute">
+                {t("common.loading")}
+              </div>
+            }
+          >
+            {isOpen && <FileManager initialPath={initialPath} mode="directory-picker" store={pickerStore} />}
+          </Suspense>
         </div>
 
         <div className="shrink-0 border-t border-ide-border px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-4 md:py-3">

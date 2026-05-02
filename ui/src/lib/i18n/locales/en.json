@@ -687,6 +687,7 @@
     "projectRoot": "Project Root"
   },
   "preview": {
+    "editorLoadFailed": "The editor could not load. Refresh the page to try again.",
     "notAvailable": "Preview not available for this file type",
     "openAsText": "Open as Text",
     "download": "Download",

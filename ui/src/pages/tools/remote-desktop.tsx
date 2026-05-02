@@ -1,4 +1,3 @@
-import { MonitorUp } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   decodeRemoteDesktopFrame,
@@ -25,7 +24,6 @@ import type {
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePageTopBar } from "@/hooks/use-page-top-bar";
 import { useTranslation } from "@/lib/i18n";
-import { registerPage } from "@/pages/registry";
 import type { PageViewProps } from "@/pages/types";
 import { useAppStore } from "@/stores/app-store";
 
@@ -742,17 +740,5 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
     </div>
   );
 };
-
-registerPage({
-  id: "remote-desktop",
-  name: "Remote Desktop",
-  nameKey: "plugin.remoteDesktop.name",
-  descriptionKey: "plugin.remoteDesktop.description",
-  icon: MonitorUp,
-  order: 16,
-  category: "tool",
-  singleton: true,
-  View: RemoteDesktopView,
-});
 
 export default RemoteDesktopView;

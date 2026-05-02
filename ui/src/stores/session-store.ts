@@ -884,11 +884,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     set({ loading: true, sessionInitialized: false, error: null });
     get().initAutoSave();
     try {
-      await get().loadSessions();
-      if (!isCurrentWorkspaceTransition(requestRevision)) {
-        return false;
-      }
-      const storedSessionId = await getStoredSessionId();
+      const [, storedSessionId] = await Promise.all([get().loadSessions(), getStoredSessionId()]);
       if (!isCurrentWorkspaceTransition(requestRevision)) {
         return false;
       }

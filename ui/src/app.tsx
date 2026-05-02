@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { authApi } from "@/api/auth";
 import { fileApi } from "@/api/file";
 import { DirectoryPicker, NewPageMenu, ProjectMenu } from "@/components/common";
@@ -360,7 +360,15 @@ const App: React.FC = () => {
         onBackToList={handleBackToList}
         onNewPage={() => setNewPageMenuOpen(true)}
       >
-        {renderContent()}
+        <Suspense
+          fallback={
+            <div className="h-full flex items-center justify-center text-ide-mute" role="status">
+              {t("common.loading")}
+            </div>
+          }
+        >
+          {renderContent()}
+        </Suspense>
       </AppFrame>
       <BlockTermWorkspaceNavigator />
       <ProjectMenu

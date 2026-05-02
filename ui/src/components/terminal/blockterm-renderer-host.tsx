@@ -1,7 +1,7 @@
 // Copyright 2023-2024, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import Editor, { type OnMount } from "@monaco-editor/react";
+import type { OnMount } from "@monaco-editor/react";
 import createDOMPurify from "dompurify";
 import {
   AlertTriangle,
@@ -22,6 +22,7 @@ import remarkGfm from "remark-gfm";
 import type { BlockTermRawOutputResult } from "@/api/blockterm";
 import { blockTermModelApi } from "@/api/blockterm-model";
 import { type FileInfo, fileApi, type RendererFileClient } from "@/api/file";
+import Editor from "@/components/preview/lazy-editor";
 import type { BlockTermBlock } from "@/components/terminal/blockterm-model";
 import {
   type BlockTermModelStreamEvent,

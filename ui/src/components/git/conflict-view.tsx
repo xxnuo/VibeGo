@@ -1,12 +1,11 @@
-import { DiffEditor } from "@monaco-editor/react";
 import { AlertTriangle, Check, X } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { GitConflictResolveMode, GitConflictStages } from "@/api/git";
 import { gitApi } from "@/api/git";
 import { buildConflictDocuments } from "@/components/git/conflict-utils";
+import { LazyDiffEditor as DiffEditor } from "@/components/preview/lazy-editor";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { Locale } from "@/stores";
-import "@/lib/monaco";
 import { useAppStore } from "@/stores/app-store";
 
 interface ConflictViewProps {

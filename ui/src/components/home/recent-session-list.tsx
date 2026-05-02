@@ -19,7 +19,6 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({ onSwitchSession, 
   const currentSessionId = useSessionStore((s) => s.currentSessionId);
   const sessionsLoading = useSessionStore((s) => s.sessionsLoading);
   const workspaceLoading = useSessionStore((s) => s.loading);
-  const loadSessions = useSessionStore((s) => s.loadSessions);
   const deleteSession = useSessionStore((s) => s.deleteSession);
   const clearAllSessions = useSessionStore((s) => s.clearAllSessions);
   const renameSession = useSessionStore((s) => s.renameSession);
@@ -45,10 +44,6 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({ onSwitchSession, 
     onReorder: handleReorder,
     disabled: sessionsLoading || workspaceLoading || editingId !== null,
   });
-
-  React.useEffect(() => {
-    loadSessions();
-  }, [loadSessions]);
 
   const handleDelete = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();

@@ -87,6 +87,19 @@ function serveSherpa(req: IncomingMessage, res: ServerResponse): void {
   createReadStream(filePath).pipe(res);
 }
 
+function ssrTestOptimizerPlugin(): Plugin {
+  return {
+    name: "vibego-ssr-test-optimizer",
+    enforce: "post",
+    config(config) {
+      // SSR-only test servers must not invalidate the running browser server cache.
+      if (config.appType === "custom" && config.server?.middlewareMode) {
+        config.optimizeDeps = { ...config.optimizeDeps, noDiscovery: true, include: [] };
+      }
+    },
+  };
+}
+
 function sherpaAssetPlugin(): Plugin {
   return {
     name: "vibego-sherpa-assets",
@@ -101,7 +114,7 @@ function sherpaAssetPlugin(): Plugin {
 
 export default defineConfig({
   base: "/",
-  plugins: [react(), tailwindcss(), sherpaAssetPlugin()],
+  plugins: [ssrTestOptimizerPlugin(), react(), tailwindcss(), sherpaAssetPlugin()],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "./src"),

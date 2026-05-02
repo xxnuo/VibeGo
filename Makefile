@@ -1,4 +1,4 @@
-.PHONY: generate-docs clean-code format dev-server dev-ui desktop-dev desktop-build build clean-dist build-frontend build-backend package-backend test-release-packaging verify-release build-release bump prepare-test test download-sherpa thirdparty verify-waveterm-reference
+.PHONY: generate-docs clean-code format dev dev-server dev-ui desktop-dev desktop-build build clean-dist build-frontend build-backend package-backend test-release-packaging verify-release build-release bump prepare-test test download-sherpa thirdparty verify-waveterm-reference
 
 VERSION ?= $(shell git describe --tags --match 'v*' 2>/dev/null || echo v0.0.0-dev)
 DIST_DIR ?= dist
@@ -27,18 +27,29 @@ format:
 	gofmt -w .
 	cd $(UI_DIR) && pnpm run check:fix
 
+dev-server dev-ui desktop-dev: SHELL := /bin/bash
+dev-server dev-ui desktop-dev: .SHELLFLAGS := -o pipefail -c
+
+dev:
+	$(MAKE) -j2 dev-server dev-ui
+
 dev-server:
-	air
+	@mkdir -p temp/dev/logs
+	@{ printf '\n--- dev-server %s ---\n' "$$(date -Iseconds)"; air; } 2>&1 | tee -a temp/dev/logs/dev-server.log
 
 dev-ui:
-	cd ui && pnpm run dev --host
+	@mkdir -p temp/dev/logs
+	@{ printf '\n--- dev-ui %s ---\n' "$$(date -Iseconds)"; cd "$(UI_DIR)" && pnpm run dev --host; } 2>&1 | tee -a temp/dev/logs/dev-ui.log
 
 desktop-dev:
-	@set -eu; \
+	@mkdir -p temp/dev/logs
+	@{ set -eu; \
+	printf '\n--- desktop-dev %s ---\n' "$$(date -Iseconds)"; \
 	(cd $(UI_DIR) && pnpm run dev --host 127.0.0.1) & \
 	ui_pid=$$!; \
 	trap 'kill $$ui_pid 2>/dev/null || true' EXIT INT TERM; \
-	VG_DEV=true VG_DESKTOP_PORT=11984 VG_DESKTOP_DEV_UI=http://127.0.0.1:15173 CGO_ENABLED=1 go run -tags "desktop,debug" .
+	VG_DEV=true VG_DESKTOP_PORT=11984 VG_DESKTOP_DEV_UI=http://127.0.0.1:15173 CGO_ENABLED=1 go run -tags "desktop,debug" .; \
+	} 2>&1 | tee -a temp/dev/logs/desktop-dev.log
 
 desktop-build:
 	$(MAKE) build-frontend

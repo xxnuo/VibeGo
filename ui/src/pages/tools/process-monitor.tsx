@@ -40,7 +40,6 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { usePageTopBar } from "@/hooks/use-page-top-bar";
 import { useCombinedStats, useProcessKill } from "@/hooks/use-process";
 import { getIntlLocale, useTranslation } from "@/lib/i18n";
-import { registerPage } from "@/pages/registry";
 import type { PageViewProps } from "@/pages/types";
 import { useAppStore } from "@/stores/app-store";
 
@@ -979,17 +978,5 @@ const ProcessMonitorView: React.FC<PageViewProps> = () => {
     </div>
   );
 };
-
-registerPage({
-  id: "process-monitor",
-  name: "Process Monitor",
-  nameKey: "plugin.processMonitor.name",
-  descriptionKey: "plugin.processMonitor.description",
-  icon: Activity,
-  order: 10,
-  category: "tool",
-  singleton: true,
-  View: ProcessMonitorView,
-});
 
 export default ProcessMonitorView;
