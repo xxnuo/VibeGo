@@ -181,7 +181,7 @@ export const SETTINGS_SCHEMA: SettingSchema[] = [
     category: "keyboard",
     labelKey: "settings.useNativeKeyboard.label",
     descriptionKey: "settings.useNativeKeyboard.description",
-    defaultValue: "false",
+    defaultValue: "true",
   },
   {
     key: "keyboardHaptic",
