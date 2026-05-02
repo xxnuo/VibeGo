@@ -1,5 +1,5 @@
 import { Bookmark, BookmarkPlus, Check, Clipboard, LoaderCircle, Play, Search, Trash2 } from "lucide-react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type BlockTermBookmark, type BlockTermBookmarkInput, blockTermApi } from "@/api/blockterm";
 import {
@@ -30,6 +30,11 @@ const BlockTermBookmarkDialog: React.FC<BlockTermBookmarkDialogProps> = ({
 }) => {
   const locale = useAppStore((state) => state.locale);
   const t = useTranslation(locale);
+  const fieldId = useId();
+  const searchInputId = `${fieldId}-search`;
+  const titleInputId = `${fieldId}-title`;
+  const descriptionInputId = `${fieldId}-description`;
+  const commandInputId = `${fieldId}-command`;
   const [query, setQuery] = useState("");
   const [bookmarks, setBookmarks] = useState<BlockTermBookmark[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -181,8 +186,8 @@ const BlockTermBookmarkDialog: React.FC<BlockTermBookmarkDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[min(82dvh,44rem)] grid-rows-[auto_auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-t-md p-0 md:max-w-4xl md:grid-rows-[auto_minmax(0,1fr)] md:rounded-md">
-        <DialogHeader className="border-b border-ide-border px-4 py-3 pr-12 text-left">
+      <DialogContent className="h-[min(82dvh,44rem)] min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-t-md p-0 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:max-w-4xl md:grid-rows-[auto_minmax(0,1fr)] md:rounded-md md:pb-0">
+        <DialogHeader className="min-w-0 border-b border-ide-border px-4 py-3 pr-12 text-left">
           <DialogTitle className="flex items-center gap-2 text-base text-ide-text">
             <Bookmark size={16} className="text-ide-accent" />
             {t("plugin.blockTerm.bookmarks")}
@@ -190,21 +195,24 @@ const BlockTermBookmarkDialog: React.FC<BlockTermBookmarkDialogProps> = ({
           <DialogDescription className="sr-only">{t("plugin.blockTerm.bookmarkManagerDescription")}</DialogDescription>
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 grid-rows-[12rem_minmax(0,1fr)] md:grid-cols-[minmax(16rem,0.85fr)_minmax(0,1.15fr)] md:grid-rows-1">
-          <section className="flex min-h-0 flex-col border-b border-ide-border md:border-r md:border-b-0">
+        <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[12rem_minmax(0,1fr)] md:grid-cols-[minmax(16rem,0.85fr)_minmax(0,1.15fr)] md:grid-rows-1">
+          <section className="flex min-h-0 min-w-0 flex-col border-b border-ide-border md:border-r md:border-b-0">
             <div className="flex h-11 shrink-0 items-center gap-2 border-b border-ide-border px-2">
               <div className="flex min-w-0 flex-1 items-center gap-2 px-1 text-ide-mute">
                 <Search size={14} className="shrink-0" />
                 <input
+                  id={searchInputId}
+                  name="bookmark-search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  className="h-8 min-w-0 flex-1 bg-transparent text-sm text-ide-text outline-none placeholder:text-ide-mute"
+                  aria-label={t("plugin.blockTerm.searchBookmarks")}
+                  className="h-11 min-w-0 flex-1 bg-transparent text-base text-ide-text outline-none placeholder:text-ide-mute md:h-8 md:text-sm"
                   placeholder={t("plugin.blockTerm.searchBookmarks")}
                 />
               </div>
               <button
                 type="button"
-                className="flex h-8 w-8 shrink-0 items-center justify-center border border-ide-border text-ide-mute hover:bg-ide-bg hover:text-ide-text"
+                className="flex size-11 shrink-0 items-center justify-center border border-ide-border text-ide-mute hover:bg-ide-bg hover:text-ide-text md:size-8"
                 title={t("plugin.blockTerm.newBookmark")}
                 aria-label={t("plugin.blockTerm.newBookmark")}
                 onClick={() => startCreate()}
@@ -232,7 +240,7 @@ const BlockTermBookmarkDialog: React.FC<BlockTermBookmarkDialogProps> = ({
                     <button
                       key={bookmark.id}
                       type="button"
-                      className={`block w-full border-b border-ide-border px-3 py-2.5 text-left last:border-b-0 ${
+                      className={`block min-h-11 w-full border-b border-ide-border px-3 py-2.5 text-left last:border-b-0 ${
                         selected ? "bg-ide-bg text-ide-accent" : "text-ide-text hover:bg-ide-bg"
                       }`}
                       onClick={() => selectBookmark(bookmark)}
@@ -254,7 +262,7 @@ const BlockTermBookmarkDialog: React.FC<BlockTermBookmarkDialogProps> = ({
           </section>
 
           <form
-            className="flex min-h-0 flex-col bg-ide-panel"
+            className="flex min-h-0 min-w-0 flex-col bg-ide-panel"
             onSubmit={(event) => {
               event.preventDefault();
               void saveBookmark();
@@ -267,7 +275,7 @@ const BlockTermBookmarkDialog: React.FC<BlockTermBookmarkDialogProps> = ({
               <div className="flex shrink-0 items-center gap-1">
                 <button
                   type="button"
-                  className="flex h-7 w-7 items-center justify-center text-ide-mute hover:bg-ide-bg hover:text-ide-text disabled:opacity-50"
+                  className="flex size-11 items-center justify-center text-ide-mute hover:bg-ide-bg hover:text-ide-text disabled:opacity-50 md:size-7"
                   title={t("plugin.blockTerm.copyBookmarkCommand")}
                   aria-label={t("plugin.blockTerm.copyBookmarkCommand")}
                   disabled={!draft.command}
@@ -277,7 +285,7 @@ const BlockTermBookmarkDialog: React.FC<BlockTermBookmarkDialogProps> = ({
                 </button>
                 <button
                   type="button"
-                  className="flex h-7 w-7 items-center justify-center text-ide-mute hover:bg-ide-bg hover:text-ide-text disabled:opacity-50"
+                  className="flex size-11 items-center justify-center text-ide-mute hover:bg-ide-bg hover:text-ide-text disabled:opacity-50 md:size-7"
                   title={t("plugin.blockTerm.useBookmarkCommand")}
                   aria-label={t("plugin.blockTerm.useBookmarkCommand")}
                   disabled={!draft.command.trim()}
@@ -288,7 +296,7 @@ const BlockTermBookmarkDialog: React.FC<BlockTermBookmarkDialogProps> = ({
                 {selectedId && (
                   <button
                     type="button"
-                    className="flex h-7 w-7 items-center justify-center text-ide-mute hover:bg-ide-bg hover:text-red-500 disabled:opacity-50"
+                    className="flex size-11 items-center justify-center text-ide-mute hover:bg-ide-bg hover:text-red-500 disabled:opacity-50 md:size-7"
                     title={t("plugin.blockTerm.deleteBookmark")}
                     aria-label={t("plugin.blockTerm.deleteBookmark")}
                     disabled={deleting || saving}
@@ -301,37 +309,43 @@ const BlockTermBookmarkDialog: React.FC<BlockTermBookmarkDialogProps> = ({
             </div>
 
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 custom-scrollbar">
-              <label className="block space-y-1.5">
+              <label htmlFor={titleInputId} className="block space-y-1.5">
                 <span className="text-xs font-medium text-ide-text">{t("plugin.blockTerm.bookmarkTitle")}</span>
                 <input
+                  id={titleInputId}
+                  name="bookmark-title"
                   value={draft.title}
                   onChange={(event) => updateDraft({ title: event.target.value })}
                   aria-invalid={validationError === "titleTooLong"}
-                  className="h-9 w-full border border-ide-border bg-ide-bg px-2.5 text-sm text-ide-text outline-none focus:border-ide-accent aria-invalid:border-red-500"
+                  className="h-11 w-full border border-ide-border bg-ide-bg px-2.5 text-base text-ide-text outline-none focus:border-ide-accent aria-invalid:border-red-500 md:h-9 md:text-sm"
                   placeholder={t("plugin.blockTerm.bookmarkTitlePlaceholder")}
                 />
               </label>
 
-              <label className="block space-y-1.5">
+              <label htmlFor={descriptionInputId} className="block space-y-1.5">
                 <span className="text-xs font-medium text-ide-text">{t("plugin.blockTerm.bookmarkDescription")}</span>
                 <textarea
+                  id={descriptionInputId}
+                  name="bookmark-description"
                   value={draft.description}
                   onChange={(event) => updateDraft({ description: event.target.value })}
                   rows={3}
                   aria-invalid={validationError === "descriptionTooLong"}
-                  className="block w-full resize-y border border-ide-border bg-ide-bg px-2.5 py-2 text-sm text-ide-text outline-none focus:border-ide-accent aria-invalid:border-red-500"
+                  className="block w-full resize-y border border-ide-border bg-ide-bg px-2.5 py-2 text-base text-ide-text outline-none focus:border-ide-accent aria-invalid:border-red-500 md:text-sm"
                   placeholder={t("plugin.blockTerm.bookmarkDescriptionPlaceholder")}
                 />
               </label>
 
-              <label className="block space-y-1.5">
+              <label htmlFor={commandInputId} className="block space-y-1.5">
                 <span className="text-xs font-medium text-ide-text">{t("plugin.blockTerm.bookmarkCommand")}</span>
                 <textarea
+                  id={commandInputId}
+                  name="bookmark-command"
                   value={draft.command}
                   onChange={(event) => updateDraft({ command: event.target.value })}
                   rows={8}
                   aria-invalid={validationError === "commandRequired" || validationError === "commandTooLong"}
-                  className="block min-h-36 w-full resize-y border border-ide-border bg-ide-bg px-2.5 py-2 font-mono text-sm text-ide-text outline-none focus:border-ide-accent aria-invalid:border-red-500"
+                  className="block min-h-36 w-full resize-y border border-ide-border bg-ide-bg px-2.5 py-2 font-mono text-base text-ide-text outline-none focus:border-ide-accent aria-invalid:border-red-500 md:text-sm"
                   placeholder={t("plugin.blockTerm.bookmarkCommandPlaceholder")}
                 />
               </label>
@@ -343,10 +357,10 @@ const BlockTermBookmarkDialog: React.FC<BlockTermBookmarkDialogProps> = ({
               )}
             </div>
 
-            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-ide-border px-4 py-3">
+            <div className="flex shrink-0 flex-col-reverse items-stretch justify-end gap-2 border-t border-ide-border px-4 py-3 md:flex-row md:items-center">
               <button
                 type="button"
-                className="h-8 border border-ide-border px-3 text-xs text-ide-mute hover:bg-ide-bg hover:text-ide-text"
+                className="min-h-11 w-full border border-ide-border px-3 text-xs text-ide-mute hover:bg-ide-bg hover:text-ide-text md:h-8 md:min-h-0 md:w-auto"
                 disabled={saving || deleting}
                 onClick={resetDraft}
               >
@@ -354,7 +368,7 @@ const BlockTermBookmarkDialog: React.FC<BlockTermBookmarkDialogProps> = ({
               </button>
               <button
                 type="submit"
-                className="flex h-8 min-w-20 items-center justify-center gap-1.5 bg-ide-accent px-3 text-xs text-ide-on-accent disabled:bg-ide-border disabled:text-ide-mute"
+                className="flex min-h-11 w-full min-w-20 items-center justify-center gap-1.5 bg-ide-accent px-3 text-xs text-ide-on-accent disabled:bg-ide-border disabled:text-ide-mute md:h-8 md:min-h-0 md:w-auto"
                 disabled={saving || deleting}
               >
                 {saving && <LoaderCircle size={14} className="animate-spin" />}

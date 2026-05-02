@@ -1,5 +1,6 @@
 {
   "common": {
+    "menu": "菜单",
     "settings": "设置",
     "theme": "主题",
     "language": "语言",
@@ -43,6 +44,7 @@
     "edit": "编辑",
     "view": "查看",
     "sort": "排序",
+    "moreActions": "更多操作",
     "apply": "应用",
     "new": "新建",
     "backToList": "返回列表",
@@ -60,6 +62,185 @@
     "copied": "已复制",
     "pageNotFound": "页面不存在",
     "saveFailed": "保存失败"
+  },
+  "codex": {
+    "action": {
+      "newThread": "新建会话",
+      "renameThread": "重命名会话",
+      "deleteThread": "删除会话",
+      "pinThread": "置顶会话",
+      "unpinThread": "取消置顶",
+      "archiveThread": "归档会话",
+      "unarchiveThread": "取消归档",
+      "settings": "Codex 设置",
+      "toggleInspector": "切换设置面板",
+      "reconnect": "重新连接",
+      "send": "发送",
+      "steer": "追加指令",
+      "stop": "停止",
+      "forkThread": "分叉会话",
+      "compact": "压缩上下文",
+      "review": "审查变更",
+      "shellCommand": "运行 Shell 命令",
+      "goal": "设置目标",
+      "retry": "重试",
+      "edit": "编辑消息",
+      "scrollToBottom": "回到底部"
+    },
+    "connection": {
+      "connected": "已连接",
+      "connecting": "正在连接",
+      "offline": "离线"
+    },
+    "thread": {
+      "new": "新 Codex 会话",
+      "search": "搜索会话",
+      "empty": "暂无会话",
+      "connectToLoad": "连接 Codex 后加载会话",
+      "listLabel": "Codex 会话",
+      "deleteTitle": "删除会话？",
+      "renameTitle": "重命名会话",
+      "showArchived": "查看归档会话",
+      "showActive": "查看活动会话",
+      "loadMore": "加载更多",
+      "historyLoadFailed": "加载会话历史失败",
+      "retryHistory": "重试"
+    },
+    "empty": {
+      "title": "使用 Codex 开发",
+      "threadTitle": "开始对话"
+    },
+    "turn": {
+      "label": "第 {index} 轮",
+      "working": "正在工作"
+    },
+    "composer": {
+      "placeholder": "给 Codex 发送消息"
+    },
+    "cwd": {
+      "none": "未设置工作目录",
+      "folder": "目录",
+      "short": "工作目录",
+      "choose": "选择目录"
+    },
+    "item": {
+      "reasoning": "推理",
+      "command": "命令",
+      "exitCode": "退出码",
+      "fileChanges": "{count} 个文件变更",
+      "plan": "计划",
+      "webSearch": "网页搜索",
+      "imageView": "图片",
+      "enteredReviewMode": "开始审查",
+      "exitedReviewMode": "完成审查",
+      "contextCompaction": "上下文已压缩",
+      "warning": "警告",
+      "turnDiff": "本轮差异"
+    },
+    "settings": {
+      "session": "会话",
+      "status": "状态",
+      "version": "版本",
+      "account": "账号",
+      "skills": "技能",
+      "none": "无",
+      "notSignedIn": "未登录",
+      "signIn": "使用 ChatGPT 登录",
+      "execution": "执行设置",
+      "mobileDescription": "设置账号、模型、权限、沙箱和工作目录",
+      "model": "模型",
+      "reasoning": "推理强度",
+      "approval": "审批策略",
+      "sandbox": "沙箱",
+      "cwd": "工作目录",
+      "thread": "会话",
+      "commit": "提交",
+      "tokens": "令牌",
+      "signOut": "退出登录"
+    },
+    "insights": {
+      "title": "运行状态",
+      "refresh": "刷新状态",
+      "loadFailed": "部分运行状态读取失败",
+      "rateLimit": "额度使用",
+      "resets": "重置时间",
+      "lifetimeTokens": "累计令牌",
+      "mcp": "MCP 服务",
+      "noMcp": "没有已配置的 MCP 服务",
+      "unavailable": "不可用",
+      "connect": "连接 MCP 服务"
+    },
+    "goal": {
+      "title": "会话目标",
+      "placeholder": "描述这个会话要完成的目标",
+      "none": "未设置目标",
+      "set": "设置目标",
+      "edit": "编辑目标",
+      "tokens": "令牌"
+    },
+    "skill": {
+      "none": "不选择技能"
+    },
+    "login": {
+      "title": "使用 ChatGPT 登录",
+      "instructions": "打开验证页面并输入此代码以完成登录。",
+      "unavailable": "Codex 未返回有效的设备登录信息"
+    },
+    "review": {
+      "title": "开始代码审查",
+      "placeholder": "可选的审查说明；留空则审查未提交变更"
+    },
+    "shell": {
+      "title": "运行 Shell 命令",
+      "placeholder": "命令",
+      "confirmTitle": "在沙箱外运行此命令？"
+    },
+    "approval": {
+      "onRequest": "按需询问",
+      "untrusted": "不可信操作询问",
+      "never": "从不询问"
+    },
+    "sandbox": {
+      "workspaceWrite": "允许工作区写入",
+      "readOnly": "只读",
+      "dangerFullAccess": "完全访问"
+    },
+    "request": {
+      "commandTitle": "允许运行命令？",
+      "fileTitle": "允许修改文件？",
+      "permissionsTitle": "允许额外权限？",
+      "inputTitle": "Codex 需要你的输入",
+      "elicitationTitle": "MCP 服务需要你的输入",
+      "waiting": "Codex 已暂停当前任务，正在等待你的决定。",
+      "commandUnavailable": "暂无命令详情",
+      "fileFallback": "Codex 希望修改当前工作区中的文件。",
+      "permissionsFallback": "Codex 请求了额外权限。",
+      "other": "其他",
+      "otherPlaceholder": "输入其他答案",
+      "requiredFields": "请填写所有必填项。",
+      "choose": "请选择",
+      "confirm": "确认",
+      "decline": "拒绝",
+      "allowSession": "本会话允许",
+      "allow": "允许",
+      "submit": "提交"
+    },
+    "attachment": {
+      "add": "添加图片",
+      "tooLarge": "单张图片不能超过 5 MB。",
+      "totalTooLarge": "图片附件总大小不能超过 10 MB。",
+      "readFailed": "读取图片附件失败。"
+    },
+    "error": {
+      "notConnected": "Codex 尚未连接",
+      "cliUnavailable": "Codex CLI 不可用",
+      "connectionClosed": "Codex 连接已关闭",
+      "reported": "Codex 返回错误",
+      "retryCleanupFailed": "重试分支清理失败，已保留该分支以便恢复",
+      "retryOutcomeUnknown": "重试请求状态未知，已保留该分支，请检查后继续",
+      "dynamicToolUnavailable": "此动态工具未在 VibeGo 中配置，已拒绝调用。",
+      "authRefreshUnavailable": "无法为 Codex 刷新外部登录令牌。"
+    }
   },
   "dialog": {
     "ok": "确定",
@@ -126,6 +307,8 @@
     "closeStash": "关闭贮藏",
     "pop": "恢复",
     "drop": "删除",
+    "stashDropConfirmTitle": "删除此贮藏？",
+    "stashDropConfirmMessage": "贮藏“{message}”将被永久删除。",
     "conflicts": "个冲突待解决",
     "resolve": "解决",
     "undo": "撤销",
@@ -249,6 +432,7 @@
     "unpushedTag": "此标签尚未推送",
     "unpushedTags": "个未推送标签",
     "tagsStatusUnavailable": "标签远程状态不可用",
+    "moreActions": "更多操作",
     "advancedOperations": "高级操作",
     "operation": "操作",
     "merge": "合并",
@@ -763,6 +947,8 @@
     "newFolder": "新建文件夹",
     "enterName": "输入名称...",
     "emptyFolder": "空文件夹",
+    "showHidden": "显示隐藏文件",
+    "hideHidden": "隐藏隐藏文件",
     "searchFiles": "搜索文件...",
     "sortName": "名称",
     "sortSize": "大小",
@@ -813,6 +999,10 @@
     "namePlaceholder": "输入会话名称..."
   },
   "plugin": {
+    "codex": {
+      "name": "Codex",
+      "description": "通过图形界面使用 Codex 会话、工具、审批和终端能力。"
+    },
     "terminal": {
       "name": "终端",
       "newTab": "新建标签页"
@@ -958,9 +1148,14 @@
       "description": "控制当前设备的音量、媒体播放和屏幕开关。",
       "title": "遥控器",
       "volume": "音量",
+      "volumeDown": "降低音量",
+      "volumeUp": "提高音量",
       "mute": "静音",
       "unmute": "取消静音",
       "media": "媒体控制",
+      "previous": "上一曲",
+      "playPause": "播放或暂停",
+      "next": "下一曲",
       "screen": "屏幕",
       "screenOff": "关闭屏幕",
       "screenOn": "开启屏幕"
@@ -1014,6 +1209,11 @@
       "closePanel": "关闭面板",
       "mouseMode": "鼠标模式",
       "touchMode": "触摸模式",
+      "scrollUp": "向上滚动",
+      "middleButton": "鼠标中键",
+      "scrollDown": "向下滚动",
+      "leftButton": "鼠标左键",
+      "rightButton": "鼠标右键",
       "showVirtualMouse": "显示虚拟鼠标",
       "virtualMouseSize": "鼠标大小",
       "gestureTap": "点击：发送左键点击",

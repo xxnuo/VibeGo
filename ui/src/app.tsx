@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { authApi } from "@/api/auth";
 import { fileApi } from "@/api/file";
 import { DirectoryPicker, NewPageMenu, ProjectMenu } from "@/components/common";
@@ -56,11 +56,18 @@ const App: React.FC = () => {
   const [isNewGroupMenuOpen, setNewGroupMenuOpen] = useState(false);
   const [isNewPageMenuOpen, setNewPageMenuOpen] = useState(false);
   const [isDirectoryPickerOpen, setDirectoryPickerOpen] = useState(false);
+  const directoryPickerRestoreFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     initSettings();
     initTerminalCleanup(enqueueWorkspaceMutation);
   }, [initSettings]);
+
+  useEffect(() => {
+    const park = () => void saveCurrentSession();
+    window.addEventListener("vibego:desktop-park", park);
+    return () => window.removeEventListener("vibego:desktop-park", park);
+  }, [saveCurrentSession]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -264,7 +271,8 @@ const App: React.FC = () => {
     }
   }, [activeGroup, currentPage]);
 
-  const handleOpenDirectory = useCallback(() => {
+  const handleOpenDirectory = useCallback((restoreFocusTo?: HTMLElement | null) => {
+    directoryPickerRestoreFocusRef.current = restoreFocusTo?.isConnected ? restoreFocusTo : null;
     setDirectoryPickerOpen(true);
   }, []);
 
@@ -389,6 +397,7 @@ const App: React.FC = () => {
         onSelect={handleDirectorySelect}
         initialPath="."
         locale={locale}
+        restoreFocusRef={directoryPickerRestoreFocusRef}
       />
       <Toaster />
     </>

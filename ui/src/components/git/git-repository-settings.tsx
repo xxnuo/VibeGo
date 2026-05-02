@@ -18,7 +18,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   type GitLFSStatus,
@@ -30,12 +30,14 @@ import {
   gitApi,
 } from "@/api/git";
 import { useDialog } from "@/components/common";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { getTranslation, type Locale } from "@/lib/i18n";
 import "@/components/git/git-repository-settings.css";
 
 interface GitRepositorySettingsProps {
   path: string;
   locale: Locale;
+  returnFocusRef?: React.RefObject<HTMLElement | null>;
   onClose: () => void;
   onChanged?: () => void;
   onOpenWorktree?: (path: string) => void;
@@ -84,6 +86,7 @@ const worktreeLabel = (worktree: GitWorktreeEntry, t: (key: string) => string) =
 const GitRepositorySettings: React.FC<GitRepositorySettingsProps> = ({
   path,
   locale,
+  returnFocusRef,
   onClose,
   onChanged,
   onOpenWorktree,
@@ -108,7 +111,54 @@ const GitRepositorySettings: React.FC<GitRepositorySettingsProps> = ({
   const [submodules, setSubmodules] = useState<GitSubmoduleEntry[]>([]);
   const [submoduleRecursive, setSubmoduleRecursive] = useState(true);
   const [allowFileProtocol, setAllowFileProtocol] = useState(false);
+  const settingsFieldId = useId();
   const scopeRef = useRef<IdentityScope>(scope);
+  const capturedFocusRef = useRef<HTMLElement | null>(
+    returnFocusRef?.current ??
+      (typeof document !== "undefined" &&
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement !== document.body
+        ? document.activeElement
+        : null)
+  );
+
+  const captureRestoreFocus = useCallback(() => {
+    const preferred = returnFocusRef?.current;
+    if (preferred?.isConnected) {
+      capturedFocusRef.current = preferred;
+      return;
+    }
+    if (capturedFocusRef.current?.isConnected) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active !== document.body) {
+      capturedFocusRef.current = active;
+      return;
+    }
+    const label = t("git.repositorySettings.open");
+    const fallback = Array.from(document.querySelectorAll<HTMLElement>("button[aria-label]")).find(
+      (element) => element.getAttribute("aria-label") === label
+    );
+    if (fallback) capturedFocusRef.current = fallback;
+  }, [returnFocusRef, t]);
+
+  useLayoutEffect(() => {
+    captureRestoreFocus();
+  }, [captureRestoreFocus]);
+
+  const restoreFocus = useCallback(() => {
+    const preferred = returnFocusRef?.current;
+    const target = preferred?.isConnected ? preferred : capturedFocusRef.current;
+    if (!target) return;
+    window.requestAnimationFrame(() => {
+      if (target.isConnected) target.focus();
+    });
+  }, [returnFocusRef]);
+
+  const closePanel = useCallback(() => {
+    captureRestoreFocus();
+    onClose();
+    restoreFocus();
+  }, [captureRestoreFocus, onClose, restoreFocus]);
 
   useEffect(() => {
     scopeRef.current = scope;
@@ -152,14 +202,6 @@ const GitRepositorySettings: React.FC<GitRepositorySettingsProps> = ({
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
 
   const refreshWorktrees = useCallback(async () => {
     try {
@@ -386,13 +428,20 @@ const GitRepositorySettings: React.FC<GitRepositorySettingsProps> = ({
   const submodulesBusy = busy === "submodule:update" || busy === "submodule:reset";
 
   return (
-    <div className="git-repository-settings-overlay" role="presentation">
-      <section
-        className="git-repository-settings-panel"
-        role="dialog"
-        aria-modal="true"
+    <Dialog open onOpenChange={(open) => !open && closePanel()}>
+      <DialogContent
+        showCloseButton={false}
+        className="git-repository-settings-panel git-repository-settings-dialog-content"
         aria-label={t("git.repositorySettings.title")}
+        onOpenAutoFocus={captureRestoreFocus}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          restoreFocus();
+        }}
+        onPointerDownOutside={(event) => event.preventDefault()}
       >
+        <DialogTitle className="sr-only">{t("git.repositorySettings.title")}</DialogTitle>
+        <DialogDescription className="sr-only">{t("git.repositorySettings.title")}</DialogDescription>
         <header className="git-repository-settings-header">
           <div className="git-repository-settings-heading">
             <Settings2 size={16} />
@@ -415,7 +464,7 @@ const GitRepositorySettings: React.FC<GitRepositorySettingsProps> = ({
             <button
               type="button"
               className="git-repository-settings-icon-button"
-              onClick={onClose}
+              onClick={closePanel}
               title={t("common.close")}
             >
               <X size={15} />
@@ -447,32 +496,41 @@ const GitRepositorySettings: React.FC<GitRepositorySettingsProps> = ({
                 <h3>{t("git.repositorySettings.identity")}</h3>
               </div>
               <div className="git-repository-settings-form-grid">
-                <label>
+                <label htmlFor={`${settingsFieldId}-identity-scope`}>
                   <span>{t("git.repositorySettings.scope")}</span>
                   <select
+                    id={`${settingsFieldId}-identity-scope`}
+                    name="gitIdentityScope"
                     value={scope}
                     onChange={(event) => handleScopeChange(event.target.value as IdentityScope)}
                     disabled={busy === "identity"}
+                    aria-label={t("git.repositorySettings.scope")}
                   >
                     <option value="local">{t("git.repositorySettings.local")}</option>
                     <option value="global">{t("git.repositorySettings.global")}</option>
                   </select>
                 </label>
-                <label>
+                <label htmlFor={`${settingsFieldId}-identity-name`}>
                   <span>{t("git.repositorySettings.name")}</span>
                   <input
+                    id={`${settingsFieldId}-identity-name`}
+                    name="gitIdentityName"
                     value={identityName}
                     onChange={(event) => setIdentityName(event.target.value)}
                     autoComplete="name"
+                    aria-label={t("git.repositorySettings.name")}
                   />
                 </label>
-                <label className="git-repository-settings-field-wide">
+                <label className="git-repository-settings-field-wide" htmlFor={`${settingsFieldId}-identity-email`}>
                   <span>{t("git.repositorySettings.email")}</span>
                   <input
+                    id={`${settingsFieldId}-identity-email`}
+                    name="gitIdentityEmail"
                     value={identityEmail}
                     onChange={(event) => setIdentityEmail(event.target.value)}
                     type="email"
                     autoComplete="email"
+                    aria-label={t("git.repositorySettings.email")}
                   />
                 </label>
               </div>
@@ -502,7 +560,7 @@ const GitRepositorySettings: React.FC<GitRepositorySettingsProps> = ({
                 <div className="git-repository-settings-empty">{t("git.repositorySettings.noRemotes")}</div>
               )}
               <div className="git-repository-settings-list">
-                {remoteRows.map((remote) => {
+                {remoteRows.map((remote, remoteIndex) => {
                   const draft = remoteDrafts[remote.name] || {
                     url: remote.fetchUrl,
                     pushUrl: remote.pushUrls[0] || "",
@@ -524,9 +582,11 @@ const GitRepositorySettings: React.FC<GitRepositorySettingsProps> = ({
                         </button>
                       </div>
                       <div className="git-repository-settings-form-grid">
-                        <label>
+                        <label htmlFor={`${settingsFieldId}-remote-${remoteIndex}-fetch-url`}>
                           <span>{t("git.repositorySettings.fetchUrl")}</span>
                           <input
+                            id={`${settingsFieldId}-remote-${remoteIndex}-fetch-url`}
+                            name={`gitRemoteFetchUrl[${remote.name}]`}
                             value={draft.url}
                             onChange={(event) =>
                               setRemoteDrafts((current) => ({
@@ -534,11 +594,14 @@ const GitRepositorySettings: React.FC<GitRepositorySettingsProps> = ({
                                 [remote.name]: { ...draft, url: event.target.value },
                               }))
                             }
+                            aria-label={`${remote.name} ${t("git.repositorySettings.fetchUrl")}`}
                           />
                         </label>
-                        <label>
+                        <label htmlFor={`${settingsFieldId}-remote-${remoteIndex}-push-url`}>
                           <span>{t("git.repositorySettings.pushUrl")}</span>
                           <input
+                            id={`${settingsFieldId}-remote-${remoteIndex}-push-url`}
+                            name={`gitRemotePushUrl[${remote.name}]`}
                             value={draft.pushUrl}
                             onChange={(event) =>
                               setRemoteDrafts((current) => ({
@@ -546,6 +609,7 @@ const GitRepositorySettings: React.FC<GitRepositorySettingsProps> = ({
                                 [remote.name]: { ...draft, pushUrl: event.target.value },
                               }))
                             }
+                            aria-label={`${remote.name} ${t("git.repositorySettings.pushUrl")}`}
                           />
                         </label>
                       </div>
@@ -564,12 +628,16 @@ const GitRepositorySettings: React.FC<GitRepositorySettingsProps> = ({
               </div>
               <div className="git-repository-settings-add-row">
                 <input
+                  id={`${settingsFieldId}-new-remote-name`}
+                  name="gitNewRemoteName"
                   value={newRemoteName}
                   onChange={(event) => setNewRemoteName(event.target.value)}
                   placeholder={t("git.repositorySettings.remoteName")}
                   aria-label={t("git.repositorySettings.remoteName")}
                 />
                 <input
+                  id={`${settingsFieldId}-new-remote-url`}
+                  name="gitNewRemoteUrl"
                   value={newRemoteUrl}
                   onChange={(event) => setNewRemoteUrl(event.target.value)}
                   placeholder={t("git.repositorySettings.remoteUrl")}
@@ -593,10 +661,13 @@ const GitRepositorySettings: React.FC<GitRepositorySettingsProps> = ({
                 <h3>.gitignore</h3>
               </div>
               <textarea
+                id={`${settingsFieldId}-gitignore`}
+                name="gitignore"
                 value={gitignore}
                 onChange={(event) => setGitignore(event.target.value)}
                 placeholder={t("git.repositorySettings.gitignorePlaceholder")}
                 spellCheck={false}
+                aria-label=".gitignore"
               />
               <div className="git-repository-settings-section-actions">
                 <span className="git-repository-settings-hint">{gitignore.length.toLocaleString()} / 1 MB</span>
@@ -728,19 +799,25 @@ const GitRepositorySettings: React.FC<GitRepositorySettingsProps> = ({
                 </div>
               )}
               <div className="git-repository-settings-submodule-options">
-                <label className="git-repository-settings-checkbox">
+                <label className="git-repository-settings-checkbox" htmlFor={`${settingsFieldId}-submodule-recursive`}>
                   <input
+                    id={`${settingsFieldId}-submodule-recursive`}
+                    name="gitSubmoduleRecursive"
                     type="checkbox"
                     checked={submoduleRecursive}
                     onChange={(event) => setSubmoduleRecursive(event.target.checked)}
+                    aria-label={t("git.repositorySettings.recursive")}
                   />
                   <span>{t("git.repositorySettings.recursive")}</span>
                 </label>
-                <label className="git-repository-settings-checkbox">
+                <label className="git-repository-settings-checkbox" htmlFor={`${settingsFieldId}-allow-file-protocol`}>
                   <input
+                    id={`${settingsFieldId}-allow-file-protocol`}
+                    name="gitAllowFileProtocol"
                     type="checkbox"
                     checked={allowFileProtocol}
                     onChange={(event) => setAllowFileProtocol(event.target.checked)}
+                    aria-label={t("git.repositorySettings.allowFileProtocol")}
                   />
                   <span>{t("git.repositorySettings.allowFileProtocol")}</span>
                 </label>
@@ -795,7 +872,7 @@ const GitRepositorySettings: React.FC<GitRepositorySettingsProps> = ({
                 <div className="git-repository-settings-empty">{t("git.repositorySettings.noWorktrees")}</div>
               )}
               <div className="git-repository-settings-list">
-                {worktrees.map((worktree) => {
+                {worktrees.map((worktree, worktreeIndex) => {
                   const moveBusy = busy === `worktree:move:${worktree.path}`;
                   const removeBusy = busy === `worktree:remove:${worktree.path}`;
                   return (
@@ -828,12 +905,15 @@ const GitRepositorySettings: React.FC<GitRepositorySettingsProps> = ({
                           </button>
                         )}
                         <input
+                          id={`${settingsFieldId}-worktree-${worktreeIndex}-move-path`}
+                          name={`gitWorktreeMovePath[${worktreeIndex}]`}
                           value={movePaths[worktree.path] || ""}
                           onChange={(event) =>
                             setMovePaths((current) => ({ ...current, [worktree.path]: event.target.value }))
                           }
                           placeholder={t("git.repositorySettings.newPath")}
                           disabled={worktree.main || moveBusy || removeBusy}
+                          aria-label={`${worktreeLabel(worktree, t)} ${t("git.repositorySettings.newPath")}`}
                         />
                         <button
                           type="button"
@@ -862,38 +942,53 @@ const GitRepositorySettings: React.FC<GitRepositorySettingsProps> = ({
               </div>
               <div className="git-repository-settings-worktree-add">
                 <div className="git-repository-settings-form-grid">
-                  <label className="git-repository-settings-field-wide">
+                  <label className="git-repository-settings-field-wide" htmlFor={`${settingsFieldId}-worktree-path`}>
                     <span>{t("git.repositorySettings.worktreePath")}</span>
                     <input
+                      id={`${settingsFieldId}-worktree-path`}
+                      name="gitWorktreePath"
                       value={worktreeDraft.path}
                       onChange={(event) => setWorktreeDraft((current) => ({ ...current, path: event.target.value }))}
                       placeholder="/path/to/worktree"
+                      aria-label={t("git.repositorySettings.worktreePath")}
                     />
                   </label>
-                  <label>
+                  <label htmlFor={`${settingsFieldId}-worktree-branch`}>
                     <span>{t("git.repositorySettings.branch")}</span>
                     <input
+                      id={`${settingsFieldId}-worktree-branch`}
+                      name="gitWorktreeBranch"
                       value={worktreeDraft.branch}
                       onChange={(event) => setWorktreeDraft((current) => ({ ...current, branch: event.target.value }))}
                       placeholder="feature/name"
+                      aria-label={t("git.repositorySettings.branch")}
                     />
                   </label>
-                  <label>
+                  <label htmlFor={`${settingsFieldId}-worktree-commit`}>
                     <span>{t("git.repositorySettings.commit")}</span>
                     <input
+                      id={`${settingsFieldId}-worktree-commit`}
+                      name="gitWorktreeCommit"
                       value={worktreeDraft.commit}
                       onChange={(event) => setWorktreeDraft((current) => ({ ...current, commit: event.target.value }))}
                       placeholder="HEAD"
+                      aria-label={t("git.repositorySettings.commit")}
                     />
                   </label>
                 </div>
-                <label className="git-repository-settings-checkbox">
+                <label
+                  className="git-repository-settings-checkbox"
+                  htmlFor={`${settingsFieldId}-worktree-create-branch`}
+                >
                   <input
+                    id={`${settingsFieldId}-worktree-create-branch`}
+                    name="gitWorktreeCreateBranch"
                     type="checkbox"
                     checked={worktreeDraft.createBranch}
                     onChange={(event) =>
                       setWorktreeDraft((current) => ({ ...current, createBranch: event.target.checked }))
                     }
+                    aria-label={t("git.repositorySettings.createBranch")}
                   />
                   <span>{t("git.repositorySettings.createBranch")}</span>
                 </label>
@@ -910,8 +1005,8 @@ const GitRepositorySettings: React.FC<GitRepositorySettingsProps> = ({
             </section>
           </div>
         )}
-      </section>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

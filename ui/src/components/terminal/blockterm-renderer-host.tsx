@@ -420,15 +420,16 @@ const RendererToolbar: React.FC<{
   const t = useTranslation(locale);
   const sourceLabel = spec.source === "pty" ? fileName || "PTY output" : fileName || spec.filePath;
   return (
-    <div className="h-9 px-2 border-b border-ide-border bg-ide-panel flex items-center gap-1">
+    <div className="flex h-11 min-w-0 items-center gap-1 overflow-x-auto border-b border-ide-border bg-ide-panel px-2 md:h-9">
       <span className="min-w-0 flex-1 truncate text-[11px] font-mono text-ide-mute" title={sourceLabel}>
         {sourceLabel}
       </span>
       {children}
       <button
         type="button"
-        className="p-1.5 text-ide-mute hover:text-ide-text hover:bg-ide-bg disabled:opacity-40"
+        className="flex size-11 shrink-0 items-center justify-center p-1.5 text-ide-mute hover:bg-ide-bg hover:text-ide-text disabled:opacity-40 md:size-auto"
         title={t("common.refresh")}
+        aria-label={t("common.refresh")}
         onClick={onReload}
         disabled={reloadDisabled}
       >
@@ -439,8 +440,9 @@ const RendererToolbar: React.FC<{
           <a
             href={viewUrl}
             download={fileName || true}
-            className="p-1.5 text-ide-mute hover:text-ide-text hover:bg-ide-bg"
+            className="flex size-11 shrink-0 items-center justify-center p-1.5 text-ide-mute hover:bg-ide-bg hover:text-ide-text md:size-auto"
             title={t("preview.download")}
+            aria-label={t("preview.download")}
           >
             <Download size={14} />
           </a>
@@ -448,8 +450,9 @@ const RendererToolbar: React.FC<{
             href={viewUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="p-1.5 text-ide-mute hover:text-ide-text hover:bg-ide-bg"
+            className="flex size-11 shrink-0 items-center justify-center p-1.5 text-ide-mute hover:bg-ide-bg hover:text-ide-text md:size-auto"
             title={t("preview.openInNewTab")}
+            aria-label={t("preview.openInNewTab")}
           >
             <ExternalLink size={14} />
           </a>
@@ -484,8 +487,9 @@ const RendererError: React.FC<{ error: string; output: string; onRetry: () => vo
         <span className="break-words">{error}</span>
         <button
           type="button"
-          className="ml-auto p-1.5 text-ide-mute hover:text-ide-text hover:bg-ide-panel"
+          className="ml-auto flex size-11 shrink-0 items-center justify-center p-1.5 text-ide-mute hover:bg-ide-panel hover:text-ide-text md:size-auto"
           title={t("common.refresh")}
+          aria-label={t("common.refresh")}
           onClick={onRetry}
         >
           <RefreshCw size={14} />
@@ -583,8 +587,9 @@ const CodeRenderer: React.FC<BlockTermRendererComponentProps> = ({ block, spec, 
         {editable && (
           <button
             type="button"
-            className="p-1.5 text-ide-mute hover:text-ide-text hover:bg-ide-bg disabled:opacity-40"
+            className="flex size-11 shrink-0 items-center justify-center p-1.5 text-ide-mute hover:bg-ide-bg hover:text-ide-text disabled:opacity-40 md:size-auto"
             title={t("common.save")}
+            aria-label={t("common.save")}
             onClick={() => void save()}
             disabled={!dirty || saving}
           >
@@ -756,7 +761,7 @@ const MustacheRenderer: React.FC<BlockTermRendererComponentProps> = ({ spec, dat
       <RendererToolbar spec={spec} fileName={fileName} viewUrl={viewSession.session?.url || null} onReload={onReload} />
       <article
         className="min-h-0 flex-1 overflow-auto custom-scrollbar p-4 text-sm leading-6 text-ide-text [&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-ide-border [&_blockquote]:pl-3 [&_code]:font-mono [&_h1]:mb-3 [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:my-3 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:my-2 [&_h3]:text-base [&_h3]:font-semibold [&_li]:my-1 [&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-3 [&_pre]:my-3 [&_pre]:overflow-auto [&_pre]:border [&_pre]:border-ide-border [&_pre]:bg-ide-panel [&_pre]:p-3 [&_pre]:font-mono [&_pre]:text-xs [&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_td]:border [&_td]:border-ide-border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-ide-border [&_th]:bg-ide-panel [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-6"
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: Mustache output is sanitized with a resource-free allowlist.
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: result.html is sanitized by DOMPurify above.
         dangerouslySetInnerHTML={{ __html: result.html }}
       />
     </div>
@@ -853,8 +858,9 @@ const ImageRenderer: React.FC<BlockTermRendererComponentProps> = ({ spec, data, 
       <RendererToolbar spec={spec} fileName={fileName} viewUrl={url} onReload={onReload}>
         <button
           type="button"
-          className="p-1.5 text-ide-mute hover:text-ide-text hover:bg-ide-bg"
+          className="flex size-11 shrink-0 items-center justify-center p-1.5 text-ide-mute hover:bg-ide-bg hover:text-ide-text md:size-auto"
           title={t("preview.zoomOut")}
+          aria-label={t("preview.zoomOut")}
           onClick={() => setScale((value) => Math.max(0.1, value / 1.25))}
         >
           <ZoomOut size={14} />
@@ -862,16 +868,18 @@ const ImageRenderer: React.FC<BlockTermRendererComponentProps> = ({ spec, data, 
         <span className="w-10 text-center text-[10px] tabular-nums text-ide-mute">{Math.round(scale * 100)}%</span>
         <button
           type="button"
-          className="p-1.5 text-ide-mute hover:text-ide-text hover:bg-ide-bg"
+          className="flex size-11 shrink-0 items-center justify-center p-1.5 text-ide-mute hover:bg-ide-bg hover:text-ide-text md:size-auto"
           title={t("preview.zoomIn")}
+          aria-label={t("preview.zoomIn")}
           onClick={() => setScale((value) => Math.min(5, value * 1.25))}
         >
           <ZoomIn size={14} />
         </button>
         <button
           type="button"
-          className="p-1.5 text-ide-mute hover:text-ide-text hover:bg-ide-bg"
+          className="flex size-11 shrink-0 items-center justify-center p-1.5 text-ide-mute hover:bg-ide-bg hover:text-ide-text md:size-auto"
           title={t("preview.reset")}
+          aria-label={t("preview.reset")}
           onClick={() => setScale(1)}
         >
           <RotateCcw size={14} />
@@ -1084,9 +1092,8 @@ const ModelRenderer: React.FC<ModelRendererProps> = ({
     const applyEvent = (event: BlockTermModelStreamEvent): { settled: boolean; progressed: boolean } => {
       let progressed = false;
       if (typeof event.seq === "number") {
-        if (!Number.isSafeInteger(event.seq) || event.seq < 0 || event.seq <= (lastSequence.current ?? -1)) {
+        if (!Number.isSafeInteger(event.seq) || event.seq < 0 || event.seq <= (lastSequence.current ?? -1))
           return { settled: false, progressed: false };
-        }
         lastSequence.current = event.seq;
         progressed = true;
       }

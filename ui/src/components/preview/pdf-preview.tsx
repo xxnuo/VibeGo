@@ -16,13 +16,14 @@ const PDFPreview: React.FC = () => {
 
   return (
     <div className="h-full w-full flex flex-col bg-ide-bg">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-ide-border bg-ide-panel">
+      <div className="flex min-w-0 items-center gap-1 overflow-x-auto border-b border-ide-border bg-ide-panel px-2 py-2 md:gap-2 md:px-3">
         <span className="text-xs text-ide-mute truncate flex-1">{file.name}</span>
         <a
           href={pdfUrl}
           download={file.name}
-          className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-ide-mute hover:bg-ide-bg hover:text-ide-text md:h-auto md:w-auto md:p-1.5"
           title={t("preview.download")}
+          aria-label={t("preview.download")}
         >
           <Download size={18} />
         </a>
@@ -30,8 +31,9 @@ const PDFPreview: React.FC = () => {
           href={pdfUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-ide-mute hover:bg-ide-bg hover:text-ide-text md:h-auto md:w-auto md:p-1.5"
           title={t("preview.openInNewTab")}
+          aria-label={t("preview.openInNewTab")}
         >
           <ExternalLink size={18} />
         </a>

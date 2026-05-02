@@ -926,13 +926,13 @@ const BlockTerminalView: React.FC<{
       className={`border border-ide-border bg-black overflow-hidden ${fullscreen ? "fixed inset-0 z-50" : ""}`}
       data-used-rows={metrics.usedRows}
     >
-      <div className="h-9 px-2 border-b border-ide-border bg-ide-panel flex items-center justify-between">
+      <div className="flex h-11 items-center justify-between border-b border-ide-border bg-ide-panel px-2 md:h-9">
         <div className="flex items-center gap-2 text-xs text-ide-mute">
           <Server size={14} />
           <span>{isActive ? "TUI" : "TUI snapshot"}</span>
         </div>
         <button
-          className="p-1.5 text-ide-mute hover:text-ide-text hover:bg-ide-bg rounded"
+          className="flex size-11 items-center justify-center text-ide-mute hover:bg-ide-bg hover:text-ide-text md:size-7"
           title={fullscreen ? t("plugin.blockTerm.exitFullscreen") : t("plugin.blockTerm.enterFullscreen")}
           onClick={onToggleFullscreen}
         >
@@ -941,7 +941,7 @@ const BlockTerminalView: React.FC<{
       </div>
       <div
         ref={ref}
-        className={fullscreen ? "h-[calc(100%-36px)] w-full" : "w-full overflow-hidden"}
+        className={fullscreen ? "h-[calc(100%-44px)] w-full md:h-[calc(100%-36px)]" : "w-full overflow-hidden"}
         style={fullscreen ? undefined : { height: `${terminalHeight}px` }}
       />
     </div>
@@ -1056,7 +1056,7 @@ const BlockTermOutputView: React.FC<{
       <div className="h-12 flex items-center justify-center">
         <button
           type="button"
-          className="p-1.5 text-ide-mute hover:text-ide-text hover:bg-ide-bg"
+          className="flex size-11 items-center justify-center text-ide-mute hover:bg-ide-bg hover:text-ide-text md:size-7"
           title={t("plugin.blockTerm.rerun")}
           onClick={() => void loadOutput(block.id, true).catch(() => {})}
         >
@@ -1099,22 +1099,65 @@ const BlockTermRendererMenu: React.FC<{
 }> = ({ block, disabled, onSelect }) => {
   const locale = useAppStore((state) => state.locale);
   const t = useTranslation(locale);
+  const isMobile = useIsMobile();
+  const [mobileOpen, setMobileOpen] = useState(false);
   const current = isBlockTermRendererSelection(block.renderer || "terminal") ? block.renderer || "terminal" : null;
+  const trigger = (
+    <button
+      type="button"
+      data-blockterm-renderer-menu={block.id}
+      className="flex size-11 shrink-0 items-center justify-center text-ide-mute hover:bg-ide-panel hover:text-ide-text disabled:opacity-40 md:size-7"
+      title={t("plugin.blockTerm.rendererMenu")}
+      aria-label={t("plugin.blockTerm.rendererMenu")}
+      disabled={disabled}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <Terminal size={14} />
+    </button>
+  );
+
+  if (isMobile) {
+    return (
+      <Drawer open={mobileOpen} onOpenChange={setMobileOpen}>
+        <DrawerTrigger asChild>{trigger}</DrawerTrigger>
+        <DrawerContent className="max-h-[min(78dvh,36rem)] border-ide-border bg-ide-panel pb-[max(0.75rem,env(safe-area-inset-bottom))] text-ide-text">
+          <DrawerHeader className="border-b border-ide-border pb-3 pr-14 text-left">
+            <DrawerTitle className="truncate text-sm text-ide-text">{t("plugin.blockTerm.rendererMenu")}</DrawerTitle>
+            <DrawerClose
+              className="absolute right-3 top-3 inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm text-ide-mute hover:bg-ide-bg hover:text-ide-text"
+              title={t("common.close")}
+              aria-label={t("common.close")}
+            >
+              <X size={17} />
+            </DrawerClose>
+          </DrawerHeader>
+          <div className="min-h-0 overflow-y-auto py-2">
+            {BLOCKTERM_RENDERER_SELECTIONS.map((renderer) => (
+              <button
+                key={renderer}
+                type="button"
+                data-blockterm-renderer-option={renderer}
+                className={`flex min-h-11 w-full items-center gap-3 px-4 text-left text-sm hover:bg-ide-bg ${
+                  current === renderer ? "text-ide-accent" : "text-ide-text"
+                }`}
+                onClick={() => {
+                  setMobileOpen(false);
+                  window.requestAnimationFrame(() => onSelect(renderer));
+                }}
+              >
+                <Check size={14} className={current === renderer ? "opacity-100" : "opacity-0"} />
+                <span>{t(`plugin.blockTerm.rendererOptions.${renderer}`)}</span>
+              </button>
+            ))}
+          </div>
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          data-blockterm-renderer-menu={block.id}
-          className="flex size-11 shrink-0 items-center justify-center text-ide-mute hover:bg-ide-panel hover:text-ide-text disabled:opacity-40 md:size-7"
-          title={t("plugin.blockTerm.rendererMenu")}
-          aria-label={t("plugin.blockTerm.rendererMenu")}
-          disabled={disabled}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <Terminal size={14} />
-        </button>
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
         className="min-w-40 rounded-none border-ide-border bg-ide-panel text-ide-text"
@@ -1323,6 +1366,7 @@ const BlockTermMoreMenu: React.FC<{
 
 const BlockTermPage: React.FC<BlockTermPageProps> = ({ groupId }) => {
   const dialog = useDialog();
+  const isMobile = useIsMobile();
   const locale = useAppStore((state) => state.locale);
   const theme = useAppStore((state) => state.theme);
   const t = useTranslation(locale);
@@ -10741,7 +10785,10 @@ const BlockTermPage: React.FC<BlockTermPageProps> = ({ groupId }) => {
       <div ref={blockLayoutRef} className="flex min-h-0 flex-1">
         <div
           data-blockterm-main-pane
-          className={`flex min-w-0 flex-1 flex-col ${sidebarDragging ? "select-none" : ""}`}
+          aria-hidden={isMobile && rightSidebarOpen ? true : undefined}
+          className={`${isMobile && rightSidebarOpen ? "hidden" : "flex"} min-w-0 flex-1 flex-col ${
+            sidebarDragging ? "select-none" : ""
+          }`}
         >
           <div
             ref={blockScrollRef}
@@ -11441,7 +11488,7 @@ const BlockTermPage: React.FC<BlockTermPageProps> = ({ groupId }) => {
               aria-valuenow={sidebarPaneWidth}
               aria-label={t("plugin.blockTerm.resizeSidebar")}
               aria-disabled={Boolean(!lineAISidebarOpen && sidebarBlock && deletingBlockIds.has(sidebarBlock.id))}
-              className={`w-1 shrink-0 bg-ide-border touch-none ${
+              className={`hidden w-1 shrink-0 bg-ide-border touch-none md:block ${
                 !lineAISidebarOpen && sidebarBlock && deletingBlockIds.has(sidebarBlock.id)
                   ? "cursor-not-allowed opacity-40"
                   : "cursor-col-resize hover:bg-ide-accent"
@@ -11455,9 +11502,10 @@ const BlockTermPage: React.FC<BlockTermPageProps> = ({ groupId }) => {
             </div>
             <aside
               data-blockterm-sidebar
+              data-blockterm-mobile-panel={isMobile || undefined}
               aria-label={t("plugin.blockTerm.sidebar")}
-              className="min-w-0 shrink-0 border-l border-ide-border bg-ide-bg flex flex-col"
-              style={{ width: `${sidebarPaneWidth}px` }}
+              className="flex min-w-0 flex-1 flex-col bg-ide-bg md:flex-none md:shrink-0 md:border-l md:border-ide-border"
+              style={isMobile ? undefined : { width: `${sidebarPaneWidth}px` }}
             >
               {lineAISidebarOpen && activeLineAISource ? (
                 <BlockTermLineAIPanel

@@ -1376,6 +1376,8 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
       });
 
       terminal.open(containerRef.current);
+      terminal.textarea?.setAttribute("id", `terminal-input-${terminalId}`);
+      terminal.textarea?.setAttribute("name", `terminal-input-${terminalId}`);
       terminal.unicode.activeVersion = "11";
 
       if (shouldEnableTerminalWebgl()) {
@@ -1762,6 +1764,8 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
         <input
           ref={fileInputRef}
           type="file"
+          id={`terminal-image-upload-${terminalId}`}
+          name={`terminal-image-upload-${terminalId}`}
           accept="image/*"
           multiple
           className="hidden"
@@ -1815,10 +1819,13 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
           </div>
         )}
         {searchVisible && (
-          <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5 rounded-md border border-ide-border bg-ide-panel/95 px-2 py-1.5 shadow-lg backdrop-blur-sm">
+          <div className="absolute top-2 right-2 z-10 flex w-[calc(100%-1rem)] max-w-[calc(100%-1rem)] min-w-0 flex-wrap items-center gap-0 overflow-hidden rounded-md border border-ide-border bg-ide-panel/95 px-2 py-1.5 shadow-lg backdrop-blur-sm md:w-auto md:flex-nowrap md:gap-1.5 md:overflow-x-auto">
             <input
               ref={searchInputRef}
               type="text"
+              id={`terminal-search-${terminalId}`}
+              name={`terminal-search-${terminalId}`}
+              aria-label="Search terminal output"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => {
@@ -1829,39 +1836,48 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
                 }
               }}
               placeholder="Search..."
-              className="w-40 bg-transparent text-xs text-ide-text outline-none placeholder:text-ide-mute/50"
+              className="h-11 w-full min-w-0 shrink-0 basis-full bg-transparent text-base text-ide-text outline-none placeholder:text-ide-mute/50 md:w-40 md:basis-auto md:text-xs"
             />
             <button
+              type="button"
               onClick={() => setSearchCaseSensitive((v) => !v)}
               title="Case Sensitive"
-              className={`rounded px-1.5 py-0.5 text-xs font-medium transition-colors ${searchCaseSensitive ? "bg-ide-accent text-white" : "text-ide-mute hover:text-ide-text hover:bg-ide-bg"}`}
+              aria-label="Case Sensitive"
+              className={`flex size-11 shrink-0 items-center justify-center rounded px-1.5 py-0.5 text-xs font-medium transition-colors md:size-auto md:px-1.5 md:py-0.5 ${searchCaseSensitive ? "bg-ide-accent text-white" : "text-ide-mute hover:text-ide-text hover:bg-ide-bg"}`}
             >
               Aa
             </button>
             <button
+              type="button"
               onClick={() => setSearchRegex((v) => !v)}
               title="Use Regex"
-              className={`rounded px-1.5 py-0.5 font-mono text-xs transition-colors ${searchRegex ? "bg-ide-accent text-white" : "text-ide-mute hover:text-ide-text hover:bg-ide-bg"}`}
+              aria-label="Use Regex"
+              className={`flex size-11 shrink-0 items-center justify-center rounded px-1.5 py-0.5 font-mono text-xs transition-colors md:size-auto md:px-1.5 md:py-0.5 ${searchRegex ? "bg-ide-accent text-white" : "text-ide-mute hover:text-ide-text hover:bg-ide-bg"}`}
             >
               .*
             </button>
-            <div className="h-4 w-px bg-ide-border" />
+            <div className="hidden h-4 w-px bg-ide-border md:block" />
             <button
+              type="button"
               onClick={handleSearchPrev}
               title="Previous (Shift+Enter)"
-              className="rounded p-0.5 text-ide-mute transition-colors hover:text-ide-text hover:bg-ide-bg"
+              aria-label="Previous search result"
+              className="flex size-11 shrink-0 items-center justify-center rounded p-0.5 text-ide-mute transition-colors hover:text-ide-text hover:bg-ide-bg md:size-auto"
             >
               <ChevronUp size={14} />
             </button>
             <button
+              type="button"
               onClick={handleSearchNext}
               title="Next (Enter)"
-              className="rounded p-0.5 text-ide-mute transition-colors hover:text-ide-text hover:bg-ide-bg"
+              aria-label="Next search result"
+              className="flex size-11 shrink-0 items-center justify-center rounded p-0.5 text-ide-mute transition-colors hover:text-ide-text hover:bg-ide-bg md:size-auto"
             >
               <ChevronDown size={14} />
             </button>
-            <div className="h-4 w-px bg-ide-border" />
+            <div className="hidden h-4 w-px bg-ide-border md:block" />
             <button
+              type="button"
               onClick={() => {
                 const text = serializeAddonRef.current?.serialize();
                 if (!text) return;
@@ -1871,14 +1887,17 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
                 });
               }}
               title="Copy all output"
-              className="rounded p-0.5 text-ide-mute transition-colors hover:text-ide-text hover:bg-ide-bg"
+              aria-label="Copy all output"
+              className="flex size-11 shrink-0 items-center justify-center rounded p-0.5 text-ide-mute transition-colors hover:text-ide-text hover:bg-ide-bg md:size-auto"
             >
               {copySuccess ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
             </button>
             <button
+              type="button"
               onClick={closeSearch}
               title="Close (Escape)"
-              className="rounded p-0.5 text-ide-mute transition-colors hover:text-ide-text hover:bg-ide-bg"
+              aria-label="Close search"
+              className="flex size-11 shrink-0 items-center justify-center rounded p-0.5 text-ide-mute transition-colors hover:text-ide-text hover:bg-ide-bg md:size-auto"
             >
               <X size={14} />
             </button>

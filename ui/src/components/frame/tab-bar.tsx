@@ -125,10 +125,10 @@ const TabBar: React.FC<TabBarProps> = ({ onRefresh, onBackToList }) => {
       getPreviewType(file.mimeType, file.extension) === "markdown");
   const showEditToggle = isCodeFile && activeTabId;
   const cornerButtonClass =
-    "shrink-0 w-8 h-8 rounded-md text-ide-accent hover:bg-ide-accent hover:text-ide-bg flex items-center justify-center border border-ide-border transition-colors";
+    "shrink-0 w-11 h-11 min-w-11 min-h-11 md:w-8 md:h-8 md:min-w-0 md:min-h-0 rounded-md text-ide-accent hover:bg-ide-accent hover:text-ide-bg flex items-center justify-center border border-ide-border transition-colors";
 
   return (
-    <div className="h-12 bg-ide-bg border-b border-ide-border flex items-center px-2 gap-2 shrink-0 transition-colors duration-300 overflow-hidden">
+    <div className="h-[calc(3rem+env(safe-area-inset-top))] min-h-[calc(3rem+env(safe-area-inset-top))] bg-ide-bg border-b border-ide-border flex items-center px-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] pt-[env(safe-area-inset-top)] gap-2 shrink-0 transition-colors duration-300 overflow-hidden md:h-12 md:min-h-0 md:px-2 md:pt-0">
       {(showBackButton || showDefaultCloseButton) && (
         <div className="flex items-center gap-2 shrink-0">
           {showBackButton ? (
@@ -137,6 +137,7 @@ const TabBar: React.FC<TabBarProps> = ({ onRefresh, onBackToList }) => {
               onClick={handleBackClick}
               className={`${cornerButtonClass} ${activeTabId === null ? "bg-ide-accent text-ide-bg border-ide-accent" : ""}`}
               title={t("common.backToList")}
+              aria-label={t("common.backToList")}
             >
               {getViewIcon()}
             </button>
@@ -171,7 +172,7 @@ const TabBar: React.FC<TabBarProps> = ({ onRefresh, onBackToList }) => {
               onClick={() => handleTabClick(tab.id)}
               style={tabReorder.getItemStyle(tab.id)}
               className={cn(
-                "shrink-0 px-2 h-7 rounded-md flex items-center gap-1 text-xs border transition-all cursor-pointer relative",
+                "shrink-0 px-2 min-h-11 h-11 md:min-h-0 md:h-7 rounded-md flex items-center gap-1 text-xs border transition-all cursor-pointer relative",
                 tabReorder.activeId === tab.id && "opacity-95 shadow-lg cursor-grabbing",
                 tabReorder.activeId && tabReorder.overId === tab.id && "ring-1 ring-ide-accent",
                 activeTabId === tab.id
@@ -183,9 +184,12 @@ const TabBar: React.FC<TabBarProps> = ({ onRefresh, onBackToList }) => {
               <span className={`max-w-[80px] truncate font-medium ${!tab.pinned ? "italic" : ""}`}>{tab.title}</span>
               {tab.closable !== false && (
                 <button
+                  type="button"
                   data-drag-ignore
                   onClick={(e) => handleCloseTab(e, tab.id)}
-                  className="hover:text-red-500 rounded-full p-0.5 hover:bg-ide-bg"
+                  className="flex size-11 min-h-11 min-w-11 items-center justify-center rounded-sm hover:bg-ide-bg hover:text-red-500 md:size-5 md:min-h-0 md:min-w-0 md:rounded-full md:p-0.5"
+                  title={`${t("common.close")} ${tab.title}`}
+                  aria-label={`${t("common.close")} ${tab.title}`}
                 >
                   <X size={12} />
                 </button>
@@ -200,14 +204,22 @@ const TabBar: React.FC<TabBarProps> = ({ onRefresh, onBackToList }) => {
           <>
             {showEditToggle ? (
               <button
+                type="button"
                 onClick={handleToggleEdit}
                 className={`${cornerButtonClass} ${editMode ? "bg-ide-accent text-ide-bg border-ide-accent" : ""}`}
                 title={editMode ? t("common.view") : t("common.edit")}
+                aria-label={editMode ? t("common.view") : t("common.edit")}
               >
                 {editMode ? <Eye size={18} /> : <Edit size={18} />}
               </button>
             ) : (
-              <button onClick={onRefresh} className={cornerButtonClass} title={t("common.refresh")}>
+              <button
+                type="button"
+                onClick={onRefresh}
+                className={cornerButtonClass}
+                title={t("common.refresh")}
+                aria-label={t("common.refresh")}
+              >
                 <RefreshCw size={18} />
               </button>
             )}

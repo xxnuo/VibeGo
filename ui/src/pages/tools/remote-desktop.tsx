@@ -95,6 +95,7 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
   );
   const [remoteCursor, setRemoteCursor] = useState<{ x: number; y: number } | null>(null);
   const [toolbar, setToolbar] = useState<ToolbarState>(() => readStored(toolbarStorageKey, defaultToolbar));
+  const [mobileDesktopToolbarOpen, setMobileDesktopToolbarOpen] = useState(false);
   const [activeMenu, setActiveMenu] = useState<ActiveMenu>(null);
   const [installingHelper, setInstallingHelper] = useState(false);
 
@@ -160,10 +161,15 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
     ws.send(JSON.stringify(payload));
   }, []);
 
-  const sendRealtimeInput = useCallback((payload: Record<string, unknown>) => {
+  const sendRealtimeInput = useCallback((payload: Record<string, unknown>, options: { reliable?: boolean } = {}) => {
     const ws = wsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN || ws.bufferedAmount > 0) return;
-    ws.send(JSON.stringify({ ...payload, clientSentAt: Date.now() + serverTimeOffsetRef.current }));
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!options.reliable && ws.bufferedAmount > 0) return;
+    try {
+      ws.send(JSON.stringify({ ...payload, clientSentAt: Date.now() + serverTimeOffsetRef.current }));
+    } catch {
+      // The socket can close between the readyState check and send.
+    }
   }, []);
 
   const setRemoteCursorPoint = useCallback((point: { x: number; y: number } | null) => {
@@ -441,6 +447,7 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
 
   const handlePointer = useCallback(
     (event: React.PointerEvent<HTMLCanvasElement>, down?: boolean) => {
+      if (isMobile && event.pointerType === "touch") return;
       if (!controlEnabled) return;
       event.preventDefault();
       event.currentTarget.focus();
@@ -456,22 +463,25 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
         }, 16);
         return;
       }
-      sendRealtimeInput({
-        type: "pointer",
-        version: 2,
-        displayId,
-        x: point.x,
-        y: point.y,
-        button: pointerButton(event.button),
-        down,
-      });
+      sendRealtimeInput(
+        {
+          type: "pointer",
+          version: 2,
+          displayId,
+          x: point.x,
+          y: point.y,
+          button: pointerButton(event.button),
+          down,
+        },
+        { reliable: true }
+      );
     },
-    [canvasPoint, controlEnabled, displayId, sendRealtimeInput]
+    [canvasPoint, controlEnabled, displayId, isMobile, sendRealtimeInput]
   );
 
   const sendButton = useCallback(
     (button: "left" | "middle" | "right", down: boolean) => {
-      sendRealtimeInput({ type: "pointer", version: 2, displayId, button, down, move: false });
+      sendRealtimeInput({ type: "pointer", version: 2, displayId, button, down, move: false }, { reliable: true });
     },
     [displayId, sendRealtimeInput]
   );
@@ -485,7 +495,7 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
       if (event.touches.length === 2) {
         const second = event.touches[1];
         const distance = Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
-        touchRef.current = { lastX: first.clientX, lastY: first.clientY, lastDistance: distance, moved: false };
+        touchRef.current = { lastX: first.clientX, lastY: first.clientY, lastDistance: distance, moved: true };
         return;
       }
       touchRef.current = { lastX: first.clientX, lastY: first.clientY, lastDistance: 0, moved: false };
@@ -571,9 +581,16 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
       const last = touchRef.current;
       touchRef.current = null;
       if (last && !last.moved) {
-        sendRealtimeInput({ type: "pointer", version: 2, displayId, button: "left", down: true, move: false });
+        sendRealtimeInput(
+          { type: "pointer", version: 2, displayId, button: "left", down: true, move: false },
+          { reliable: true }
+        );
         window.setTimeout(
-          () => sendRealtimeInput({ type: "pointer", version: 2, displayId, button: "left", down: false, move: false }),
+          () =>
+            sendRealtimeInput(
+              { type: "pointer", version: 2, displayId, button: "left", down: false, move: false },
+              { reliable: true }
+            ),
           35
         );
       }
@@ -601,24 +618,27 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
         !event.metaKey &&
         !event.altKey
       ) {
-        if (down) sendRealtimeInput({ type: "text", text: event.key });
+        if (down) sendRealtimeInput({ type: "text", text: event.key }, { reliable: true });
         return;
       }
       const keyId = event.code || event.key;
       if (down && keysDownRef.current.has(keyId)) return;
       if (down) keysDownRef.current.add(keyId);
       else keysDownRef.current.delete(keyId);
-      sendRealtimeInput({
-        type: "key",
-        version: 2,
-        key: event.key,
-        code: event.code,
-        location: event.location,
-        keyCode: event.keyCode,
-        char: event.key.length === 1 ? event.key : "",
-        down,
-        modifiers: modifierKeys(event),
-      });
+      sendRealtimeInput(
+        {
+          type: "key",
+          version: 2,
+          key: event.key,
+          code: event.code,
+          location: event.location,
+          keyCode: event.keyCode,
+          char: event.key.length === 1 ? event.key : "",
+          down,
+          modifiers: modifierKeys(event),
+        },
+        { reliable: true }
+      );
     },
     [controlEnabled, sendRealtimeInput, viewConfig.keyboardMode]
   );
@@ -655,11 +675,12 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
   };
 
   return (
-    <div className="relative h-full overflow-hidden bg-ide-bg text-ide-text">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-ide-bg text-ide-text">
       <RemoteDesktopStage
         runtime={runtime}
         canvasRef={canvasRef}
         stageRef={stageRef}
+        isMobile={isMobile}
         t={t}
         onPointerMove={(event) => handlePointer(event)}
         onPointerDown={(event) => handlePointer(event, true)}
@@ -676,13 +697,17 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
         onTouchEnd={handleTouchEnd}
         onReleaseInput={releaseInput}
       />
-      <div className={isMobile ? "hidden md:block" : ""}>
+      <div className={isMobile ? (mobileDesktopToolbarOpen ? "block" : "hidden") : ""}>
         <RemoteDesktopToolbar
           runtime={runtime}
           toolbar={toolbar}
           activeMenu={activeMenu}
           t={t}
-          onToolbarChange={(patch) => setToolbar((prev) => ({ ...prev, ...patch }))}
+          onToolbarChange={(patch) => {
+            if (isMobile && patch.hidden === true) setMobileDesktopToolbarOpen(false);
+            if (isMobile && patch.hidden === false) setMobileDesktopToolbarOpen(true);
+            setToolbar((prev) => ({ ...prev, ...patch }));
+          }}
           onActiveMenuChange={setActiveMenu}
           onConnectToggle={state === "idle" || state === "error" ? connect : disconnect}
           onPauseToggle={togglePause}
@@ -692,7 +717,9 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
           onClipboardTextChange={setClipboardText}
           onClipboardRead={() => send({ type: "clipboardRead" })}
           onClipboardWrite={() => send({ type: "clipboardWrite", text: clipboardText })}
-          onSpecialKey={(specialKey: SpecialKey) => sendRealtimeInput({ type: "specialKey", specialKey })}
+          onSpecialKey={(specialKey: SpecialKey) =>
+            sendRealtimeInput({ type: "specialKey", specialKey }, { reliable: true })
+          }
         />
       </div>
       <MobileRemoteControls
@@ -700,13 +727,14 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
         t={t}
         onConnectToggle={state === "idle" || state === "error" ? connect : disconnect}
         onConfigure={configure}
-        onSpecialKey={(specialKey) => sendRealtimeInput({ type: "specialKey", specialKey })}
+        onSpecialKey={(specialKey) => sendRealtimeInput({ type: "specialKey", specialKey }, { reliable: true })}
         onWheel={(deltaY) => sendRealtimeInput({ type: "wheel", deltaX: 0, deltaY })}
         onButton={sendButton}
-        onKeyboardText={(text) => sendRealtimeInput({ type: "text", text })}
+        onKeyboardText={(text) => sendRealtimeInput({ type: "text", text }, { reliable: true })}
         onClipboardRead={() => send({ type: "clipboardRead" })}
         onClipboardWrite={() => send({ type: "clipboardWrite", text: clipboardText })}
         onShowDesktopToolbar={() => {
+          setMobileDesktopToolbarOpen(true);
           setToolbar((prev) => ({ ...prev, hidden: false, collapsed: false }));
           setActiveMenu("display");
         }}

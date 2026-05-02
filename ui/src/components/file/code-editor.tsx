@@ -12,8 +12,11 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ content, onChange }) => {
   const [value, setValue] = useState(content);
 
   const handleInsert = (char: string) => {
-    setValue((prev) => prev + char);
-    onChange(value + char);
+    setValue((prev) => {
+      const next = prev + char;
+      onChange(next);
+      return next;
+    });
   };
 
   const lines = value.split("\n");
@@ -33,7 +36,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ content, onChange }) => {
         {/* Editor Area */}
         <div className="flex-1 relative overflow-auto">
           <textarea
-            className="w-full h-full bg-transparent text-ide-text p-4 font-mono text-sm leading-6 resize-none focus:outline-none whitespace-pre"
+            id="code-editor"
+            name="code-editor"
+            aria-label="Code editor"
+            className="h-full w-full resize-none whitespace-pre bg-transparent p-4 font-mono text-base leading-6 text-ide-text focus:outline-none md:text-sm"
             value={value}
             onChange={(e) => {
               setValue(e.target.value);

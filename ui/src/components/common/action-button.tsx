@@ -17,7 +17,7 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
         onClick={onClick}
         title={title || label}
         className={cn(
-          "flex flex-col items-center gap-1.5 p-2 rounded-md transition-all group outline-none",
+          "flex min-h-11 min-w-11 flex-col items-center gap-1.5 p-2 rounded-md transition-all group outline-none md:min-h-0 md:min-w-0",
           destructive ? "text-red-500 hover:bg-red-500/10" : "text-ide-text hover:bg-ide-bg hover:text-ide-accent",
           className
         )}

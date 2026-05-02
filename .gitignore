@@ -6,6 +6,7 @@ ui/CLAUDE.md
 /ui/.vite
 /dist
 /artifacts
+/build/
 /testdata
 /scripts/__pycache__
 /assets/sherpa/
@@ -13,3 +14,4 @@ ui/CLAUDE.md
 /thirdparty/waveterm/*
 !/thirdparty/waveterm/LICENSE
 !/thirdparty/waveterm/NOTICE
+/.codex-tmp

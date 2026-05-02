@@ -1,5 +1,6 @@
 {
   "common": {
+    "menu": "Menu",
     "settings": "Settings",
     "theme": "Theme",
     "language": "Language",
@@ -45,6 +46,7 @@
     "clear": "Clear",
     "search": "Search",
     "sort": "Sort",
+    "moreActions": "More actions",
     "apply": "Apply",
     "copy": "Copy",
     "backToList": "Back to List",
@@ -60,6 +62,185 @@
     "pageNotFound": "Page not found",
     "saveFailed": "Failed to save",
     "selected": "selected"
+  },
+  "codex": {
+    "action": {
+      "newThread": "New thread",
+      "renameThread": "Rename thread",
+      "deleteThread": "Delete thread",
+      "pinThread": "Pin thread",
+      "unpinThread": "Unpin thread",
+      "archiveThread": "Archive thread",
+      "unarchiveThread": "Unarchive thread",
+      "settings": "Codex settings",
+      "toggleInspector": "Toggle inspector",
+      "reconnect": "Reconnect",
+      "send": "Send",
+      "steer": "Send while working",
+      "stop": "Stop",
+      "forkThread": "Fork thread",
+      "compact": "Compact context",
+      "review": "Review changes",
+      "shellCommand": "Run shell command",
+      "goal": "Set goal",
+      "retry": "Retry",
+      "edit": "Edit message",
+      "scrollToBottom": "Scroll to bottom"
+    },
+    "connection": {
+      "connected": "Connected",
+      "connecting": "Connecting",
+      "offline": "Offline"
+    },
+    "thread": {
+      "new": "New Codex thread",
+      "search": "Search threads",
+      "empty": "No threads yet",
+      "connectToLoad": "Connect to Codex to load threads",
+      "listLabel": "Codex threads",
+      "deleteTitle": "Delete thread?",
+      "renameTitle": "Rename thread",
+      "showArchived": "Show archived threads",
+      "showActive": "Show active threads",
+      "loadMore": "Load more",
+      "historyLoadFailed": "Failed to load thread history",
+      "retryHistory": "Retry"
+    },
+    "empty": {
+      "title": "Build with Codex",
+      "threadTitle": "Start a turn"
+    },
+    "turn": {
+      "label": "Turn {index}",
+      "working": "Working"
+    },
+    "composer": {
+      "placeholder": "Message Codex"
+    },
+    "cwd": {
+      "none": "No working directory",
+      "folder": "Folder",
+      "short": "Working dir",
+      "choose": "Choose a directory"
+    },
+    "item": {
+      "reasoning": "Reasoning",
+      "command": "Command",
+      "exitCode": "exit",
+      "fileChanges": "{count} file changes",
+      "plan": "Plan",
+      "webSearch": "Web search",
+      "imageView": "Image",
+      "enteredReviewMode": "Review started",
+      "exitedReviewMode": "Review finished",
+      "contextCompaction": "Context compacted",
+      "warning": "Warning",
+      "turnDiff": "Turn diff"
+    },
+    "settings": {
+      "session": "Session",
+      "status": "Status",
+      "version": "Version",
+      "account": "Account",
+      "skills": "Skills",
+      "none": "None",
+      "notSignedIn": "Not signed in",
+      "signIn": "Sign in with ChatGPT",
+      "execution": "Execution",
+      "mobileDescription": "Account, model, permissions, sandbox, and working directory",
+      "model": "Model",
+      "reasoning": "Reasoning effort",
+      "approval": "Approval policy",
+      "sandbox": "Sandbox",
+      "cwd": "Working directory",
+      "thread": "Thread",
+      "commit": "Commit",
+      "tokens": "Tokens",
+      "signOut": "Sign out"
+    },
+    "insights": {
+      "title": "Runtime",
+      "refresh": "Refresh status",
+      "loadFailed": "Some runtime details could not be loaded",
+      "rateLimit": "Rate limit",
+      "resets": "Resets",
+      "lifetimeTokens": "Lifetime tokens",
+      "mcp": "MCP servers",
+      "noMcp": "No configured MCP servers",
+      "unavailable": "Unavailable",
+      "connect": "Connect MCP server"
+    },
+    "goal": {
+      "title": "Thread goal",
+      "placeholder": "Describe what this thread should accomplish",
+      "none": "No goal set",
+      "set": "Set goal",
+      "edit": "Edit goal",
+      "tokens": "tokens"
+    },
+    "skill": {
+      "none": "No skill"
+    },
+    "login": {
+      "title": "Sign in with ChatGPT",
+      "instructions": "Open the verification page and enter this code to finish signing in.",
+      "unavailable": "Codex did not return valid device login details"
+    },
+    "review": {
+      "title": "Start code review",
+      "placeholder": "Optional review instructions; leave blank for uncommitted changes"
+    },
+    "shell": {
+      "title": "Run shell command",
+      "placeholder": "Command",
+      "confirmTitle": "Run this command outside the sandbox?"
+    },
+    "approval": {
+      "onRequest": "On request",
+      "untrusted": "Untrusted",
+      "never": "Never"
+    },
+    "sandbox": {
+      "workspaceWrite": "Workspace write",
+      "readOnly": "Read only",
+      "dangerFullAccess": "Danger full access"
+    },
+    "request": {
+      "commandTitle": "Allow command?",
+      "fileTitle": "Allow file changes?",
+      "permissionsTitle": "Allow additional permissions?",
+      "inputTitle": "Codex needs your input",
+      "elicitationTitle": "MCP server needs your input",
+      "waiting": "Codex paused this turn and is waiting for a decision.",
+      "commandUnavailable": "Command details unavailable",
+      "fileFallback": "Codex wants to modify files in this workspace.",
+      "permissionsFallback": "Codex requested additional permissions.",
+      "other": "Other",
+      "otherPlaceholder": "Enter another answer",
+      "requiredFields": "Fill in all required fields.",
+      "choose": "Choose an option",
+      "confirm": "Confirm",
+      "decline": "Decline",
+      "allowSession": "Allow for session",
+      "allow": "Allow",
+      "submit": "Submit"
+    },
+    "attachment": {
+      "add": "Add image",
+      "tooLarge": "Each image must be 5 MB or smaller.",
+      "totalTooLarge": "Image attachments must total 10 MB or less.",
+      "readFailed": "Failed to read image attachment."
+    },
+    "error": {
+      "notConnected": "Codex is not connected",
+      "cliUnavailable": "Codex CLI is unavailable",
+      "connectionClosed": "Codex connection closed",
+      "reported": "Codex reported an error",
+      "retryCleanupFailed": "Failed to clean up the retry branch; it was kept for recovery",
+      "retryOutcomeUnknown": "The retry outcome is unknown; the branch was kept for recovery",
+      "dynamicToolUnavailable": "This dynamic tool is not configured in VibeGo and was rejected.",
+      "authRefreshUnavailable": "VibeGo cannot refresh externally managed Codex auth tokens."
+    }
   },
   "dialog": {
     "ok": "OK",
@@ -127,6 +308,8 @@
     "closeStash": "Close stash",
     "pop": "Pop",
     "drop": "Drop",
+    "stashDropConfirmTitle": "Drop this stash?",
+    "stashDropConfirmMessage": "The stash \"{message}\" will be permanently deleted.",
     "conflicts": "conflicts to resolve",
     "resolve": "Resolve",
     "undo": "Undo",
@@ -240,6 +423,7 @@
     "unpushedTag": "This tag has not been pushed",
     "unpushedTags": "unpushed tags",
     "tagsStatusUnavailable": "Tag remote status unavailable",
+    "moreActions": "More actions",
     "advancedOperations": "Advanced operations",
     "operation": "Operation",
     "merge": "Merge",
@@ -754,6 +938,8 @@
     "newFolder": "New Folder",
     "enterName": "Enter name...",
     "emptyFolder": "Empty folder",
+    "showHidden": "Show hidden files",
+    "hideHidden": "Hide hidden files",
     "searchPlaceholder": "Search files...",
     "sortName": "Name",
     "sortSize": "Size",
@@ -798,6 +984,10 @@
     "namePlaceholder": "Enter session name..."
   },
   "plugin": {
+    "codex": {
+      "name": "Codex",
+      "description": "Use Codex threads, tools, approvals, and terminal workflows in a graphical interface."
+    },
     "terminal": {
       "name": "Terminal",
       "newTab": "New Tab"
@@ -943,9 +1133,14 @@
       "description": "Control this device's volume, media playback, and screen power.",
       "title": "Remote Control",
       "volume": "Volume",
+      "volumeDown": "Lower volume",
+      "volumeUp": "Raise volume",
       "mute": "Mute",
       "unmute": "Unmute",
       "media": "Media",
+      "previous": "Previous track",
+      "playPause": "Play or pause",
+      "next": "Next track",
       "screen": "Screen",
       "screenOff": "Screen Off",
       "screenOn": "Screen On"
@@ -999,6 +1194,11 @@
       "closePanel": "Close panel",
       "mouseMode": "Mouse mode",
       "touchMode": "Touch mode",
+      "scrollUp": "Scroll up",
+      "middleButton": "Middle mouse button",
+      "scrollDown": "Scroll down",
+      "leftButton": "Left mouse button",
+      "rightButton": "Right mouse button",
       "showVirtualMouse": "Show virtual mouse",
       "virtualMouseSize": "Mouse size",
       "gestureTap": "Tap: send left click",

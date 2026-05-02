@@ -12,8 +12,9 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getTranslation, type Locale } from "@/lib/i18n";
 
@@ -76,6 +77,8 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({
   const [search, setSearch] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [newBranchName, setNewBranchName] = useState("");
+  const searchInputId = useId();
+  const newBranchInputId = useId();
   const [desktopAnchorReady, setDesktopAnchorReady] = useState(false);
   const branchListRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -250,7 +253,8 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({
   );
 
   const renderSelectorContent = (compact: boolean) => {
-    const itemPadding = compact ? "px-3 py-1.5" : "px-4 py-2.5";
+    const itemPadding = compact ? "px-3 py-1.5" : "min-h-11 px-4 py-2";
+    const iconButtonSize = compact ? "size-7" : "size-11";
     return (
       <>
         <div
@@ -258,12 +262,16 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({
         >
           <div className="flex items-center gap-2">
             <GitBranch size={16} className="text-ide-accent" />
-            <span className="text-sm font-medium text-ide-text">{t("git.branches")}</span>
+            {compact ? (
+              <span className="text-sm font-medium text-ide-text">{t("git.branches")}</span>
+            ) : (
+              <SheetTitle className="text-sm font-medium text-ide-text">{t("git.branches")}</SheetTitle>
+            )}
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-sm p-1 text-ide-mute hover:bg-ide-panel hover:text-ide-text"
+            className={`flex shrink-0 items-center justify-center rounded-sm text-ide-mute hover:bg-ide-panel hover:text-ide-text ${iconButtonSize}`}
             aria-label={t("git.cancel")}
           >
             <X size={16} />
@@ -272,17 +280,20 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({
 
         <div className={`border-b border-ide-border ${compact ? "p-2" : "px-3 py-2"}`}>
           <div
-            className={`flex items-center gap-2 border border-transparent bg-ide-panel focus-within:border-ide-accent ${compact ? "rounded-sm px-2 py-1.5" : "rounded-lg px-3 py-2"}`}
+            className={`flex items-center gap-2 border border-transparent bg-ide-panel focus-within:border-ide-accent ${compact ? "rounded-sm px-2 py-1.5" : "min-h-11 rounded-md px-3"}`}
           >
             <Search size={14} className="text-ide-mute" />
             <input
+              id={searchInputId}
+              name="gitBranchSearch"
               ref={searchInputRef}
               type="text"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               onKeyDown={handleSearchKeyDown}
               placeholder={t("git.searchBranches")}
-              className="min-w-0 flex-1 bg-transparent text-sm text-ide-text outline-none placeholder-ide-mute"
+              aria-label={t("git.searchBranches")}
+              className={`${compact ? "text-sm" : "h-11 text-base"} min-w-0 flex-1 bg-transparent text-ide-text outline-none placeholder-ide-mute`}
               autoFocus
             />
           </div>
@@ -303,7 +314,7 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({
                 type="button"
                 onClick={(event) => handleRename(event, currentBranch)}
                 disabled={isLoading}
-                className="rounded-sm p-1 text-ide-mute hover:bg-ide-panel hover:text-ide-accent disabled:opacity-50"
+                className={`flex shrink-0 items-center justify-center rounded-sm text-ide-mute hover:bg-ide-panel hover:text-ide-accent disabled:opacity-50 ${iconButtonSize}`}
                 aria-label={t("git.renameBranch")}
                 title={t("git.renameBranch")}
               >
@@ -371,12 +382,12 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({
                     <GitBranch size={14} className="shrink-0 text-ide-mute" />
                     <span className="truncate text-sm text-ide-text">{branch}</span>
                   </button>
-                  <div className="flex shrink-0 items-center gap-0.5 pr-3 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100">
+                  <div className="flex shrink-0 items-center gap-0.5 pr-3 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 focus-within:opacity-100">
                     <button
                       type="button"
                       onClick={(event) => handleRename(event, branch)}
                       disabled={isLoading}
-                      className="rounded-sm p-1 text-ide-mute hover:text-ide-accent disabled:opacity-50"
+                      className={`flex shrink-0 items-center justify-center rounded-sm text-ide-mute hover:text-ide-accent disabled:opacity-50 ${iconButtonSize}`}
                       aria-label={`${t("git.renameBranch")} ${branch}`}
                       title={t("git.renameBranch")}
                     >
@@ -386,7 +397,7 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({
                       type="button"
                       onClick={(event) => handleDelete(event, branch)}
                       disabled={isLoading}
-                      className="rounded-sm p-1 text-ide-mute hover:text-red-400 disabled:opacity-50"
+                      className={`flex shrink-0 items-center justify-center rounded-sm text-ide-mute hover:text-red-400 disabled:opacity-50 ${iconButtonSize}`}
                       aria-label={`${t("git.deleteBranch")} ${branch}`}
                       title={t("git.deleteBranch")}
                     >
@@ -408,7 +419,7 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({
                   type="button"
                   onClick={onPrune}
                   disabled={isLoading || remoteNames.length === 0}
-                  className="rounded-sm p-1 text-ide-mute hover:bg-ide-panel hover:text-ide-accent disabled:opacity-50"
+                  className={`flex shrink-0 items-center justify-center rounded-sm text-ide-mute hover:bg-ide-panel hover:text-ide-accent disabled:opacity-50 ${iconButtonSize}`}
                   aria-label={t("git.pruneRemote")}
                   title={t("git.pruneRemote")}
                 >
@@ -437,7 +448,7 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({
                     <button
                       type="button"
                       onClick={(event) => handleDeleteRemote(event, branch)}
-                      className="mr-3 shrink-0 rounded-sm p-1 text-ide-mute opacity-100 transition-opacity hover:text-red-400 disabled:opacity-30 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100"
+                      className={`mr-3 flex shrink-0 items-center justify-center rounded-sm text-ide-mute opacity-100 transition-opacity hover:text-red-400 disabled:opacity-30 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 ${iconButtonSize}`}
                       disabled={isLoading || !target}
                       aria-label={`${t("git.deleteRemoteBranch")} ${branch}`}
                       title={t("git.deleteRemoteBranch")}
@@ -451,15 +462,22 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({
           )}
         </div>
 
-        <div className={`border-t border-ide-border ${compact ? "p-2" : "p-3"}`}>
+        <div
+          className={`border-t border-ide-border ${
+            compact ? "p-2" : "px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+          }`}
+        >
           {isCreating ? (
             <div className="space-y-2">
               <input
+                id={newBranchInputId}
+                name="gitNewBranch"
                 type="text"
                 value={newBranchName}
                 onChange={(event) => setNewBranchName(event.target.value)}
                 placeholder={t("git.newBranch")}
-                className={`w-full border border-ide-border bg-ide-panel px-3 text-sm text-ide-text outline-none focus:border-ide-accent ${compact ? "rounded-sm py-1.5" : "rounded-lg py-2"}`}
+                aria-label={t("git.newBranch")}
+                className={`w-full border border-ide-border bg-ide-panel px-3 text-ide-text outline-none focus:border-ide-accent ${compact ? "rounded-sm py-1.5 text-sm" : "min-h-11 rounded-md py-2 text-base"}`}
                 autoFocus
                 onKeyDown={(event) => {
                   if (event.key === "Enter") handleCreate();
@@ -479,7 +497,7 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({
                     setIsCreating(false);
                     setNewBranchName("");
                   }}
-                  className={`flex-1 text-sm text-ide-mute hover:bg-ide-panel hover:text-ide-text ${compact ? "rounded-sm px-2 py-1.5" : "rounded-lg px-3 py-2"}`}
+                  className={`flex-1 text-sm text-ide-mute hover:bg-ide-panel hover:text-ide-text ${compact ? "rounded-sm px-2 py-1.5" : "min-h-11 rounded-md px-3 py-2"}`}
                 >
                   {t("git.cancel")}
                 </button>
@@ -487,7 +505,7 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({
                   type="button"
                   onClick={handleCreate}
                   disabled={isLoading || !newBranchName.trim()}
-                  className={`flex-1 bg-ide-accent text-sm text-ide-bg disabled:opacity-50 ${compact ? "rounded-sm px-2 py-1.5" : "rounded-lg px-3 py-2"}`}
+                  className={`flex-1 bg-ide-accent text-sm text-ide-bg disabled:opacity-50 ${compact ? "rounded-sm px-2 py-1.5" : "min-h-11 rounded-md px-3 py-2"}`}
                 >
                   {t("git.create")}
                 </button>
@@ -498,7 +516,7 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({
               type="button"
               onClick={() => setIsCreating(true)}
               disabled={isLoading}
-              className={`flex w-full items-center justify-center gap-2 text-sm text-ide-accent hover:bg-ide-accent/10 disabled:opacity-50 ${compact ? "rounded-sm px-2 py-1.5" : "rounded-lg px-3 py-2"}`}
+              className={`flex w-full items-center justify-center gap-2 text-sm text-ide-accent hover:bg-ide-accent/10 disabled:opacity-50 ${compact ? "rounded-sm px-2 py-1.5" : "min-h-11 rounded-md px-3 py-2"}`}
             >
               <Plus size={14} />
               {t("git.createBranch")}
@@ -546,23 +564,28 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50" onClick={onClose} role="presentation">
-      <div
-        className="flex max-h-[70vh] w-full max-w-lg flex-col rounded-t-2xl border-t border-ide-border bg-ide-bg shadow-xl animate-in slide-in-from-bottom duration-200"
-        onClick={(event) => event.stopPropagation()}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            event.preventDefault();
-            onClose();
-          }
+    <Sheet
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <SheetContent
+        side="bottom"
+        showCloseButton={false}
+        className="h-[min(78dvh,42rem)] max-h-[min(78dvh,42rem)] min-h-0 gap-0 overflow-hidden rounded-t-md border-ide-border bg-ide-bg p-0 text-ide-text"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          searchInputRef.current?.focus();
         }}
-        role="dialog"
-        aria-modal="true"
-        aria-label={t("git.branches")}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          restoreTriggerFocus();
+        }}
       >
         {renderSelectorContent(false)}
-      </div>
-    </div>
+      </SheetContent>
+    </Sheet>
   );
 };
 

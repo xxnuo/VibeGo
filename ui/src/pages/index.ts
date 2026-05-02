@@ -2,6 +2,7 @@ export { pageRegistry, registerPage, unregisterPage } from "@/pages/registry";
 export type { PageCategory, PageContext, PageDefinition, PageId, PageViewProps } from "@/pages/types";
 
 import "@/pages/tools/ai-session-manager";
+import "@/pages/tools/codex";
 import "@/pages/tools/blockterm";
 import "@/pages/system/home";
 import "@/pages/system/settings";

@@ -1,5 +1,5 @@
 import { Download, FolderGit2, FolderOpen, FolderPlus, Loader2 } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { gitApi } from "@/api/git";
 import DirectoryPicker from "@/components/common/directory-picker";
 import { Button } from "@/components/ui/button";
@@ -71,14 +71,20 @@ const GitRepositoryDialog: React.FC<GitRepositoryDialogProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [directoryPickerOpen, setDirectoryPickerOpen] = useState(false);
+  const browseButtonRef = useRef<HTMLButtonElement | null>(null);
+  const restoreBrowseFocusRef = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      restoreBrowseFocusRef.current = false;
+      return;
+    }
     setUrl("");
     setDestination(mode === "create" ? initialPath : "");
     setError(null);
     setRunning(false);
     setDirectoryPickerOpen(false);
+    restoreBrowseFocusRef.current = false;
   }, [initialPath, mode, open]);
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -122,6 +128,12 @@ const GitRepositoryDialog: React.FC<GitRepositoryDialogProps> = ({
       >
         <DialogContent
           showCloseButton={!running}
+          onOpenAutoFocus={(event) => {
+            if (!restoreBrowseFocusRef.current) return;
+            event.preventDefault();
+            restoreBrowseFocusRef.current = false;
+            browseButtonRef.current?.focus({ preventScroll: true });
+          }}
           className="border-ide-border bg-ide-panel text-ide-text shadow-sm md:max-w-lg"
         >
           <DialogHeader className="gap-2 text-left">
@@ -139,13 +151,16 @@ const GitRepositoryDialog: React.FC<GitRepositoryDialogProps> = ({
               <label className="block space-y-1.5 text-sm">
                 <span className="text-ide-text">{t("git.repositoryUrl")}</span>
                 <Input
+                  id="git-repository-url"
+                  name="git-repository-url"
+                  aria-label={t("git.repositoryUrl")}
                   value={url}
                   onChange={(event) => {
                     setUrl(event.target.value);
                     setError(null);
                   }}
                   placeholder={t("git.repositoryUrlPlaceholder")}
-                  autoFocus
+                  autoFocus={!restoreBrowseFocusRef.current}
                   disabled={running}
                   className="border-ide-border bg-ide-bg text-ide-text placeholder:text-ide-mute focus-visible:ring-ide-accent/30"
                 />
@@ -156,23 +171,30 @@ const GitRepositoryDialog: React.FC<GitRepositoryDialogProps> = ({
               <span className="text-ide-text">{t("git.repositoryPath")}</span>
               <div className="flex gap-2">
                 <Input
+                  id="git-repository-path"
+                  name="git-repository-path"
+                  aria-label={t("git.repositoryPath")}
                   value={destination}
                   onChange={(event) => {
                     setDestination(event.target.value);
                     setError(null);
                   }}
                   placeholder={t("git.repositoryPathPlaceholder")}
-                  autoFocus={mode === "create"}
+                  autoFocus={mode === "create" && !restoreBrowseFocusRef.current}
                   disabled={running}
                   className="min-w-0 border-ide-border bg-ide-bg text-ide-text placeholder:text-ide-mute focus-visible:ring-ide-accent/30"
                 />
                 <Button
+                  ref={browseButtonRef}
                   type="button"
                   variant="outline"
                   size="icon"
                   title={t("git.chooseRepositoryDirectory")}
                   aria-label={t("git.chooseRepositoryDirectory")}
-                  onClick={() => setDirectoryPickerOpen(true)}
+                  onClick={() => {
+                    restoreBrowseFocusRef.current = true;
+                    setDirectoryPickerOpen(true);
+                  }}
                   disabled={running}
                   className="shrink-0 border-ide-border bg-ide-panel text-ide-text hover:bg-ide-bg"
                 >

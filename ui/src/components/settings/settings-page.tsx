@@ -150,22 +150,24 @@ const FontSettingItem: React.FC<{
 
   return (
     <div className="p-4 bg-ide-bg rounded-lg border border-ide-border">
-      <div className="flex items-start justify-between gap-3 mb-3">
+      <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="text-ide-mute">
+          <div className="shrink-0 text-ide-mute">
             <Type size={18} />
           </div>
           <div className="min-w-0">
             <div className="text-sm font-medium text-ide-text">{t(schema.labelKey)}</div>
-            {schema.descriptionKey && <div className="text-xs text-ide-mute">{t(schema.descriptionKey)}</div>}
+            {schema.descriptionKey && (
+              <div className="break-words text-xs text-ide-mute">{t(schema.descriptionKey)}</div>
+            )}
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:shrink-0 md:items-center">
           <button
             type="button"
             onClick={() => onChange(schema.defaultValue || "default")}
             disabled={!canResetPrimary}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md border transition-all bg-ide-panel text-ide-text border-ide-border hover:border-ide-accent disabled:opacity-50 disabled:hover:border-ide-border"
+            className="inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-md border border-ide-border bg-ide-panel px-2.5 py-1.5 text-xs text-ide-text transition-all hover:border-ide-accent disabled:opacity-50 disabled:hover:border-ide-border md:min-h-0"
           >
             恢复默认
           </button>
@@ -173,7 +175,7 @@ const FontSettingItem: React.FC<{
             type="button"
             onClick={() => void scanFonts()}
             disabled={fontScanBusy}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md border transition-all bg-ide-panel text-ide-text border-ide-border hover:border-ide-accent disabled:opacity-60"
+            className="inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-md border border-ide-border bg-ide-panel px-2.5 py-1.5 text-xs text-ide-text transition-all hover:border-ide-accent disabled:opacity-60 md:min-h-0"
           >
             <RefreshCw size={13} className={fontScanBusy ? "animate-spin" : ""} />
             {scanSupported ? "扫描本机" : "检测候选"}
@@ -207,14 +209,16 @@ const FontSettingItem: React.FC<{
           </div>
         </div>
       )}
-      <div className="mb-2 flex items-center gap-2 rounded-md border border-ide-border bg-ide-panel px-2.5 py-1.5 focus-within:border-ide-accent">
+      <div className="mb-2 flex min-h-11 items-center gap-2 rounded-md border border-ide-border bg-ide-panel px-2.5 focus-within:border-ide-accent md:min-h-0 md:py-1.5">
         <Search size={14} className="shrink-0 text-ide-mute" />
         <input
           type="search"
+          name={`${schema.key}-search`}
+          aria-label="搜索字体"
           value={fontSearch}
           onChange={(e) => setFontSearch(e.target.value)}
           placeholder="搜索字体"
-          className="min-w-0 flex-1 bg-transparent text-xs text-ide-text outline-none placeholder:text-ide-mute"
+          className="h-11 min-w-0 flex-1 bg-transparent text-base text-ide-text outline-none placeholder:text-ide-mute md:h-auto md:text-xs"
         />
         <span className="shrink-0 text-[11px] text-ide-mute">{filteredFontOptions.length}</span>
       </div>
@@ -227,7 +231,7 @@ const FontSettingItem: React.FC<{
               key={opt.value}
               type="button"
               onClick={() => onChange(opt.value)}
-              className={`flex w-full min-w-0 items-center gap-3 border-b border-ide-border px-3 py-2 text-left transition-all last:border-b-0 ${
+              className={`flex min-h-11 w-full min-w-0 items-center gap-3 border-b border-ide-border px-3 py-2 text-left transition-all last:border-b-0 ${
                 selected ? "bg-ide-accent/10 text-ide-text" : "bg-transparent text-ide-text hover:bg-ide-bg"
               }`}
             >
@@ -268,7 +272,7 @@ const FontSettingItem: React.FC<{
           <button
             type="button"
             onClick={() => setAdvancedOpen((open) => !open)}
-            className="flex w-full items-center justify-between gap-3 text-left text-xs text-ide-text"
+            className="flex min-h-11 w-full items-center justify-between gap-3 text-left text-xs text-ide-text md:min-h-0"
           >
             <span className="font-medium">高级设置</span>
             <span className="text-ide-mute">{advancedOpen ? "收起" : "展开"}</span>
@@ -282,7 +286,7 @@ const FontSettingItem: React.FC<{
                     type="button"
                     onClick={() => onFallbackChange(fallbackSchema.defaultValue || "default")}
                     disabled={!canResetFallback}
-                    className="shrink-0 text-[11px] text-ide-mute hover:text-ide-text disabled:opacity-50 disabled:hover:text-ide-mute"
+                    className="inline-flex min-h-11 shrink-0 items-center text-[11px] text-ide-mute hover:text-ide-text disabled:opacity-50 disabled:hover:text-ide-mute md:min-h-0"
                   >
                     恢复默认
                   </button>
@@ -309,20 +313,22 @@ const FontSettingItem: React.FC<{
                   <button
                     type="button"
                     onClick={() => onFallbackChange("default")}
-                    className="shrink-0 text-[11px] text-ide-mute hover:text-ide-text"
+                    className="inline-flex min-h-11 shrink-0 items-center text-[11px] text-ide-mute hover:text-ide-text md:min-h-0"
                   >
                     清除
                   </button>
                 </div>
               )}
-              <div className="mb-2 flex items-center gap-2 rounded-md border border-ide-border bg-ide-panel px-2.5 py-1.5 focus-within:border-ide-accent">
+              <div className="mb-2 flex min-h-11 items-center gap-2 rounded-md border border-ide-border bg-ide-panel px-2.5 focus-within:border-ide-accent md:min-h-0 md:py-1.5">
                 <Search size={14} className="shrink-0 text-ide-mute" />
                 <input
                   type="search"
+                  name={`${schema.key}-fallback-search`}
+                  aria-label="搜索备选字体"
                   value={fallbackSearch}
                   onChange={(e) => setFallbackSearch(e.target.value)}
                   placeholder="搜索备选字体"
-                  className="min-w-0 flex-1 bg-transparent text-xs text-ide-text outline-none placeholder:text-ide-mute"
+                  className="h-11 min-w-0 flex-1 bg-transparent text-base text-ide-text outline-none placeholder:text-ide-mute md:h-auto md:text-xs"
                 />
                 <span className="shrink-0 text-[11px] text-ide-mute">{filteredFallbackOptions.length}</span>
               </div>
@@ -335,7 +341,7 @@ const FontSettingItem: React.FC<{
                       key={opt.value}
                       type="button"
                       onClick={() => onFallbackChange(opt.value)}
-                      className={`flex w-full min-w-0 items-center gap-3 border-b border-ide-border px-3 py-2 text-left transition-all last:border-b-0 ${
+                      className={`flex min-h-11 w-full min-w-0 items-center gap-3 border-b border-ide-border px-3 py-2 text-left transition-all last:border-b-0 ${
                         selected ? "bg-ide-accent/10 text-ide-text" : "bg-transparent text-ide-text hover:bg-ide-bg"
                       }`}
                     >
@@ -422,7 +428,7 @@ const SettingItem: React.FC<{
     const enabled = value === "true";
 
     return (
-      <div className="flex items-center justify-between gap-4 p-4 bg-ide-bg rounded-lg border border-ide-border">
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-ide-border bg-ide-bg p-4">
         <div className="flex items-center gap-3 min-w-0">
           <div className={`shrink-0 transition-colors ${enabled ? "text-ide-accent" : "text-ide-mute"}`}>
             {getIcon()}
@@ -435,12 +441,18 @@ const SettingItem: React.FC<{
         <button
           type="button"
           aria-pressed={enabled}
+          aria-label={t(schema.labelKey)}
           onClick={() => onChange(enabled ? "false" : "true")}
-          className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors duration-200 focus:outline-none focus:border-ide-accent ${enabled ? "border-ide-accent bg-ide-accent/12" : "border-ide-border bg-ide-panel hover:border-ide-mute/40"}`}
+          className="group inline-flex h-11 w-14 shrink-0 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ide-accent md:h-7 md:w-12"
         >
           <span
-            className={`absolute left-0.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full border shadow-sm transition-all duration-200 ${enabled ? "translate-x-5 border-ide-accent bg-ide-accent" : "translate-x-0 border-ide-border bg-white"}`}
-          />
+            aria-hidden="true"
+            className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors duration-200 ${enabled ? "border-ide-accent bg-ide-accent/12" : "border-ide-border bg-ide-panel group-hover:border-ide-mute/40"}`}
+          >
+            <span
+              className={`absolute left-0.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full border shadow-sm transition-all duration-200 ${enabled ? "translate-x-5 border-ide-accent bg-ide-accent" : "translate-x-0 border-ide-border bg-white"}`}
+            />
+          </span>
         </button>
       </div>
     );
@@ -469,11 +481,13 @@ const SettingItem: React.FC<{
   if (schema.type === "select" && schema.options) {
     return (
       <div className="p-4 bg-ide-bg rounded-lg border border-ide-border">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="text-ide-mute">{getIcon()}</div>
-          <div>
+        <div className="mb-3 flex items-center gap-3">
+          <div className="shrink-0 text-ide-mute">{getIcon()}</div>
+          <div className="min-w-0">
             <div className="text-sm font-medium text-ide-text">{t(schema.labelKey)}</div>
-            {schema.descriptionKey && <div className="text-xs text-ide-mute">{t(schema.descriptionKey)}</div>}
+            {schema.descriptionKey && (
+              <div className="break-words text-xs text-ide-mute">{t(schema.descriptionKey)}</div>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -482,8 +496,10 @@ const SettingItem: React.FC<{
             return (
               <button
                 key={opt.value}
+                type="button"
+                aria-pressed={value === opt.value}
                 onClick={() => onChange(opt.value)}
-                className={`px-3 py-1.5 text-xs rounded-md border transition-all ${
+                className={`min-h-11 min-w-11 rounded-md border px-3 py-1.5 text-xs transition-all md:min-h-0 md:min-w-0 ${
                   value === opt.value
                     ? "bg-ide-accent text-ide-bg border-ide-accent"
                     : "bg-ide-panel text-ide-text border-ide-border hover:border-ide-accent"
@@ -500,21 +516,25 @@ const SettingItem: React.FC<{
 
   if (schema.type === "number") {
     return (
-      <div className="flex items-center justify-between p-4 bg-ide-bg rounded-lg border border-ide-border">
-        <div className="flex items-center gap-3">
-          <div className="text-ide-mute">{getIcon()}</div>
-          <div>
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-ide-border bg-ide-bg p-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="shrink-0 text-ide-mute">{getIcon()}</div>
+          <div className="min-w-0">
             <div className="text-sm font-medium text-ide-text">{t(schema.labelKey)}</div>
-            {schema.descriptionKey && <div className="text-xs text-ide-mute">{t(schema.descriptionKey)}</div>}
+            {schema.descriptionKey && (
+              <div className="break-words text-xs text-ide-mute">{t(schema.descriptionKey)}</div>
+            )}
           </div>
         </div>
         <input
           type="number"
+          name={schema.key}
+          aria-label={t(schema.labelKey)}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           min={schema.min}
           max={schema.max}
-          className="w-20 px-2 py-1 text-sm bg-ide-panel border border-ide-border rounded text-ide-text text-center"
+          className="h-11 w-20 shrink-0 rounded border border-ide-border bg-ide-panel px-2 py-1 text-base text-center text-ide-text md:h-8 md:text-sm"
         />
       </div>
     );
@@ -523,19 +543,23 @@ const SettingItem: React.FC<{
   if (schema.type === "text") {
     return (
       <div className="p-4 bg-ide-bg rounded-lg border border-ide-border">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="text-ide-mute">{getIcon()}</div>
-          <div>
+        <div className="mb-3 flex items-center gap-3">
+          <div className="shrink-0 text-ide-mute">{getIcon()}</div>
+          <div className="min-w-0">
             <div className="text-sm font-medium text-ide-text">{t(schema.labelKey)}</div>
-            {schema.descriptionKey && <div className="text-xs text-ide-mute">{t(schema.descriptionKey)}</div>}
+            {schema.descriptionKey && (
+              <div className="break-words text-xs text-ide-mute">{t(schema.descriptionKey)}</div>
+            )}
           </div>
         </div>
         <input
           type="text"
+          name={schema.key}
+          aria-label={t(schema.labelKey)}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={t(schema.labelKey)}
-          className="w-full px-3 py-1.5 text-sm bg-ide-panel border border-ide-border rounded text-ide-text placeholder:text-ide-mute"
+          className="h-11 w-full rounded border border-ide-border bg-ide-panel px-3 py-1.5 text-base text-ide-text placeholder:text-ide-mute md:h-8 md:text-sm"
         />
       </div>
     );
@@ -544,18 +568,20 @@ const SettingItem: React.FC<{
   if (schema.type === "action") {
     return (
       <div className="p-4 bg-ide-bg rounded-lg border border-ide-border">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="text-ide-mute">{getIcon()}</div>
-          <div>
+        <div className="mb-3 flex items-center gap-3">
+          <div className="shrink-0 text-ide-mute">{getIcon()}</div>
+          <div className="min-w-0">
             <div className="text-sm font-medium text-ide-text">{t(schema.labelKey)}</div>
-            {schema.descriptionKey && <div className="text-xs text-ide-mute">{t(schema.descriptionKey)}</div>}
+            {schema.descriptionKey && (
+              <div className="break-words text-xs text-ide-mute">{t(schema.descriptionKey)}</div>
+            )}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <button
             type="button"
             onClick={() => onChange("run")}
-            className="inline-flex items-center gap-2 px-3 py-1.5 text-xs border rounded-md transition-all bg-ide-panel text-ide-text border-ide-border hover:border-ide-accent"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-ide-border bg-ide-panel px-3 py-1.5 text-xs text-ide-text transition-all hover:border-ide-accent sm:w-auto md:min-h-0"
           >
             <Download size={14} />
             {t("settings.speechAssets.button")}
@@ -564,7 +590,7 @@ const SettingItem: React.FC<{
             <button
               type="button"
               onClick={onDeleteSpeechAssets}
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-xs border rounded-md transition-all bg-ide-panel text-red-500 border-ide-border hover:border-red-500"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-ide-border bg-ide-panel px-3 py-1.5 text-xs text-red-500 transition-all hover:border-red-500 sm:w-auto md:min-h-0"
             >
               <Trash2 size={14} />
               {t("settings.speechAssets.deleteButton")}
@@ -681,19 +707,21 @@ const SettingsPage: React.FC = () => {
 
   const topBarCenterContent = useMemo(
     () => (
-      <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar touch-pan-x h-full">
+      <div className="flex h-full items-center gap-1 overflow-x-auto custom-scrollbar touch-pan-x md:gap-2">
         {SETTING_CATEGORIES.map((cat) => (
-          <div
+          <button
             key={cat.key}
+            type="button"
+            aria-pressed={activeTab === cat.key}
             onClick={() => setSettingsActiveCategory(cat.key)}
-            className={`shrink-0 px-2 h-7 rounded-md flex items-center gap-1 text-xs border transition-all cursor-pointer ${
+            className={`flex h-11 shrink-0 items-center gap-1 rounded-md border px-3 text-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ide-accent md:h-7 md:px-2 ${
               activeTab === cat.key
                 ? "bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm"
                 : "bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text"
             }`}
           >
             <span className="font-medium">{t(cat.labelKey)}</span>
-          </div>
+          </button>
         ))}
       </div>
     ),
@@ -736,14 +764,14 @@ const SettingsPage: React.FC = () => {
     if (!speechModelSchema?.options) return null;
     const selectedModel = settings.speechModel || speechModelSchema.defaultValue;
     return (
-      <div className="p-4 bg-ide-bg rounded-lg border border-ide-border">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="text-ide-mute">
+      <div className="rounded-lg border border-ide-border bg-ide-bg p-4">
+        <div className="mb-3 flex items-center gap-3">
+          <div className="shrink-0 text-ide-mute">
             <CloudDownload size={18} />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="text-sm font-medium text-ide-text">{t("settings.speechModel.label")}</div>
-            <div className="text-xs text-ide-mute">{t("settings.speechModel.description")}</div>
+            <div className="break-words text-xs text-ide-mute">{t("settings.speechModel.description")}</div>
           </div>
         </div>
         <div className="space-y-2">
@@ -760,8 +788,9 @@ const SettingsPage: React.FC = () => {
               >
                 <button
                   type="button"
+                  aria-pressed={selected}
                   onClick={() => void handleSettingChange("speechModel", opt.value)}
-                  className="min-w-0 flex-1 text-left text-xs text-ide-text"
+                  className="min-h-11 min-w-0 flex-1 text-left text-xs text-ide-text md:min-h-0"
                 >
                   <span className="block truncate">{opt.label}</span>
                   {opt.description && (
@@ -774,12 +803,13 @@ const SettingsPage: React.FC = () => {
                   onClick={() =>
                     downloaded ? void handleDeleteSpeechModel(opt.value) : void handleDownloadSpeechModel(opt.value)
                   }
-                  className={`h-7 w-7 shrink-0 inline-flex items-center justify-center rounded-md border transition-all ${
+                  className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border transition-all md:h-7 md:w-7 ${
                     downloaded
                       ? "text-red-500 border-ide-border hover:border-red-500 bg-ide-bg"
                       : "text-ide-text border-ide-border hover:border-ide-accent bg-ide-bg"
                   } disabled:opacity-60`}
                   title={downloaded ? t("settings.speechAssets.deleteButton") : t("settings.speechAssets.button")}
+                  aria-label={downloaded ? t("settings.speechAssets.deleteButton") : t("settings.speechAssets.button")}
                 >
                   {downloaded ? <Trash2 size={14} /> : <Download size={14} />}
                 </button>
@@ -791,20 +821,20 @@ const SettingsPage: React.FC = () => {
     );
   };
   const renderNotificationTab = () => (
-    <div className="p-4 bg-ide-bg rounded-lg border border-ide-border">
-      <div className="flex items-center gap-3 mb-3">
-        <div className="text-ide-mute">
+    <div className="rounded-lg border border-ide-border bg-ide-bg p-4">
+      <div className="mb-3 flex items-center gap-3">
+        <div className="shrink-0 text-ide-mute">
           <Bell size={18} />
         </div>
-        <div>
+        <div className="min-w-0">
           <div className="text-sm font-medium text-ide-text">{t("settings.notificationTest.label")}</div>
-          <div className="text-xs text-ide-mute">{t("settings.notificationTest.description")}</div>
+          <div className="break-words text-xs text-ide-mute">{t("settings.notificationTest.description")}</div>
         </div>
       </div>
       <button
         type="button"
         onClick={handleTestNotification}
-        className="inline-flex items-center gap-2 px-3 py-1.5 text-xs border rounded-md transition-all bg-ide-panel text-ide-text border-ide-border hover:border-ide-accent"
+        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-ide-border bg-ide-panel px-3 py-1.5 text-xs text-ide-text transition-all hover:border-ide-accent sm:w-auto md:min-h-0"
       >
         <Bell size={14} />
         {t("settings.notificationTest.button")}
@@ -813,14 +843,14 @@ const SettingsPage: React.FC = () => {
   );
 
   const renderPageTab = () => (
-    <div className="p-4 bg-ide-bg rounded-lg border border-ide-border">
-      <div className="flex items-center gap-3 mb-3">
-        <div className="text-ide-mute">
+    <div className="rounded-lg border border-ide-border bg-ide-bg p-4">
+      <div className="mb-3 flex items-center gap-3">
+        <div className="shrink-0 text-ide-mute">
           <Settings size={18} />
         </div>
-        <div>
+        <div className="min-w-0">
           <div className="text-sm font-medium text-ide-text">{t("settings.pageVisibility.label")}</div>
-          <div className="text-xs text-ide-mute">{t("settings.pageVisibility.description")}</div>
+          <div className="break-words text-xs text-ide-mute">{t("settings.pageVisibility.description")}</div>
         </div>
       </div>
       <div className="space-y-2">
@@ -831,15 +861,15 @@ const SettingsPage: React.FC = () => {
           return (
             <div
               key={page.id}
-              className="flex items-center justify-between gap-4 p-3 bg-ide-panel/60 rounded-md border border-ide-border"
+              className="flex items-center justify-between gap-3 rounded-md border border-ide-border bg-ide-panel/60 p-3"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className={`shrink-0 transition-colors ${enabled ? "text-ide-accent" : "text-ide-mute"}`}>
                   <IconComponent size={18} />
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-sm font-medium text-ide-text">
-                    <span>{getPageName(page)}</span>
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm font-medium text-ide-text">
+                    <span className="min-w-0 break-words">{getPageName(page)}</span>
                     {page.tags?.map((tag) => (
                       <span
                         key={tag.labelKey}
@@ -849,20 +879,26 @@ const SettingsPage: React.FC = () => {
                       </span>
                     ))}
                   </div>
-                  {description && <div className="text-xs leading-5 text-ide-mute">{description}</div>}
+                  {description && <div className="break-words text-xs leading-5 text-ide-mute">{description}</div>}
                 </div>
               </div>
               <button
                 type="button"
                 aria-pressed={enabled}
+                aria-label={getPageName(page)}
                 onClick={() =>
                   void handleSettingChange(getNewPageVisibilitySettingKey(page), enabled ? "false" : "true")
                 }
-                className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors duration-200 focus:outline-none focus:border-ide-accent ${enabled ? "border-ide-accent bg-ide-accent/12" : "border-ide-border bg-ide-bg hover:border-ide-mute/40"}`}
+                className="group inline-flex h-11 w-14 shrink-0 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ide-accent md:h-7 md:w-12"
               >
                 <span
-                  className={`absolute left-0.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full border shadow-sm transition-all duration-200 ${enabled ? "translate-x-5 border-ide-accent bg-ide-accent" : "translate-x-0 border-ide-border bg-white"}`}
-                />
+                  aria-hidden="true"
+                  className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors duration-200 ${enabled ? "border-ide-accent bg-ide-accent/12" : "border-ide-border bg-ide-bg group-hover:border-ide-mute/40"}`}
+                >
+                  <span
+                    className={`absolute left-0.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full border shadow-sm transition-all duration-200 ${enabled ? "translate-x-5 border-ide-accent bg-ide-accent" : "translate-x-0 border-ide-border bg-white"}`}
+                  />
+                </span>
               </button>
             </div>
           );
@@ -873,7 +909,7 @@ const SettingsPage: React.FC = () => {
 
   return (
     <div className="h-full overflow-y-auto bg-ide-bg">
-      <div className="max-w-2xl mx-auto p-4">
+      <div className="mx-auto max-w-2xl p-3 sm:p-4">
         <div className="space-y-2">
           {activeTab === "notification" ? (
             renderNotificationTab()

@@ -103,14 +103,15 @@ const TerminalHistoryPage: React.FC<TerminalHistoryPageProps> = ({ onBack }) => 
       leftButtons: [
         {
           icon: <ArrowLeft size={18} />,
+          title: t("common.backToList"),
           onClick: () => setViewingTerminal(null),
         },
       ],
       centerContent: (
-        <div className="flex items-center gap-2 h-full">
+        <div className="flex min-w-0 items-center gap-2 h-full">
           <Terminal size={14} className="text-ide-mute" />
           <span className="font-medium text-ide-text truncate text-sm">{viewingTerminal.name}</span>
-          <span className="text-xs text-ide-mute">({t("terminal.readOnly")})</span>
+          <span className="shrink-0 text-xs text-ide-mute">({t("terminal.readOnly")})</span>
         </div>
       ),
       rightButtons: [],
@@ -126,6 +127,7 @@ const TerminalHistoryPage: React.FC<TerminalHistoryPageProps> = ({ onBack }) => 
         leftButtons: [
           {
             icon: <X size={18} />,
+            title: t("common.cancel"),
             onClick: exitSelectionMode,
           },
         ],
@@ -141,16 +143,19 @@ const TerminalHistoryPage: React.FC<TerminalHistoryPageProps> = ({ onBack }) => 
             ? [
                 {
                   icon: <Trash2 size={18} className="text-red-500" />,
+                  title: t("common.delete"),
                   onClick: handleDeleteSelected,
                 },
               ]
             : []),
           {
             icon: <CheckSquare size={18} />,
+            title: t("git.selectAll"),
             onClick: selectAll,
           },
           {
             icon: <Square size={18} />,
+            title: t("git.clearSelection"),
             onClick: clearSelection,
           },
         ],
@@ -162,6 +167,7 @@ const TerminalHistoryPage: React.FC<TerminalHistoryPageProps> = ({ onBack }) => 
       leftButtons: [
         {
           icon: <ArrowLeft size={18} />,
+          title: t("terminal.backToTerminal"),
           onClick: onBack,
         },
       ],
@@ -175,12 +181,14 @@ const TerminalHistoryPage: React.FC<TerminalHistoryPageProps> = ({ onBack }) => 
           ? [
               {
                 icon: <CheckSquare size={18} />,
+                title: t("common.select"),
                 onClick: () => setSelectionMode(true),
               },
             ]
           : []),
         {
           icon: <RefreshCw size={18} />,
+          title: t("common.refresh"),
           onClick: handleRefresh,
         },
       ],
@@ -219,7 +227,7 @@ const TerminalHistoryPage: React.FC<TerminalHistoryPageProps> = ({ onBack }) => 
 
   return (
     <div className="flex flex-col h-full bg-ide-panel">
-      <div className="flex-1 overflow-auto p-3">
+      <div className="flex-1 overscroll-contain overflow-auto px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         {isLoading ? (
           <div className="flex items-center justify-center py-10 text-ide-mute">
             <span className="text-sm">{t("common.loading")}</span>
@@ -236,44 +244,53 @@ const TerminalHistoryPage: React.FC<TerminalHistoryPageProps> = ({ onBack }) => 
               return (
                 <div
                   key={terminal.id}
-                  onClick={() => handleItemClick(terminal)}
-                  className={`group flex items-center gap-2 p-2.5 rounded-lg border transition-all cursor-pointer ${
+                  className={`group flex min-h-11 items-center overflow-hidden rounded-lg border transition-all ${
                     isSelected
                       ? "bg-ide-accent/10 border-ide-accent/30"
                       : "border-transparent hover:bg-ide-bg hover:border-ide-border"
                   }`}
                 >
-                  {selectionMode && (
+                  <button
+                    type="button"
+                    onClick={() => handleItemClick(terminal)}
+                    aria-pressed={selectionMode ? isSelected : undefined}
+                    className="flex min-w-0 flex-1 items-center gap-2 self-stretch p-2.5 text-left"
+                  >
+                    {selectionMode && (
+                      <div className="p-1.5 rounded-lg flex-shrink-0 bg-ide-bg group-hover:bg-ide-panel">
+                        {isSelected ? (
+                          <CheckSquare size={18} className="text-ide-accent" />
+                        ) : (
+                          <Square size={18} className="text-ide-mute" />
+                        )}
+                      </div>
+                    )}
+
                     <div className="p-1.5 rounded-lg flex-shrink-0 bg-ide-bg group-hover:bg-ide-panel">
-                      {isSelected ? (
-                        <CheckSquare size={18} className="text-ide-accent" />
-                      ) : (
-                        <Square size={18} className="text-ide-mute" />
-                      )}
+                      <Terminal size={18} className="text-ide-mute" />
                     </div>
-                  )}
 
-                  <div className="p-1.5 rounded-lg flex-shrink-0 bg-ide-bg group-hover:bg-ide-panel">
-                    <Terminal size={18} className="text-ide-mute" />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium truncate text-sm text-ide-text">{terminal.name}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium truncate text-sm text-ide-text">{terminal.name}</span>
+                      </div>
+                      <div className="text-xs text-ide-mute mt-0.5 break-all">
+                        {formatDate(terminal.created_at)} - {terminal.cwd}
+                      </div>
                     </div>
-                    <div className="text-xs text-ide-mute mt-0.5 break-all">
-                      {formatDate(terminal.created_at)} - {terminal.cwd}
-                    </div>
-                  </div>
+                  </button>
 
                   {!selectionMode && (
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedIds(new Set([terminal.id]));
                         setShowDeleteConfirm(true);
                       }}
-                      className="p-2 rounded-md text-ide-mute hover:bg-ide-bg hover:text-red-500 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                      title={t("common.delete")}
+                      aria-label={`${t("common.delete")} ${terminal.name}`}
+                      className="mr-1 flex size-11 shrink-0 items-center justify-center rounded-md text-ide-mute opacity-100 transition-opacity hover:bg-ide-bg hover:text-red-500 md:size-8 md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -294,8 +311,13 @@ const TerminalHistoryPage: React.FC<TerminalHistoryPageProps> = ({ onBack }) => 
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} variant="destructive" disabled={deleteBatchMutation.isPending}>
+            <AlertDialogCancel className="w-full md:w-auto">{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="w-full md:w-auto"
+              onClick={confirmDelete}
+              variant="destructive"
+              disabled={deleteBatchMutation.isPending}
+            >
               {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>

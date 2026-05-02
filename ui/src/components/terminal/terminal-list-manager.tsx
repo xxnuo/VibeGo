@@ -96,16 +96,20 @@ const TerminalListManager: React.FC<TerminalListManagerProps> = ({
       {!embedded && (
         <div className="h-12 bg-ide-bg border-b border-ide-border flex items-center px-3 gap-2 shrink-0">
           <button
+            type="button"
             onClick={onBack}
-            className="w-8 h-8 rounded-md text-ide-accent hover:bg-ide-accent hover:text-ide-bg flex items-center justify-center border border-ide-border transition-colors"
+            title={t("terminal.backToTerminal")}
+            aria-label={t("terminal.backToTerminal")}
+            className="flex size-11 shrink-0 items-center justify-center rounded-md border border-ide-border text-ide-accent transition-colors hover:bg-ide-accent hover:text-ide-bg md:size-8"
           >
             <ArrowLeft size={18} />
           </button>
           <span className="font-medium text-ide-text flex-1">{t("terminal.list")}</span>
           {terminals.length > 0 && (
             <button
+              type="button"
               onClick={handleClearAllClick}
-              className="text-xs text-ide-mute hover:text-red-500 flex items-center gap-1 transition-colors"
+              className="flex min-h-11 items-center gap-1 px-2 text-xs text-ide-mute transition-colors hover:text-red-500 md:min-h-0 md:px-0"
             >
               <Trash2 size={12} />
               <span>{t("terminal.clearAll")}</span>
@@ -117,8 +121,9 @@ const TerminalListManager: React.FC<TerminalListManagerProps> = ({
       {embedded && terminals.length > 0 && (
         <div className="flex justify-end px-3 py-2">
           <button
+            type="button"
             onClick={handleClearAllClick}
-            className="p-2 rounded-md text-ide-mute hover:bg-ide-bg hover:text-red-500 flex items-center gap-1 text-xs"
+            className="flex min-h-11 items-center gap-1 rounded-md px-3 text-xs text-ide-mute hover:bg-ide-bg hover:text-red-500 md:min-h-0 md:p-2"
           >
             <Trash2 size={14} />
             <span>{t("terminal.clearAll")}</span>
@@ -141,7 +146,7 @@ const TerminalListManager: React.FC<TerminalListManagerProps> = ({
           </div>
         )}
 
-        <div className="relative z-10 h-full overflow-auto p-3 pt-0 pb-24">
+        <div className="relative z-10 h-full overscroll-contain overflow-auto px-3 pt-0 pb-[calc(6rem+env(safe-area-inset-bottom))]">
           {terminals.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-ide-mute">
               <Terminal size={40} className="mb-4 opacity-50" />
@@ -158,8 +163,7 @@ const TerminalListManager: React.FC<TerminalListManagerProps> = ({
                 return (
                   <div
                     key={terminal.id}
-                    onClick={() => onSelect(terminal.id)}
-                    className={`group flex items-center gap-2 p-2.5 rounded-lg border transition-all cursor-pointer ${
+                    className={`group flex min-h-11 items-center overflow-hidden rounded-lg border transition-all ${
                       isCurrent
                         ? "bg-ide-accent/10 border-ide-accent/30"
                         : isClosed
@@ -167,25 +171,26 @@ const TerminalListManager: React.FC<TerminalListManagerProps> = ({
                           : "border-transparent hover:bg-ide-bg hover:border-ide-border"
                     }`}
                   >
-                    <div
-                      className={`p-1.5 rounded-lg flex-shrink-0 ${
-                        isCurrent ? "bg-ide-accent/20" : "bg-ide-bg group-hover:bg-ide-panel"
-                      }`}
-                    >
-                      <Terminal
-                        size={18}
-                        className={isCurrent ? "text-ide-accent" : isClosed ? "text-ide-mute/50" : "text-ide-mute"}
-                      />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      {isEditing ? (
-                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    {isEditing ? (
+                      <>
+                        <div
+                          className={`ml-2.5 p-1.5 rounded-lg flex-shrink-0 ${
+                            isCurrent ? "bg-ide-accent/20" : "bg-ide-bg group-hover:bg-ide-panel"
+                          }`}
+                        >
+                          <Terminal
+                            size={18}
+                            className={isCurrent ? "text-ide-accent" : isClosed ? "text-ide-mute/50" : "text-ide-mute"}
+                          />
+                        </div>
+                        <div className="flex min-w-0 flex-1 items-center gap-1 py-1 pr-1">
                           <input
                             type="text"
+                            name={`terminal-name-${terminal.id}`}
                             value={editName}
                             onChange={(e) => setEditName(e.target.value)}
-                            className="flex-1 px-2 py-0.5 bg-ide-bg border border-ide-accent rounded text-sm text-ide-text outline-none"
+                            aria-label={t("common.rename")}
+                            className="h-11 min-w-0 flex-1 rounded border border-ide-accent bg-ide-bg px-2 text-sm text-ide-text outline-none md:h-7"
                             autoFocus
                             onKeyDown={(e) => {
                               if (e.key === "Enter") void handleRename(terminal.id);
@@ -193,64 +198,96 @@ const TerminalListManager: React.FC<TerminalListManagerProps> = ({
                             }}
                           />
                           <button
+                            type="button"
                             onClick={() => void handleRename(terminal.id)}
-                            className="p-2 rounded-md text-green-500 hover:bg-ide-bg"
+                            title={t("common.save")}
+                            aria-label={t("common.save")}
+                            className="flex size-11 shrink-0 items-center justify-center rounded-md text-green-500 hover:bg-ide-bg md:size-8"
                           >
                             <Check size={14} />
                           </button>
                           <button
+                            type="button"
                             onClick={() => setEditingId(null)}
-                            className="p-2 rounded-md text-red-500 hover:bg-ide-bg"
+                            title={t("common.cancel")}
+                            aria-label={t("common.cancel")}
+                            className="flex size-11 shrink-0 items-center justify-center rounded-md text-red-500 hover:bg-ide-bg md:size-8"
                           >
                             <X size={14} />
                           </button>
                         </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`font-medium truncate text-sm ${
-                              isCurrent ? "text-ide-accent" : isClosed ? "text-ide-mute" : "text-ide-text"
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onSelect(terminal.id)}
+                          className="flex min-w-0 flex-1 items-center gap-2 self-stretch p-2.5 text-left"
+                        >
+                          <div
+                            className={`p-1.5 rounded-lg flex-shrink-0 ${
+                              isCurrent ? "bg-ide-accent/20" : "bg-ide-bg group-hover:bg-ide-panel"
                             }`}
                           >
-                            {terminal.name}
-                          </span>
-                          {isCurrent && !isClosed && (
-                            <span className="text-[10px] bg-ide-accent text-ide-bg px-1.5 py-0.5 rounded font-bold">
-                              {t("terminal.active")}
+                            <Terminal
+                              size={18}
+                              className={
+                                isCurrent ? "text-ide-accent" : isClosed ? "text-ide-mute/50" : "text-ide-mute"
+                              }
+                            />
+                          </div>
+                          <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <span
+                              className={`truncate text-sm font-medium ${
+                                isCurrent ? "text-ide-accent" : isClosed ? "text-ide-mute" : "text-ide-text"
+                              }`}
+                            >
+                              {terminal.name}
                             </span>
-                          )}
-                          {isClosed && (
-                            <span className="text-[10px] bg-ide-mute/30 text-ide-mute px-1.5 py-0.5 rounded">
-                              {t("terminal.closed")}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {!isEditing && (
-                      <div className="flex items-center gap-0.5">
-                        <button
-                          onClick={(e) => startEditing(e, terminal)}
-                          className="p-2 rounded-md text-ide-mute hover:bg-ide-bg hover:text-ide-text"
-                        >
-                          <Edit2 size={14} />
+                            {isCurrent && !isClosed && (
+                              <span className="shrink-0 rounded bg-ide-accent px-1.5 py-0.5 text-[10px] font-bold text-ide-bg">
+                                {t("terminal.active")}
+                              </span>
+                            )}
+                            {isClosed && (
+                              <span className="shrink-0 rounded bg-ide-mute/30 px-1.5 py-0.5 text-[10px] text-ide-mute">
+                                {t("terminal.closed")}
+                              </span>
+                            )}
+                          </div>
                         </button>
-                        {!isClosed && (
+                        <div className="flex shrink-0 items-center gap-0.5 pr-1">
                           <button
-                            onClick={(e) => handleCloseClick(e, terminal.id)}
-                            className="p-2 rounded-md text-ide-mute hover:bg-ide-bg hover:text-ide-text"
+                            type="button"
+                            onClick={(e) => startEditing(e, terminal)}
+                            title={t("common.edit")}
+                            aria-label={`${t("common.edit")} ${terminal.name}`}
+                            className="flex size-11 items-center justify-center rounded-md text-ide-mute hover:bg-ide-bg hover:text-ide-text md:size-8"
                           >
-                            <X size={14} />
+                            <Edit2 size={14} />
                           </button>
-                        )}
-                        <button
-                          onClick={(e) => handleDeleteClick(e, terminal.id)}
-                          className="p-2 rounded-md text-ide-mute hover:bg-ide-bg hover:text-red-500"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
+                          {!isClosed && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleCloseClick(e, terminal.id)}
+                              title={t("common.close")}
+                              aria-label={`${t("common.close")} ${terminal.name}`}
+                              className="flex size-11 items-center justify-center rounded-md text-ide-mute hover:bg-ide-bg hover:text-ide-text md:size-8"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteClick(e, terminal.id)}
+                            title={t("common.delete")}
+                            aria-label={`${t("common.delete")} ${terminal.name}`}
+                            className="flex size-11 items-center justify-center rounded-md text-ide-mute hover:bg-ide-bg hover:text-red-500 md:size-8"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </>
                     )}
                   </div>
                 );
@@ -261,10 +298,11 @@ const TerminalListManager: React.FC<TerminalListManagerProps> = ({
       </div>
 
       {onManageHistory && (
-        <div className="border-t border-ide-border px-3 py-3">
+        <div className="border-t border-ide-border px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:py-3">
           <button
+            type="button"
             onClick={onManageHistory}
-            className="text-sm text-blue-500 hover:text-blue-400 flex items-center gap-1.5 transition-colors"
+            className="flex min-h-11 w-full items-center gap-1.5 text-sm text-blue-500 transition-colors hover:text-blue-400 md:min-h-0 md:w-auto"
           >
             <History size={14} />
             <span>{t("terminal.manageHistory")}</span>
@@ -288,8 +326,8 @@ const TerminalListManager: React.FC<TerminalListManagerProps> = ({
             <AlertDialogDescription>{t("terminal.deleteConfirm")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmDelete} variant="destructive">
+            <AlertDialogCancel className="w-full md:w-auto">{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction className="w-full md:w-auto" onClick={handleConfirmDelete} variant="destructive">
               {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -303,8 +341,8 @@ const TerminalListManager: React.FC<TerminalListManagerProps> = ({
             <AlertDialogDescription>{t("terminal.clearAllConfirm")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmClear} variant="destructive">
+            <AlertDialogCancel className="w-full md:w-auto">{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction className="w-full md:w-auto" onClick={handleConfirmClear} variant="destructive">
               {t("terminal.clearAll")}
             </AlertDialogAction>
           </AlertDialogFooter>

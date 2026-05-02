@@ -1,5 +1,5 @@
 import { Archive, ChevronLeft, FileDiff, Loader2, RotateCcw, Trash2, X } from "lucide-react";
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import type { GitInteractiveDiff, GitStashFile, StashEntry } from "@/api/git";
 import DiffView from "@/components/git/diff-view";
 import { getTranslation, type Locale } from "@/lib/i18n";
@@ -15,6 +15,7 @@ interface GitStashDetailProps {
   loading: boolean;
   disabled?: boolean;
   compact?: boolean;
+  returnFocusRef?: React.RefObject<HTMLElement | null>;
   onClose: () => void;
   onFileSelect: (filePath: string | null) => void;
   onPop: (index: number, oid?: string) => void;
@@ -49,12 +50,68 @@ const GitStashDetail: React.FC<GitStashDetailProps> = ({
   loading,
   disabled = false,
   compact = false,
+  returnFocusRef,
   onClose,
   onFileSelect,
   onPop,
   onDrop,
 }) => {
   const t = useCallback((key: string) => getTranslation(locale, key), [locale]);
+  const stashFilesContainerRef = useRef<HTMLDivElement | null>(null);
+  const selectedFileTriggerRef = useRef<HTMLElement | null>(null);
+  const selectedFileTriggerPathRef = useRef<string | null>(null);
+  const previousSelectedFileRef = useRef<string | null>(selectedFile);
+
+  const restoreFocus = useCallback((target: HTMLElement | null) => {
+    if (!target) return;
+    window.requestAnimationFrame(() => {
+      if (target.isConnected) target.focus();
+    });
+  }, []);
+
+  const handleClose = useCallback(() => {
+    const target = returnFocusRef?.current ?? null;
+    onClose();
+    restoreFocus(target);
+  }, [onClose, restoreFocus, returnFocusRef]);
+
+  const handleFileSelect = useCallback(
+    (filePath: string | null, trigger?: HTMLElement) => {
+      if (filePath) {
+        selectedFileTriggerRef.current = trigger ?? null;
+        selectedFileTriggerPathRef.current = filePath;
+        onFileSelect(filePath);
+        return;
+      }
+      onFileSelect(null);
+    },
+    [onFileSelect]
+  );
+
+  useEffect(() => {
+    const wasSelected = previousSelectedFileRef.current !== null;
+    previousSelectedFileRef.current = selectedFile;
+    if (!wasSelected || selectedFile !== null) return;
+
+    const target = selectedFileTriggerRef.current;
+    const targetPath = selectedFileTriggerPathRef.current;
+    if (!target && !targetPath) return;
+    // The parent updates selectedFile asynchronously. Wait for that render
+    // before restoring focus. The file list is recreated when leaving the
+    // diff, so prefer the newly rendered button when the old node is gone.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const currentTarget =
+          (target?.isConnected ? target : null) ??
+          (targetPath
+            ? Array.from(stashFilesContainerRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(
+                (button) => button.dataset.stashFilePath === targetPath
+              )
+            : null);
+        if (currentTarget) currentTarget.focus();
+      });
+    });
+  }, [selectedFile]);
 
   if (!stash) return null;
 
@@ -63,15 +120,24 @@ const GitStashDetail: React.FC<GitStashDetailProps> = ({
 
   return (
     <section
-      className={`flex min-h-0 flex-col border-t border-ide-border bg-ide-bg ${compact ? "max-h-[48vh]" : "h-full"}`}
+      className={`flex min-h-0 flex-col border-t border-ide-border bg-ide-bg ${
+        compact ? "max-h-[48vh] pb-[env(safe-area-inset-bottom)]" : "h-full"
+      }`}
     >
-      <div className="flex min-h-9 items-center gap-2 border-b border-ide-border bg-ide-panel/50 px-2 py-1">
+      <div
+        className={`flex items-center gap-2 border-b border-ide-border bg-ide-panel/50 px-2 py-1 ${
+          compact ? "min-h-11" : "min-h-9"
+        }`}
+      >
         {selectedFile ? (
           <button
             type="button"
-            className="flex shrink-0 items-center gap-1 p-1 text-[10px] text-ide-mute hover:bg-ide-panel hover:text-ide-text"
-            onClick={() => onFileSelect(null)}
+            className={`flex shrink-0 items-center gap-1 text-[10px] text-ide-mute hover:bg-ide-panel hover:text-ide-text ${
+              compact ? "min-h-11 px-2 py-1" : "p-1"
+            }`}
+            onClick={() => handleFileSelect(null)}
             title={t("git.backToStashFiles")}
+            aria-label={t("git.backToStashFiles")}
           >
             <ChevronLeft size={13} />
             <span>{t("git.stashFiles")}</span>
@@ -84,8 +150,8 @@ const GitStashDetail: React.FC<GitStashDetailProps> = ({
         </span>
         <button
           type="button"
-          className="shrink-0 p-1 text-ide-mute hover:bg-ide-panel hover:text-ide-text"
-          onClick={onClose}
+          className={`shrink-0 text-ide-mute hover:bg-ide-panel hover:text-ide-text ${compact ? "size-11 p-2" : "p-1"}`}
+          onClick={handleClose}
           title={t("git.closeStash")}
           aria-label={t("git.closeStash")}
         >
@@ -94,24 +160,36 @@ const GitStashDetail: React.FC<GitStashDetailProps> = ({
       </div>
 
       {!selectedFile ? (
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="flex items-center justify-end gap-1 border-b border-ide-border px-2 py-1">
+        <div ref={stashFilesContainerRef} className="min-h-0 flex-1 overflow-y-auto">
+          <div
+            className={`flex items-center justify-end gap-1 border-b border-ide-border px-2 py-1 ${compact ? "min-h-11" : ""}`}
+          >
             <button
               type="button"
-              className="desktop-git-action-button"
+              className={
+                compact
+                  ? "inline-flex min-h-11 items-center justify-center gap-1 rounded-sm px-3 text-[11px] text-ide-mute hover:bg-ide-accent/10 hover:text-ide-text disabled:cursor-not-allowed disabled:opacity-50"
+                  : "desktop-git-action-button"
+              }
               onClick={() => onPop(stash.index, stash.oid)}
               disabled={disabled}
               title={t("git.pop")}
+              aria-label={t("git.pop")}
             >
               <RotateCcw size={11} />
               {t("git.pop")}
             </button>
             <button
               type="button"
-              className="desktop-git-action-button desktop-git-action-button--danger"
+              className={
+                compact
+                  ? "inline-flex min-h-11 items-center justify-center gap-1 rounded-sm px-3 text-[11px] text-red-400 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  : "desktop-git-action-button desktop-git-action-button--danger"
+              }
               onClick={() => onDrop(stash.index, stash.oid)}
               disabled={disabled}
               title={t("git.drop")}
+              aria-label={t("git.drop")}
             >
               <Trash2 size={11} />
               {t("git.drop")}
@@ -132,8 +210,12 @@ const GitStashDetail: React.FC<GitStashDetailProps> = ({
               <button
                 type="button"
                 key={file.path}
-                className="flex min-h-8 w-full items-center gap-2 border-b border-ide-border/60 px-2 py-1.5 text-left hover:bg-ide-accent/10"
-                onClick={() => onFileSelect(file.path)}
+                className={`flex w-full items-center gap-2 border-b border-ide-border/60 px-2 py-1.5 text-left hover:bg-ide-accent/10 ${
+                  compact ? "min-h-11" : "min-h-8"
+                }`}
+                onClick={(event) => handleFileSelect(file.path, event.currentTarget)}
+                aria-label={file.path}
+                data-stash-file-path={file.path}
               >
                 <span
                   className={`w-4 shrink-0 text-center font-mono text-[10px] font-semibold ${statusClass[file.status]}`}

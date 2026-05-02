@@ -1,4 +1,4 @@
-import { Calendar, Copy, Download, Edit3, File, Folder, HardDrive, Link2, Shield, Trash2 } from "lucide-react";
+import { Calendar, Copy, Download, Edit3, File, Folder, HardDrive, Link2, Shield, Trash2, X } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { fileApi } from "@/api/file";
 import { ActionButton } from "@/components/common/action-button";
@@ -46,6 +46,16 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({ file, open, onClose, 
   const infoCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [copiedInfoLabel, setCopiedInfoLabel] = useState<string | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const wasOpenRef = useRef(false);
+
+  const restorePreviousFocus = () => {
+    const element = previousFocusRef.current;
+    previousFocusRef.current = null;
+    if (element && element.isConnected) {
+      window.requestAnimationFrame(() => element.focus({ preventScroll: true }));
+    }
+  };
 
   useEffect(() => {
     return () => {
@@ -53,6 +63,23 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({ file, open, onClose, 
       if (infoCopyTimerRef.current) clearTimeout(infoCopyTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    }
+    if (!open && wasOpenRef.current) {
+      restorePreviousFocus();
+    }
+    wasOpenRef.current = open;
+  }, [open]);
+
+  useEffect(
+    () => () => {
+      if (wasOpenRef.current) restorePreviousFocus();
+    },
+    []
+  );
 
   if (!file) return null;
 
@@ -146,9 +173,19 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({ file, open, onClose, 
     >
       <DialogContent
         showCloseButton={false}
-        className="inset-x-0 top-auto bottom-0 translate-x-0 translate-y-0 w-full max-w-2xl rounded-t-2xl rounded-b-none border-t border-x-0 border-b-0 bg-ide-panel p-4 pb-5 md:inset-auto md:top-[50%] md:left-[50%] md:-translate-x-[50%] md:-translate-y-[50%] md:w-[480px] md:max-w-md md:rounded-2xl md:border md:pb-6"
+        className="inset-x-0 top-auto bottom-0 translate-x-0 translate-y-0 w-full max-w-2xl rounded-t-2xl rounded-b-none border-t border-x-0 border-b-0 bg-ide-panel p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:inset-auto md:top-[50%] md:left-[50%] md:-translate-x-[50%] md:-translate-y-[50%] md:w-[480px] md:max-w-md md:rounded-2xl md:border md:pb-6"
       >
         <div className="bg-muted mx-auto h-1.5 w-10 rounded-full" />
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-3 top-3 inline-flex h-11 w-11 items-center justify-center rounded-sm text-ide-mute hover:bg-ide-bg hover:text-ide-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ide-accent md:right-4 md:top-4 md:h-8 md:w-8"
+          aria-label={t("common.close")}
+          title={t("common.close")}
+        >
+          <X size={18} />
+        </button>
 
         <div className="px-4 py-3 space-y-1 overflow-y-auto max-h-[40vh]">
           <InfoRow icon={File} label={t("fileDetail.name")} value={file.name} />
@@ -169,7 +206,7 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({ file, open, onClose, 
         </div>
 
         <div className="px-4 pt-3 border-t border-ide-border">
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
             <ActionButton
               onClick={handleCopyPath}
               icon={<Copy size={20} className="text-ide-mute" />}

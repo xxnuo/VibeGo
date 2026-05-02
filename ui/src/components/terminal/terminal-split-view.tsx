@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { TerminalInstanceHandle, TerminalInstanceStateUpdate } from "@/components/terminal/terminal-instance";
 import TerminalInstance from "@/components/terminal/terminal-instance";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { LayoutNode } from "@/stores/terminal-store";
 
 interface TerminalSplitViewProps {
@@ -17,6 +18,7 @@ interface TerminalSplitViewProps {
 }
 
 const DIVIDER_SIZE = 4;
+const DIVIDER_HIT_SIZE = 24;
 const MIN_PANE_RATIO = 0.1;
 const MAX_PANE_RATIO = 0.9;
 
@@ -101,10 +103,18 @@ interface SplitContainerProps {
 const SplitContainer: React.FC<SplitContainerProps> = ({ direction, ratio, onRatioChange, children }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
+  const isMobile = useIsMobile();
   const ratioRef = useRef(ratio);
   ratioRef.current = ratio;
 
-  const isVertical = direction === "vertical";
+  const isVertical = direction === "vertical" || isMobile;
+
+  const adjustRatio = useCallback(
+    (delta: number) => {
+      onRatioChange(Math.max(MIN_PANE_RATIO, Math.min(MAX_PANE_RATIO, ratioRef.current + delta)));
+    },
+    [onRatioChange]
+  );
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -198,7 +208,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({ direction, ratio, onRat
     >
       <div
         style={{
-          [isVertical ? "height" : "width"]: `calc(${pctFirst} - ${DIVIDER_SIZE / 2}px)`,
+          [isVertical ? "height" : "width"]: `calc(${pctFirst} - ${DIVIDER_HIT_SIZE / 2}px)`,
           overflow: "hidden",
           position: "relative",
         }}
@@ -208,15 +218,47 @@ const SplitContainer: React.FC<SplitContainerProps> = ({ direction, ratio, onRat
       <div
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
-        className={`shrink-0 bg-ide-border hover:bg-ide-accent transition-colors z-10 ${dragging ? "bg-ide-accent" : ""}`}
+        role="separator"
+        tabIndex={0}
+        aria-orientation={isVertical ? "horizontal" : "vertical"}
+        aria-valuemin={MIN_PANE_RATIO * 100}
+        aria-valuemax={MAX_PANE_RATIO * 100}
+        aria-valuenow={Math.round(ratio * 100)}
+        aria-label="Resize terminal panes"
+        onKeyDown={(event) => {
+          if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+            event.preventDefault();
+            adjustRatio(-0.02);
+          } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+            event.preventDefault();
+            adjustRatio(0.02);
+          } else if (event.key === "Home") {
+            event.preventDefault();
+            onRatioChange(MIN_PANE_RATIO);
+          } else if (event.key === "End") {
+            event.preventDefault();
+            onRatioChange(MAX_PANE_RATIO);
+          }
+        }}
+        className={`relative z-10 shrink-0 touch-none transition-colors ${dragging ? "bg-ide-accent/30" : "hover:bg-ide-accent/20"}`}
         style={{
-          [isVertical ? "height" : "width"]: `${DIVIDER_SIZE}px`,
+          [isVertical ? "height" : "width"]: `${DIVIDER_HIT_SIZE}px`,
           cursor: isVertical ? "row-resize" : "col-resize",
         }}
-      />
+      >
+        <span
+          aria-hidden="true"
+          className={`absolute bg-ide-border transition-colors ${dragging ? "bg-ide-accent" : ""}`}
+          style={
+            isVertical
+              ? { left: 0, right: 0, top: `${(DIVIDER_HIT_SIZE - DIVIDER_SIZE) / 2}px`, height: `${DIVIDER_SIZE}px` }
+              : { top: 0, bottom: 0, left: `${(DIVIDER_HIT_SIZE - DIVIDER_SIZE) / 2}px`, width: `${DIVIDER_SIZE}px` }
+          }
+        />
+      </div>
       <div
         style={{
-          [isVertical ? "height" : "width"]: `calc(${pctSecond} - ${DIVIDER_SIZE / 2}px)`,
+          [isVertical ? "height" : "width"]: `calc(${pctSecond} - ${DIVIDER_HIT_SIZE / 2}px)`,
           overflow: "hidden",
           position: "relative",
         }}

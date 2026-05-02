@@ -12,7 +12,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { gitApi } from "@/api/git";
 import {
@@ -29,12 +29,14 @@ import {
   type GitHubWorkflowRun,
   githubApi,
 } from "@/api/github";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { getTranslation, type Locale } from "@/lib/i18n";
 import "@/components/git/github-panel.css";
 
 interface GitHubPanelProps {
   path: string;
   locale: Locale;
+  returnFocusRef?: React.RefObject<HTMLElement | null>;
   remoteUrls: string[];
   currentBranch: string;
   headHash?: string;
@@ -62,6 +64,7 @@ export const workflowRunsQueryForCommit = (headHash: string) => ({
 const GitHubPanel: React.FC<GitHubPanelProps> = ({
   path,
   locale,
+  returnFocusRef,
   remoteUrls,
   currentBranch,
   headHash,
@@ -97,7 +100,54 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
   const [newBody, setNewBody] = useState("");
   const [newHead, setNewHead] = useState(currentBranch);
   const [newBase, setNewBase] = useState("main");
+  const githubFieldId = useId();
   const oauthTimerRef = useRef<number | null>(null);
+  const capturedFocusRef = useRef<HTMLElement | null>(
+    returnFocusRef?.current ??
+      (typeof document !== "undefined" &&
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement !== document.body
+        ? document.activeElement
+        : null)
+  );
+
+  const captureRestoreFocus = useCallback(() => {
+    const preferred = returnFocusRef?.current;
+    if (preferred?.isConnected) {
+      capturedFocusRef.current = preferred;
+      return;
+    }
+    if (capturedFocusRef.current?.isConnected) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active !== document.body) {
+      capturedFocusRef.current = active;
+      return;
+    }
+    const label = t("git.github.open");
+    const fallback = Array.from(document.querySelectorAll<HTMLElement>("button[aria-label]")).find(
+      (element) => element.getAttribute("aria-label") === label
+    );
+    if (fallback) capturedFocusRef.current = fallback;
+  }, [returnFocusRef, t]);
+
+  useLayoutEffect(() => {
+    captureRestoreFocus();
+  }, [captureRestoreFocus]);
+
+  const restoreFocus = useCallback(() => {
+    const preferred = returnFocusRef?.current;
+    const target = preferred?.isConnected ? preferred : capturedFocusRef.current;
+    if (!target) return;
+    window.requestAnimationFrame(() => {
+      if (target.isConnected) target.focus();
+    });
+  }, [returnFocusRef]);
+
+  const closePanel = useCallback(() => {
+    captureRestoreFocus();
+    onClose();
+    restoreFocus();
+  }, [captureRestoreFocus, onClose, restoreFocus]);
 
   const stopOAuthPolling = useCallback(() => {
     if (oauthTimerRef.current !== null) {
@@ -491,10 +541,22 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
   );
 
   return (
-    <div className="github-panel-overlay" role="presentation">
-      <section className="github-panel" role="dialog" aria-modal="true" aria-label={t("git.github.title")}>
+    <Dialog open onOpenChange={(open) => !open && closePanel()}>
+      <DialogContent
+        showCloseButton={false}
+        className="github-panel github-panel-dialog-content"
+        aria-label={t("git.github.title")}
+        onOpenAutoFocus={captureRestoreFocus}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          restoreFocus();
+        }}
+        onPointerDownOutside={(event) => event.preventDefault()}
+      >
+        <DialogTitle className="sr-only">{t("git.github.title")}</DialogTitle>
+        <DialogDescription className="sr-only">{t("git.github.title")}</DialogDescription>
         <header className="github-panel-header">
-          <div className="github-panel-title">
+          <div className="github-panel-title" aria-hidden="true">
             <GitBranch size={16} />
             <span>{t("git.github.title")}</span>
           </div>
@@ -507,7 +569,13 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
             >
               <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
             </button>
-            <button type="button" className="github-panel-icon-button" onClick={onClose} title={t("common.close")}>
+            <button
+              type="button"
+              className="github-panel-icon-button"
+              onClick={closePanel}
+              title={t("common.close")}
+              aria-label={t("common.close")}
+            >
               <X size={14} />
             </button>
           </div>
@@ -540,6 +608,8 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
                 <div className="github-panel-inline">
                   <KeyRound size={13} />
                   <input
+                    id={`${githubFieldId}-token`}
+                    name="githubToken"
                     value={token}
                     onChange={(event) => setToken(event.target.value)}
                     placeholder={t("git.github.tokenPlaceholder")}
@@ -580,7 +650,7 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
                       {t("git.github.deviceCode")}: <strong>{device.userCode}</strong>
                     </span>
                     <span className="github-panel-device-actions">
-                      <a href={device.uri} target="_blank" rel="noreferrer">
+                      <a className="github-panel-device-link" href={device.uri} target="_blank" rel="noreferrer">
                         {t("git.github.openVerification")}
                         <ExternalLink size={11} />
                       </a>
@@ -643,22 +713,29 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
                   ) : (
                     <div className="github-panel-publish">
                       <input
+                        id={`${githubFieldId}-repository-name`}
+                        name="githubRepositoryName"
                         value={newRepoName}
                         onChange={(event) => setNewRepoName(event.target.value)}
                         placeholder={t("git.github.repositoryName")}
                         aria-label={t("git.github.repositoryName")}
                       />
                       <input
+                        id={`${githubFieldId}-repository-description`}
+                        name="githubRepositoryDescription"
                         value={newRepoDescription}
                         onChange={(event) => setNewRepoDescription(event.target.value)}
                         placeholder={t("git.github.description")}
                         aria-label={t("git.github.description")}
                       />
-                      <label className="github-panel-check">
+                      <label className="github-panel-check" htmlFor={`${githubFieldId}-repository-private`}>
                         <input
+                          id={`${githubFieldId}-repository-private`}
+                          name="githubRepositoryPrivate"
                           type="checkbox"
                           checked={newRepoPrivate}
                           onChange={(event) => setNewRepoPrivate(event.target.checked)}
+                          aria-label={t("git.github.private")}
                         />
                         {t("git.github.private")}
                       </label>
@@ -666,6 +743,8 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
                         <label className="github-panel-field-label">
                           <span>{t("git.github.organization")}</span>
                           <select
+                            id={`${githubFieldId}-organization`}
+                            name="githubOrganization"
                             value={selectedOrganization}
                             onChange={(event) => setSelectedOrganization(event.target.value)}
                             aria-label={t("git.github.organization")}
@@ -707,12 +786,16 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
                   </div>
                   <div className="github-panel-form">
                     <input
+                      id={`${githubFieldId}-pull-title`}
+                      name="githubPullRequestTitle"
                       value={newTitle}
                       onChange={(event) => setNewTitle(event.target.value)}
                       placeholder={t("git.github.titlePlaceholder")}
                       aria-label={t("git.github.titlePlaceholder")}
                     />
                     <textarea
+                      id={`${githubFieldId}-pull-body`}
+                      name="githubPullRequestBody"
                       value={newBody}
                       onChange={(event) => setNewBody(event.target.value)}
                       placeholder={t("git.github.bodyPlaceholder")}
@@ -720,12 +803,16 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
                     />
                     <div className="github-panel-inline">
                       <input
+                        id={`${githubFieldId}-pull-head`}
+                        name="githubPullRequestHead"
                         value={newHead}
                         onChange={(event) => setNewHead(event.target.value)}
                         placeholder={t("git.github.headBranch")}
                         aria-label={t("git.github.headBranch")}
                       />
                       <input
+                        id={`${githubFieldId}-pull-base`}
+                        name="githubPullRequestBase"
                         value={newBase}
                         onChange={(event) => setNewBase(event.target.value)}
                         placeholder={t("git.github.baseBranch")}
@@ -785,12 +872,16 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
                   </div>
                   <div className="github-panel-form">
                     <input
+                      id={`${githubFieldId}-issue-title`}
+                      name="githubIssueTitle"
                       value={newTitle}
                       onChange={(event) => setNewTitle(event.target.value)}
                       placeholder={t("git.github.titlePlaceholder")}
                       aria-label={t("git.github.titlePlaceholder")}
                     />
                     <textarea
+                      id={`${githubFieldId}-issue-body`}
+                      name="githubIssueBody"
                       value={newBody}
                       onChange={(event) => setNewBody(event.target.value)}
                       placeholder={t("git.github.bodyPlaceholder")}
@@ -1069,8 +1160,8 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
             </>
           )}
         </div>
-      </section>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

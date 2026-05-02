@@ -127,14 +127,17 @@ const BlockTermHistoryDialog: React.FC<BlockTermHistoryDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="overflow-hidden rounded-t-md p-0 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:max-w-2xl md:rounded-md md:pb-0">
+      <DialogContent
+        showCloseButton={false}
+        className="overflow-hidden rounded-t-md p-0 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:max-w-2xl md:rounded-md md:pb-0"
+      >
         <DialogHeader className="sr-only">
           <DialogTitle>{t("plugin.blockTerm.commandHistory")}</DialogTitle>
           <DialogDescription>{t("plugin.blockTerm.historySearchDescription")}</DialogDescription>
         </DialogHeader>
         <Command
           shouldFilter={false}
-          className="rounded-none bg-ide-panel text-ide-text [&_[data-slot=command-input-wrapper]]:h-11 [&_[data-slot=command-input]]:h-11"
+          className="relative rounded-none bg-ide-panel text-ide-text [&_[data-slot=command-input-wrapper]]:h-11 [&_[data-slot=command-input]]:h-11"
         >
           <CommandInput
             id={searchInputId}
@@ -143,7 +146,7 @@ const BlockTermHistoryDialog: React.FC<BlockTermHistoryDialogProps> = ({
             onValueChange={setQuery}
             placeholder={t("plugin.blockTerm.searchHistory")}
             aria-label={t("plugin.blockTerm.searchHistory")}
-            className="pr-9 text-base md:text-sm"
+            className="pr-12 text-base md:text-sm"
           />
           {onOpenCenter && (
             <button
@@ -151,7 +154,7 @@ const BlockTermHistoryDialog: React.FC<BlockTermHistoryDialogProps> = ({
               onClick={onOpenCenter}
               title={t("plugin.blockTerm.openHistoryCenter")}
               aria-label={t("plugin.blockTerm.openHistoryCenter")}
-              className="absolute right-2 top-2 text-ide-mute hover:text-ide-text"
+              className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center text-ide-mute hover:text-ide-text"
             >
               <Maximize2 size={14} />
             </button>

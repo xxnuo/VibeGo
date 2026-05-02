@@ -12,7 +12,7 @@ const ButtonComponent: React.FC<{ button: TopBarButton }> = ({ button }) => {
       disabled={button.disabled}
       title={title}
       aria-label={title}
-      className={`shrink-0 h-8 ${button.label ? "px-3" : "w-8"} flex items-center justify-center gap-1.5 rounded-md border transition-all text-xs ${
+      className={`shrink-0 ${button.label ? "min-h-11 px-3 md:min-h-0 md:h-8" : "h-11 w-11 md:h-8 md:w-8"} flex items-center justify-center gap-1.5 rounded-md border transition-all text-xs ${
         button.active
           ? "bg-ide-accent text-ide-on-accent border-ide-border shadow-sm"
           : "bg-transparent text-ide-mute border-ide-border hover:bg-ide-panel hover:text-ide-text"
@@ -42,7 +42,7 @@ const TopBar: React.FC = () => {
   const hasCenter = topBarConfig.centerContent;
 
   return (
-    <div className="h-12 bg-ide-bg border-b border-ide-border flex items-center px-2 gap-2 shrink-0 transition-colors duration-300 overflow-hidden">
+    <div className="h-[calc(3rem+env(safe-area-inset-top))] min-h-[calc(3rem+env(safe-area-inset-top))] bg-ide-bg border-b border-ide-border flex items-center px-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] pt-[env(safe-area-inset-top)] gap-2 shrink-0 transition-colors duration-300 overflow-hidden md:h-12 md:min-h-0 md:px-2 md:pt-0">
       {hasLeftButtons && (
         <div className="flex items-center gap-2 shrink-0">
           {leftButtons.map((button, index) => (

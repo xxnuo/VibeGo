@@ -213,14 +213,14 @@ const BlockTermKeymapDialog: React.FC<BlockTermKeymapDialogProps> = ({
           data-blockterm-keymap-toolbar
           className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-ide-border px-3 py-2"
         >
-          <div className="flex h-8 items-center border border-ide-border bg-ide-bg p-0.5">
+          <div className="flex min-h-11 w-full items-stretch border border-ide-border bg-ide-bg p-0.5 md:h-8 md:min-h-0 md:w-auto md:items-center">
             {KEYMAP_SCOPES.map((item) => (
               <button
                 key={item}
                 type="button"
                 data-blockterm-keymap-scope={item}
                 aria-pressed={scope === item}
-                className={`h-7 min-w-24 px-3 text-xs transition-colors ${
+                className={`min-h-11 min-w-0 flex-1 px-2 text-xs transition-colors md:h-7 md:min-h-0 md:min-w-24 md:flex-none md:px-3 ${
                   scope === item ? "bg-ide-panel text-ide-accent" : "text-ide-mute hover:text-ide-text"
                 }`}
                 onClick={() => {
@@ -235,7 +235,7 @@ const BlockTermKeymapDialog: React.FC<BlockTermKeymapDialogProps> = ({
           <button
             type="button"
             data-blockterm-keymap-restore
-            className="flex h-8 items-center gap-1.5 border border-ide-border px-2.5 text-xs text-ide-mute hover:bg-ide-bg hover:text-ide-text"
+            className="flex min-h-11 w-full items-center justify-center gap-1.5 border border-ide-border px-2.5 text-xs text-ide-mute hover:bg-ide-bg hover:text-ide-text md:h-8 md:min-h-0 md:w-auto"
             onClick={restoreDefaults}
           >
             <RotateCcw size={13} />
@@ -287,7 +287,7 @@ const BlockTermKeymapDialog: React.FC<BlockTermKeymapDialogProps> = ({
                           key={key}
                           data-blockterm-keymap-key={key}
                           data-blockterm-keymap-conflict={conflict || undefined}
-                          className={`inline-flex h-7 max-w-full items-center border bg-ide-bg font-mono text-xs ${
+                          className={`inline-flex min-h-11 max-w-full items-center border bg-ide-bg font-mono text-xs md:h-7 md:min-h-0 ${
                             conflict
                               ? "border-amber-500 text-amber-600 dark:text-amber-400"
                               : "border-ide-border text-ide-text"
@@ -297,7 +297,7 @@ const BlockTermKeymapDialog: React.FC<BlockTermKeymapDialogProps> = ({
                           <kbd className="max-w-48 truncate px-2 font-inherit">{key}</kbd>
                           <button
                             type="button"
-                            className="flex h-full w-7 shrink-0 items-center justify-center border-l border-inherit text-ide-mute hover:bg-ide-panel hover:text-red-500"
+                            className="flex h-11 w-11 shrink-0 items-center justify-center border-l border-inherit text-ide-mute hover:bg-ide-panel hover:text-red-500 md:h-full md:w-7"
                             title={t("plugin.blockTerm.keymap.removeKey")}
                             aria-label={`${t("plugin.blockTerm.keymap.removeKey")}: ${definitionLabel}, ${key}`}
                             onClick={() =>
@@ -315,7 +315,7 @@ const BlockTermKeymapDialog: React.FC<BlockTermKeymapDialogProps> = ({
                       aria-pressed={recording}
                       aria-label={`${recording ? t("plugin.blockTerm.keymap.recording") : t("plugin.blockTerm.keymap.record")}: ${definitionLabel}`}
                       title={maxKeysReached ? t("plugin.blockTerm.keymap.maxKeysReached") : undefined}
-                      className={`flex h-7 shrink-0 items-center gap-1.5 border px-2 text-xs ${
+                      className={`flex min-h-11 shrink-0 items-center gap-1.5 border px-2 text-xs md:h-7 md:min-h-0 ${
                         recording
                           ? "border-ide-accent bg-ide-accent/10 text-ide-accent"
                           : "border-ide-border text-ide-mute hover:bg-ide-bg hover:text-ide-text disabled:cursor-not-allowed disabled:opacity-50"
@@ -347,11 +347,11 @@ const BlockTermKeymapDialog: React.FC<BlockTermKeymapDialogProps> = ({
 
         <div
           data-blockterm-keymap-footer
-          className="flex shrink-0 items-center justify-end gap-2 border-t border-ide-border bg-ide-panel px-4 py-3"
+          className="flex shrink-0 flex-col items-stretch gap-2 border-t border-ide-border bg-ide-panel px-4 py-3 md:flex-row md:items-center md:justify-end"
         >
           <button
             type="button"
-            className="h-8 border border-ide-border px-3 text-xs text-ide-mute hover:bg-ide-bg hover:text-ide-text disabled:opacity-50"
+            className="min-h-11 w-full border border-ide-border px-3 text-xs text-ide-mute hover:bg-ide-bg hover:text-ide-text disabled:opacity-50 md:h-8 md:min-h-0 md:w-auto"
             disabled={saving}
             onClick={() => handleOpenChange(false)}
           >
@@ -360,7 +360,7 @@ const BlockTermKeymapDialog: React.FC<BlockTermKeymapDialogProps> = ({
           <button
             type="button"
             data-blockterm-keymap-save
-            className="flex h-8 min-w-20 items-center justify-center gap-1.5 bg-ide-accent px-3 text-xs text-ide-on-accent disabled:bg-ide-border disabled:text-ide-mute"
+            className="flex min-h-11 w-full min-w-20 items-center justify-center gap-1.5 bg-ide-accent px-3 text-xs text-ide-on-accent disabled:bg-ide-border disabled:text-ide-mute md:h-8 md:min-h-0 md:w-auto"
             disabled={saving || !dirty || !preview.valid}
             onClick={() => void save()}
           >

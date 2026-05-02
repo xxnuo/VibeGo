@@ -14,10 +14,20 @@ import {
   SquareMinus,
   X,
 } from "lucide-react";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useId, useMemo, useRef, useState } from "react";
 import type { GitInteractiveDiff, GitStashFile, StashEntry } from "@/api/git";
 import GitCommitComposer from "@/components/git/git-commit-composer";
 import GitStashDetail from "@/components/git/git-stash-detail";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { getTranslation, type Locale } from "@/lib/i18n";
 import type { GitFileNode } from "@/stores";
 
@@ -221,6 +231,8 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
   const [showStashes, setShowStashes] = useState(false);
   const [discardConfirm, setDiscardConfirm] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
+  const filterInputId = useId();
+  const selectedStashTriggerRef = useRef<HTMLElement | null>(null);
 
   const safeStashes = stashes ?? [];
   const safeConflicts = conflicts ?? [];
@@ -243,11 +255,26 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
     }
   }, [discardConfirm, onDiscardFile]);
 
+  const handleStashSelect = useCallback(
+    (index: number | null) => {
+      if (index !== null) {
+        const active = document.activeElement;
+        if (active instanceof HTMLElement) selectedStashTriggerRef.current = active;
+      }
+      onStashSelect(index);
+    },
+    [onStashSelect]
+  );
+
   return (
-    <div className="flex flex-col h-full bg-ide-bg">
+    <div className="relative flex h-full min-w-0 flex-col overflow-x-hidden bg-ide-bg">
       <div className="flex-1 overflow-y-auto">
         {safeConflicts.length > 0 && (
-          <div className="bg-red-500/10 border-b border-red-500/30 px-3 py-2 flex items-center gap-2">
+          <div
+            className="bg-red-500/10 border-b border-red-500/30 px-3 py-2 flex items-center gap-2"
+            role="alert"
+            aria-live="assertive"
+          >
             <AlertTriangle size={14} className="text-red-400 shrink-0" />
             <span className="text-xs text-red-400 font-medium flex-1">
               {safeConflicts.length} {t("git.conflicts")}
@@ -258,15 +285,16 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
         {safeConflicts.length > 0 && (
           <div className="border-b border-ide-border">
             {safeConflicts.map((p) => (
-              <div
+              <button
+                type="button"
                 key={p}
-                className="flex items-center gap-2 px-3 py-1.5 hover:bg-red-500/10 cursor-pointer"
+                className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left hover:bg-red-500/10 active:bg-red-500/15"
                 onClick={() => onConflictClick(p)}
               >
                 <AlertTriangle size={12} className="text-red-400 shrink-0" />
                 <span className="flex-1 text-xs text-red-400 truncate">{p}</span>
                 <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded">{t("git.resolve")}</span>
-              </div>
+              </button>
             ))}
           </div>
         )}
@@ -292,9 +320,10 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
             <div className="flex flex-wrap justify-center gap-2 mt-2">
               {!hasRemote ? (
                 <button
+                  type="button"
                   onClick={() => onPush()}
                   disabled={isLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs text-ide-mute hover:text-ide-text hover:bg-ide-panel/80 border border-transparent hover:border-ide-border transition-all disabled:opacity-50"
+                  className="flex min-h-11 items-center gap-1.5 rounded-sm border border-transparent px-3 text-xs text-ide-mute transition-colors hover:border-ide-border hover:bg-ide-panel/80 hover:text-ide-text disabled:opacity-50"
                   title={t("git.publish")}
                 >
                   <CloudUpload size={14} className="text-ide-accent/70 shrink-0" />
@@ -303,37 +332,41 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
               ) : (
                 <>
                   <button
+                    type="button"
                     onClick={onFetch}
                     disabled={isLoading}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs text-ide-mute hover:text-ide-text hover:bg-ide-panel/80 border border-transparent hover:border-ide-border transition-all disabled:opacity-50"
+                    className="flex min-h-11 items-center gap-1.5 rounded-sm border border-transparent px-3 text-xs text-ide-mute transition-colors hover:border-ide-border hover:bg-ide-panel/80 hover:text-ide-text disabled:opacity-50"
                   >
                     <RefreshCw size={14} className="text-ide-mute/70 shrink-0" />
                     {t("git.fetch")}
                   </button>
                   {behindCount > 0 && (
                     <button
+                      type="button"
                       onClick={onPull}
                       disabled={isLoading}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs text-ide-mute hover:text-ide-text hover:bg-ide-panel/80 border border-transparent hover:border-ide-border transition-all disabled:opacity-50"
+                      className="flex min-h-11 items-center gap-1.5 rounded-sm border border-transparent px-3 text-xs text-ide-mute transition-colors hover:border-ide-border hover:bg-ide-panel/80 hover:text-ide-text disabled:opacity-50"
                     >
                       <ArrowDown size={14} className="text-orange-400/70 shrink-0" />
                       {t("git.pull")} {behindCount}
                     </button>
                   )}
                   {aheadCount > 0 && (
-                    <div className="flex items-center ml-1">
+                    <div className="ml-1 flex max-w-full items-center">
                       <button
+                        type="button"
                         onClick={() => onPush()}
                         disabled={isLoading}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-l-full text-xs text-ide-mute hover:text-ide-text hover:bg-ide-panel/80 border border-transparent hover:border-ide-border transition-all disabled:opacity-50 border-r border-ide-border/50"
+                        className="flex min-h-11 items-center gap-1.5 rounded-l-sm border border-transparent border-r-ide-border/50 px-3 text-xs text-ide-mute transition-colors hover:border-ide-border hover:bg-ide-panel/80 hover:text-ide-text disabled:opacity-50"
                       >
                         <ArrowUp size={14} className="text-blue-400/70 shrink-0" />
                         {t("git.push")} {aheadCount}
                       </button>
                       <button
+                        type="button"
                         onClick={() => onPush(true)}
                         disabled={isLoading}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-r-full text-xs text-red-500/70 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition-all disabled:opacity-50 border-l border-ide-border/50"
+                        className="flex min-h-11 items-center gap-1.5 rounded-r-sm border border-transparent border-l-ide-border/50 px-3 text-xs text-red-500/70 transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50"
                         title={t("git.forcePush")}
                       >
                         <ArrowUp size={14} className="shrink-0" />
@@ -345,9 +378,10 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
               )}
               {safeStashes.length > 0 && (
                 <button
+                  type="button"
                   onClick={() => onStashPop(safeStashes[0].index, safeStashes[0].oid)}
                   disabled={isLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs text-ide-mute hover:text-ide-text hover:bg-ide-panel/80 border border-transparent hover:border-ide-border transition-all disabled:opacity-50 max-w-[150px]"
+                  className="flex min-h-11 max-w-[150px] items-center gap-1.5 rounded-sm border border-transparent px-3 text-xs text-ide-mute transition-colors hover:border-ide-border hover:bg-ide-panel/80 hover:text-ide-text disabled:opacity-50"
                   title={safeStashes[0].message}
                 >
                   <Archive size={14} className="text-purple-400/70 shrink-0" />
@@ -364,19 +398,23 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
           <>
             {showFilter && (
               <div className="px-3 py-2 border-b border-ide-border/50 bg-ide-bg">
-                <div className="flex items-center gap-1.5 bg-ide-panel border border-ide-border rounded px-2 py-1.5 focus-within:border-ide-accent focus-within:ring-1 focus-within:ring-ide-accent/20 transition-all">
+                <div className="flex h-11 items-center gap-1.5 rounded border border-ide-border bg-ide-panel px-2 transition-all focus-within:border-ide-accent focus-within:ring-1 focus-within:ring-ide-accent/20 md:h-auto md:py-1.5">
                   <Search size={12} className="text-ide-mute shrink-0" />
                   <input
+                    id={filterInputId}
+                    name="gitFileFilter"
                     type="text"
                     value={filterText}
                     onChange={(e) => setFilterText(e.target.value)}
                     placeholder={t("git.searchFiles")}
-                    className="flex-1 bg-transparent text-xs text-ide-text placeholder-ide-mute focus:outline-none min-w-0"
+                    className="h-full min-w-0 flex-1 bg-transparent text-base text-ide-text placeholder-ide-mute focus:outline-none md:h-auto"
                   />
                   {filterText && (
                     <button
+                      type="button"
                       onClick={() => setFilterText("")}
-                      className="text-ide-mute hover:text-ide-text transition-colors"
+                      className="flex size-11 items-center justify-center rounded-sm text-ide-mute transition-colors hover:text-ide-text"
+                      aria-label={t("common.clear")}
                     >
                       <X size={12} />
                     </button>
@@ -386,11 +424,13 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
             )}
 
             <div className="flex items-center gap-2 px-3 py-2 border-b border-ide-border bg-ide-panel/30">
-              <div
-                className="flex items-center gap-2 flex-1 cursor-pointer"
+              <button
+                type="button"
+                className="flex min-h-11 flex-1 items-center gap-2 text-left"
                 onClick={() => {
                   void onToggleAll();
                 }}
+                aria-label={t("git.selectAll")}
               >
                 {renderSelectionIcon(
                   allSelectionType,
@@ -401,11 +441,13 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
                 <span className="text-xs text-ide-mute">
                   {checkedCount}/{allFiles.length}
                 </span>
-              </div>
+              </button>
               <button
-                className="p-1 hover:bg-purple-500/20 rounded text-ide-mute hover:text-purple-400 transition-colors shrink-0"
+                type="button"
+                className="flex size-11 shrink-0 items-center justify-center rounded-sm text-ide-mute transition-colors hover:bg-purple-500/20 hover:text-purple-400"
                 onClick={() => onStash()}
                 title={t("git.stashAll")}
+                aria-label={t("git.stashAll")}
               >
                 <Archive size={14} />
               </button>
@@ -417,25 +459,31 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
                 return (
                   <div
                     key={file.path}
-                    className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer group transition-colors ${getFileRowClassName(selectionType)}`}
+                    className={`group flex min-h-11 items-center gap-1.5 px-2 transition-colors ${getFileRowClassName(selectionType)}`}
                   >
-                    <div
+                    <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         void onToggleFile(file.path);
                       }}
-                      className="shrink-0"
+                      className="flex size-11 shrink-0 items-center justify-center rounded-sm hover:bg-ide-accent/10"
+                      aria-label={`${selectionType === "none" ? t("git.add") : t("git.reset")} ${file.path}`}
                     >
                       {renderSelectionIcon(
                         selectionType,
                         16,
                         selectionType === "none" ? "text-ide-mute" : "text-ide-accent"
                       )}
-                    </div>
+                    </button>
                     <span className={`w-4 text-center font-bold text-[10px] shrink-0 ${getStatusColor(file.status)}`}>
                       {getStatusLabel(file.status)}
                     </span>
-                    <div className="flex-1 min-w-0 flex flex-col" onClick={() => onFileClick(file.path)}>
+                    <button
+                      type="button"
+                      className="flex min-h-11 min-w-0 flex-1 flex-col justify-center text-left"
+                      onClick={() => onFileClick(file.path)}
+                    >
                       <span className={getFileNameClassName(selectionType)}>
                         {file.name}
                         {file.submodule && (
@@ -445,26 +493,31 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
                       {file.path !== file.name && (
                         <span className={getFilePathClassName(selectionType)}>{file.path}</span>
                       )}
-                    </div>
+                    </button>
                     <button
-                      className={`p-1 hover:bg-purple-500/20 rounded hover:text-purple-400 transition-opacity shrink-0 ${selectionType === "none" ? "text-ide-mute opacity-0 group-hover:opacity-100" : selectionType === "partial" ? "text-amber-300/80 opacity-100" : "text-ide-accent/80 opacity-100"}`}
+                      type="button"
+                      className={`flex size-11 shrink-0 items-center justify-center rounded-sm transition-colors hover:bg-purple-500/20 hover:text-purple-400 md:size-8 ${selectionType === "partial" ? "text-amber-300/80" : selectionType === "all" ? "text-ide-accent/80" : "text-ide-mute md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         onStash(undefined, [file.path]);
                       }}
                       title={t("git.stashFile")}
+                      aria-label={`${t("git.stashFile")}: ${file.path}`}
                     >
-                      <Archive size={12} />
+                      <Archive size={14} />
                     </button>
                     {file.status !== "untracked" && (
                       <button
-                        className={`p-1 hover:bg-red-500/20 rounded hover:text-red-400 transition-opacity shrink-0 ${selectionType === "none" ? "text-ide-mute opacity-0 group-hover:opacity-100" : selectionType === "partial" ? "text-amber-300/80 opacity-100" : "text-ide-accent/80 opacity-100"}`}
+                        type="button"
+                        className={`flex size-11 shrink-0 items-center justify-center rounded-sm transition-colors hover:bg-red-500/20 hover:text-red-400 md:size-8 ${selectionType === "partial" ? "text-amber-300/80" : selectionType === "all" ? "text-ide-accent/80" : "text-ide-mute md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDiscardClick(file.path);
                         }}
+                        title={t("git.discard")}
+                        aria-label={`${t("git.discard")}: ${file.path}`}
                       >
-                        <X size={12} />
+                        <X size={14} />
                       </button>
                     )}
                   </div>
@@ -480,9 +533,11 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
 
       {safeStashes.length > 0 && (
         <div className="border-t border-ide-border">
-          <div
-            className="flex items-center justify-between px-3 py-1.5 bg-ide-panel/30 cursor-pointer"
+          <button
+            type="button"
+            className="flex min-h-11 w-full items-center justify-between bg-ide-panel/30 px-3 py-1.5 text-left"
             onClick={() => setShowStashes(!showStashes)}
+            aria-expanded={showStashes}
           >
             <div className="flex items-center gap-1">
               {showStashes ? (
@@ -495,35 +550,37 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
             <span className="text-[10px] bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded">
               {safeStashes.length}
             </span>
-          </div>
+          </button>
           {showStashes && (
             <div>
               {safeStashes.map((s) => (
                 <div
                   key={s.index}
-                  className={`flex items-center gap-2 px-3 py-1.5 hover:bg-ide-accent/10 group ${
+                  className={`group flex min-h-11 items-center gap-2 px-2 hover:bg-ide-accent/10 ${
                     selectedStashIndex === s.index ? "bg-ide-accent/10" : ""
                   }`}
                 >
                   <Archive size={12} className="text-purple-400 shrink-0" />
                   <button
                     type="button"
-                    className="flex-1 min-w-0 truncate text-left text-[10px] text-ide-text"
-                    onClick={() => onStashSelect(s.index)}
+                    className="min-h-11 min-w-0 flex-1 truncate px-1 text-left text-[10px] text-ide-text"
+                    onClick={() => handleStashSelect(s.index)}
                     title={s.message}
                   >
                     {s.message}
                   </button>
-                  <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
                     <button
-                      className="px-1.5 py-0.5 text-[10px] bg-green-500/20 text-green-400 rounded hover:bg-green-500/30"
+                      type="button"
+                      className="min-h-11 rounded-sm bg-green-500/20 px-2 text-[10px] text-green-400 hover:bg-green-500/30 md:min-h-8"
                       onClick={() => onStashPop(s.index, s.oid)}
                       disabled={isLoading}
                     >
                       {t("git.pop")}
                     </button>
                     <button
-                      className="px-1.5 py-0.5 text-[10px] bg-red-500/20 text-red-400 rounded hover:bg-red-500/30"
+                      type="button"
+                      className="min-h-11 rounded-sm bg-red-500/20 px-2 text-[10px] text-red-400 hover:bg-red-500/30 md:min-h-8"
                       onClick={() => onStashDrop(s.index, s.oid)}
                       disabled={isLoading}
                     >
@@ -546,7 +603,8 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
               loading={stashLoading}
               disabled={isLoading}
               compact
-              onClose={() => onStashSelect(null)}
+              returnFocusRef={selectedStashTriggerRef}
+              onClose={() => handleStashSelect(null)}
               onFileSelect={onStashFileSelect}
               onPop={onStashPop}
               onDrop={onStashDrop}
@@ -564,42 +622,31 @@ const GitChangesView: React.FC<GitChangesViewProps> = ({
         hasConflicts={safeConflicts.length > 0}
         isLoading={isLoading}
         onUndoLastCommit={onUndoLastCommit}
+        mobile
       />
 
-      {discardConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          onClick={() => setDiscardConfirm(null)}
-        >
-          <div
-            className="bg-ide-bg border border-ide-border rounded-lg shadow-xl w-80 p-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle size={20} className="text-red-400" />
-              <span className="text-sm font-medium text-ide-text">{t("git.discardConfirm")}</span>
-            </div>
-            <p className="text-xs text-ide-mute mb-2 font-mono bg-ide-panel px-2 py-1 rounded truncate">
-              {discardConfirm}
-            </p>
-            <p className="text-xs text-red-400 mb-4">{t("git.discardWarning")}</p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setDiscardConfirm(null)}
-                className="flex-1 px-3 py-1.5 text-sm text-ide-mute hover:text-ide-text border border-ide-border rounded"
-              >
-                {t("git.cancel")}
-              </button>
-              <button
-                onClick={handleConfirmDiscard}
-                className="flex-1 px-3 py-1.5 text-sm bg-red-500 text-white rounded hover:bg-red-600"
-              >
-                {t("git.confirm")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AlertDialog open={discardConfirm !== null} onOpenChange={(open) => !open && setDiscardConfirm(null)}>
+        <AlertDialogContent size="sm" className="border-ide-border bg-ide-panel text-ide-text">
+          <AlertDialogHeader className="place-items-start text-left">
+            <AlertDialogTitle className="flex items-center gap-2 text-base">
+              <AlertTriangle size={18} className="shrink-0 text-red-400" />
+              {t("git.discardConfirm")}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="w-full text-left text-ide-mute">
+              <span className="mb-2 block truncate rounded bg-ide-bg px-2 py-1 font-mono text-xs text-ide-text">
+                {discardConfirm}
+              </span>
+              <span className="text-xs text-red-400">{t("git.discardWarning")}</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("git.cancel")}</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={handleConfirmDiscard}>
+              {t("git.confirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

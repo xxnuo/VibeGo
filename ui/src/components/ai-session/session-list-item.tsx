@@ -1,5 +1,5 @@
+import { Check } from "lucide-react";
 import { formatCount, formatRelativeTime, providerLabels, renderHighlightedText } from "@/components/ai-session/utils";
-import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import type { AIProviderId, AISessionMeta } from "@/types/ai-session";
 
@@ -38,15 +38,31 @@ const SessionListItem: React.FC<SessionListItemProps> = ({
       )}
     >
       {selectionMode ? (
-        <div className="pt-0.5">
-          <Checkbox
-            checked={isChecked}
-            disabled={!canDelete}
-            onCheckedChange={(checked) => onToggleChecked(Boolean(checked))}
-          />
-        </div>
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={isChecked}
+          aria-label={`${t("common.select")}: ${session.title || session.sessionId}`}
+          disabled={!canDelete}
+          onClick={() => onToggleChecked(!isChecked)}
+          className="flex size-11 shrink-0 items-center justify-center rounded-md disabled:cursor-not-allowed disabled:opacity-50 md:size-4 md:mt-0.5"
+        >
+          <span
+            className={cn(
+              "grid size-4 place-content-center rounded-[4px] border border-input shadow-xs",
+              isChecked ? "border-primary bg-primary text-primary-foreground" : "bg-input/30"
+            )}
+          >
+            {isChecked ? <Check className="size-3.5" /> : null}
+          </span>
+        </button>
       ) : null}
-      <button type="button" onClick={() => onSelect(session)} className="min-w-0 flex-1 text-left">
+      <button
+        type="button"
+        data-ai-session-source-path={session.sourcePath}
+        onClick={() => onSelect(session)}
+        className="min-w-0 flex-1 text-left"
+      >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">

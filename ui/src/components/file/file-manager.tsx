@@ -472,26 +472,45 @@ const FileListItem: React.FC<FileItemProps> = ({
   onLongPress,
 }) => {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggered = useRef(false);
 
   const handleTouchStart = () => {
-    longPressTimer.current = setTimeout(() => onLongPress(), 500);
+    longPressTriggered.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressTriggered.current = true;
+      longPressTimer.current = null;
+      onLongPress();
+    }, 500);
   };
 
   const handleTouchEnd = () => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressTimer.current = null;
   };
 
   return (
-    <div
-      onClick={onClick}
-      onTouchStart={handleTouchStart}
+    <button
+      type="button"
+      onClick={() => {
+        if (longPressTriggered.current) {
+          longPressTriggered.current = false;
+          return;
+        }
+        onClick();
+      }}
+      onTouchStart={(event) => {
+        event.currentTarget.focus({ preventScroll: true });
+        handleTouchStart();
+      }}
       onTouchEnd={handleTouchEnd}
       onTouchMove={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
       onContextMenu={(e) => {
         e.preventDefault();
+        e.currentTarget.focus({ preventScroll: true });
         onLongPress();
       }}
-      className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
+      className={`flex min-h-11 w-full items-center gap-3 px-3 py-2.5 text-left transition-colors ${
         focused ? "bg-ide-accent/10" : ""
       } ${selected ? "bg-ide-accent/20" : "hover:bg-ide-panel"}`}
     >
@@ -509,34 +528,53 @@ const FileListItem: React.FC<FileItemProps> = ({
         <div className={`text-sm truncate ${file.isHidden ? "text-ide-mute" : "text-ide-text"}`}>{file.name}</div>
       </div>
       <div className="text-[10px] text-ide-mute shrink-0">{file.isDir ? "--" : formatFileSize(file.size)}</div>
-      <div className="text-[10px] text-ide-mute shrink-0 w-12 text-right">{dateText}</div>
+      <div className="w-14 shrink-0 truncate text-right text-[10px] text-ide-mute tabular-nums">{dateText}</div>
       {file.isDir && <ChevronRight size={18} className="text-ide-mute shrink-0" />}
-    </div>
+    </button>
   );
 };
 
 const FileGridItem: React.FC<FileItemProps> = ({ file, selected, focused, selectionMode, onClick, onLongPress }) => {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggered = useRef(false);
 
   const handleTouchStart = () => {
-    longPressTimer.current = setTimeout(() => onLongPress(), 500);
+    longPressTriggered.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressTriggered.current = true;
+      longPressTimer.current = null;
+      onLongPress();
+    }, 500);
   };
 
   const handleTouchEnd = () => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressTimer.current = null;
   };
 
   return (
-    <div
-      onClick={onClick}
-      onTouchStart={handleTouchStart}
+    <button
+      type="button"
+      onClick={() => {
+        if (longPressTriggered.current) {
+          longPressTriggered.current = false;
+          return;
+        }
+        onClick();
+      }}
+      onTouchStart={(event) => {
+        event.currentTarget.focus({ preventScroll: true });
+        handleTouchStart();
+      }}
       onTouchEnd={handleTouchEnd}
       onTouchMove={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
       onContextMenu={(e) => {
         e.preventDefault();
+        e.currentTarget.focus({ preventScroll: true });
         onLongPress();
       }}
-      className={`flex flex-col items-center gap-1 p-3 rounded-lg cursor-pointer transition-colors ${
+      className={`relative flex min-h-20 min-w-0 flex-col items-center gap-1 rounded-lg p-3 transition-colors ${
         focused ? "bg-ide-accent/10" : ""
       } ${selected ? "bg-ide-accent/20" : "hover:bg-ide-panel"}`}
     >
@@ -551,7 +589,7 @@ const FileGridItem: React.FC<FileItemProps> = ({ file, selected, focused, select
       <div className={`text-[11px] text-center truncate w-full ${file.isHidden ? "text-ide-mute" : "text-ide-text"}`}>
         {file.name}
       </div>
-    </div>
+    </button>
   );
 };
 

@@ -339,6 +339,7 @@ const SideBar: React.FC<SideBarProps> = ({ onMenuClick, onNewPage }) => {
     const canCloseAll = isGroup && groups.some((group) => !(group.type === "home" && groups.length <= 1));
     return (
       <TaskbarItemMenu
+        key={taskbarItem.id}
         title={taskbarItem.type === "custom" ? taskbarItem.item.label : getGroupTitle(taskbarItem.group)}
         onActivate={() => activateItem(taskbarItem)}
         onClose={isGroup ? () => closeGroup(taskbarItem.group) : undefined}

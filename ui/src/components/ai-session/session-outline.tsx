@@ -31,7 +31,7 @@ const SessionOutline: React.FC<SessionOutlineProps> = ({ compact, items, t, onSe
               type="button"
               onClick={() => onSelect(item.index)}
               className={cn(
-                "w-full rounded-md border border-ide-border bg-ide-panel py-2 pr-3 text-left text-xs text-ide-mute transition-colors hover:border-ide-accent/40 hover:bg-ide-bg hover:text-ide-text",
+                "min-h-11 w-full rounded-md border border-ide-border bg-ide-panel py-2 pr-3 text-left text-xs text-ide-mute transition-colors hover:border-ide-accent/40 hover:bg-ide-bg hover:text-ide-text md:min-h-0",
                 item.level <= 0 ? "pl-3" : item.level === 1 ? "pl-5" : "pl-7"
               )}
             >

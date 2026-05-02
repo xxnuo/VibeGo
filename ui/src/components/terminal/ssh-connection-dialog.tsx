@@ -11,7 +11,7 @@ import {
   Trash2,
   Unplug,
 } from "lucide-react";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ApiError } from "@/api/request";
 import {
   type SSHAuthMethod,
@@ -140,9 +140,16 @@ function endpointLabel(profile: SSHProfile): string {
   return `${profile.user ? `${profile.user}@` : ""}${host}:${profile.port}`;
 }
 
-const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-  <label className="grid gap-1.5 text-xs text-ide-mute">
-    <span>{label}</span>
+const Field: React.FC<{ label: string; htmlFor?: string; children: React.ReactNode }> = ({
+  label,
+  htmlFor,
+  children,
+}) => (
+  <label
+    htmlFor={htmlFor}
+    className="grid min-w-0 gap-1.5 text-xs text-ide-mute [&_[data-slot=native-select-wrapper]]:w-full"
+  >
+    <span className="break-words">{label}</span>
     {children}
   </label>
 );
@@ -157,6 +164,8 @@ const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
   const dialog = useDialog();
   const locale = useAppStore((state) => state.locale);
   const t = useTranslation(locale);
+  const fieldId = useId();
+  const idFor = useCallback((suffix: string) => `${fieldId}-${suffix}`, [fieldId]);
   const [profiles, setProfiles] = useState<SSHProfile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [mode, setMode] = useState<"connect" | "edit">("connect");
@@ -413,24 +422,24 @@ const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
   return (
     <>
       <Dialog open={open} onOpenChange={(nextOpen) => (nextOpen ? onOpenChange(true) : closeDialog())}>
-        <DialogContent className="border-ide-border bg-ide-panel p-0 text-ide-text md:max-w-4xl md:overflow-hidden">
-          <DialogHeader className="border-b border-ide-border px-5 py-4 text-left">
+        <DialogContent className="flex max-h-[calc(100dvh_-_env(safe-area-inset-top)_-_0.75rem)] flex-col gap-0 overflow-hidden border-ide-border bg-ide-panel p-0 pb-0 text-ide-text md:max-w-4xl">
+          <DialogHeader className="shrink-0 border-b border-ide-border px-4 py-3 pr-16 text-left md:px-5 md:py-4 md:pr-16">
             <DialogTitle className="flex items-center gap-2 text-base">
               <Server size={17} className="text-ide-accent" />
               {t("terminal.ssh.title")}
             </DialogTitle>
-            <DialogDescription className="text-xs text-ide-mute">
+            <DialogDescription className="break-words text-xs text-ide-mute">
               {t("terminal.ssh.requestOnlySecrets")}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid min-h-[430px] md:grid-cols-[220px_minmax(0,1fr)]">
-            <aside className="border-b border-ide-border bg-ide-bg md:border-r md:border-b-0">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:grid md:min-h-[430px] md:grid-cols-[220px_minmax(0,1fr)]">
+            <aside className="shrink-0 border-b border-ide-border bg-ide-bg md:min-h-0 md:border-r md:border-b-0">
               <div className="flex items-center justify-between border-b border-ide-border px-3 py-2">
                 <span className="text-xs font-medium text-ide-mute">{t("terminal.ssh.profiles")}</span>
                 <button
                   type="button"
-                  className="flex h-7 w-7 items-center justify-center text-ide-mute hover:bg-ide-panel hover:text-ide-text"
+                  className="flex h-11 w-11 items-center justify-center rounded-md text-ide-mute hover:bg-ide-panel hover:text-ide-text md:h-7 md:w-7"
                   title={t("terminal.ssh.newProfile")}
                   aria-label={t("terminal.ssh.newProfile")}
                   onClick={startNewProfile}
@@ -438,7 +447,7 @@ const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                   <Plus size={14} />
                 </button>
               </div>
-              <div className="max-h-40 overflow-auto p-1.5 md:max-h-[376px]">
+              <div className="max-h-32 overflow-auto overscroll-contain p-1.5 md:max-h-[376px]">
                 {loading ? (
                   <div className="flex h-24 items-center justify-center text-ide-mute">
                     <Loader2 size={16} className="animate-spin" />
@@ -450,7 +459,7 @@ const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     <button
                       key={profile.id}
                       type="button"
-                      className={`flex w-full items-center gap-2 border-l-2 px-2 py-2 text-left ${
+                      className={`flex min-h-11 w-full items-center gap-2 border-l-2 px-2 py-2 text-left ${
                         profile.id === selectedProfileId && mode === "connect"
                           ? "border-ide-accent bg-ide-panel text-ide-text"
                           : "border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text"
@@ -480,7 +489,7 @@ const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
               </div>
             </aside>
 
-            <main className="min-w-0 overflow-auto px-5 py-4">
+            <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:px-5 md:pb-4">
               {mode === "edit" ? (
                 <div className="grid gap-4">
                   <div className="flex items-center justify-between gap-3">
@@ -490,7 +499,7 @@ const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     {profileForm.id && (
                       <button
                         type="button"
-                        className="flex h-8 w-8 items-center justify-center text-ide-mute hover:bg-ide-bg hover:text-red-500"
+                        className="flex h-11 w-11 items-center justify-center rounded-md text-ide-mute hover:bg-ide-bg hover:text-red-500 md:h-8 md:w-8"
                         title={t("terminal.ssh.deleteProfile")}
                         aria-label={t("terminal.ssh.deleteProfile")}
                         onClick={() => void deleteProfile()}
@@ -501,45 +510,55 @@ const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     )}
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <Field label={t("terminal.ssh.name")}>
+                    <Field label={t("terminal.ssh.name")} htmlFor={idFor("profile-name")}>
                       <Input
+                        id={idFor("profile-name")}
+                        name="profile-name"
                         value={profileForm.name}
                         onChange={(event) => setProfileForm((value) => ({ ...value, name: event.target.value }))}
-                        className="border-ide-border bg-ide-bg"
+                        className="h-11 border-ide-border bg-ide-bg text-base md:h-9 md:text-sm"
                       />
                     </Field>
-                    <Field label={t("terminal.ssh.user")}>
+                    <Field label={t("terminal.ssh.user")} htmlFor={idFor("profile-user")}>
                       <Input
+                        id={idFor("profile-user")}
+                        name="profile-user"
                         value={profileForm.user}
                         onChange={(event) => setProfileForm((value) => ({ ...value, user: event.target.value }))}
-                        className="border-ide-border bg-ide-bg"
+                        className="h-11 border-ide-border bg-ide-bg text-base md:h-9 md:text-sm"
                       />
                     </Field>
-                    <Field label={t("terminal.ssh.host")}>
+                    <Field label={t("terminal.ssh.host")} htmlFor={idFor("profile-host")}>
                       <Input
+                        id={idFor("profile-host")}
+                        name="profile-host"
                         value={profileForm.host}
                         onChange={(event) => setProfileForm((value) => ({ ...value, host: event.target.value }))}
-                        className="border-ide-border bg-ide-bg font-mono"
+                        className="h-11 border-ide-border bg-ide-bg font-mono text-base md:h-9 md:text-sm"
                         autoFocus
                       />
                     </Field>
-                    <Field label={t("terminal.ssh.port")}>
+                    <Field label={t("terminal.ssh.port")} htmlFor={idFor("profile-port")}>
                       <Input
+                        id={idFor("profile-port")}
+                        name="profile-port"
                         type="number"
                         min={1}
                         max={65535}
                         value={profileForm.port}
                         onChange={(event) => setProfileForm((value) => ({ ...value, port: event.target.value }))}
-                        className="border-ide-border bg-ide-bg font-mono"
+                        className="h-11 border-ide-border bg-ide-bg font-mono text-base md:h-9 md:text-sm"
                       />
                     </Field>
-                    <Field label={t("terminal.ssh.authMethod")}>
+                    <Field label={t("terminal.ssh.authMethod")} htmlFor={idFor("profile-auth-method")}>
                       <NativeSelect
+                        id={idFor("profile-auth-method")}
+                        name="profile-auth-method"
                         value={profileForm.authMethod}
                         onChange={(event) =>
                           setProfileForm((value) => ({ ...value, authMethod: event.target.value as SSHAuthMethod }))
                         }
-                        className="w-full border-ide-border bg-ide-bg"
+                        className="h-11 w-full border-ide-border bg-ide-bg text-base md:h-9 md:text-sm"
                       >
                         <NativeSelectOption value="auto">{t("terminal.ssh.authAuto")}</NativeSelectOption>
                         <NativeSelectOption value="agent">{t("terminal.ssh.authAgent")}</NativeSelectOption>
@@ -547,8 +566,10 @@ const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                         <NativeSelectOption value="password">{t("terminal.ssh.authPassword")}</NativeSelectOption>
                       </NativeSelect>
                     </Field>
-                    <Field label={t("terminal.ssh.connectTimeoutLabel")}>
+                    <Field label={t("terminal.ssh.connectTimeoutLabel")} htmlFor={idFor("profile-connect-timeout")}>
                       <Input
+                        id={idFor("profile-connect-timeout")}
+                        name="profile-connect-timeout"
                         type="number"
                         min={1}
                         max={60}
@@ -556,29 +577,40 @@ const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                         onChange={(event) =>
                           setProfileForm((value) => ({ ...value, connectTimeout: event.target.value }))
                         }
-                        className="border-ide-border bg-ide-bg font-mono"
+                        className="h-11 border-ide-border bg-ide-bg font-mono text-base md:h-9 md:text-sm"
                       />
                     </Field>
                   </div>
                   {(profileForm.authMethod === "auto" || profileForm.authMethod === "private_key") && (
-                    <Field label={t("terminal.ssh.identityFile")}>
+                    <Field label={t("terminal.ssh.identityFile")} htmlFor={idFor("profile-identity-file")}>
                       <Input
+                        id={idFor("profile-identity-file")}
+                        name="profile-identity-file"
                         value={profileForm.identityFile}
                         onChange={(event) =>
                           setProfileForm((value) => ({ ...value, identityFile: event.target.value }))
                         }
-                        className="border-ide-border bg-ide-bg font-mono"
+                        className="h-11 border-ide-border bg-ide-bg font-mono text-base md:h-9 md:text-sm"
                         placeholder="~/.ssh/id_ed25519"
                       />
                     </Field>
                   )}
-                  <div className="flex justify-end gap-2 border-t border-ide-border pt-4">
+                  <div className="flex flex-col-reverse gap-2 border-t border-ide-border pt-4 md:flex-row md:justify-end">
                     {(selectedProfile || profiles.length > 0) && (
-                      <Button variant="outline" onClick={() => setMode("connect")} disabled={profileSaving}>
+                      <Button
+                        variant="outline"
+                        onClick={() => setMode("connect")}
+                        disabled={profileSaving}
+                        className="h-11 w-full md:h-9 md:w-auto"
+                      >
                         {t("common.cancel")}
                       </Button>
                     )}
-                    <Button onClick={() => void saveProfile()} disabled={profileSaving}>
+                    <Button
+                      onClick={() => void saveProfile()}
+                      disabled={profileSaving}
+                      className="h-11 w-full md:h-9 md:w-auto"
+                    >
                       {profileSaving ? <Loader2 className="animate-spin" /> : <Check />}
                       {t("common.save")}
                     </Button>
@@ -602,7 +634,7 @@ const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                       {selectedProfile.connected && (
                         <button
                           type="button"
-                          className="flex h-8 w-8 items-center justify-center text-ide-mute hover:bg-ide-bg hover:text-red-500"
+                          className="flex h-11 w-11 items-center justify-center rounded-md text-ide-mute hover:bg-ide-bg hover:text-red-500 md:h-8 md:w-8"
                           title={t("terminal.ssh.disconnect")}
                           aria-label={t("terminal.ssh.disconnect")}
                           onClick={() => void disconnectProfile()}
@@ -613,7 +645,7 @@ const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                       )}
                       <button
                         type="button"
-                        className="flex h-8 w-8 items-center justify-center text-ide-mute hover:bg-ide-bg hover:text-ide-text"
+                        className="flex h-11 w-11 items-center justify-center rounded-md text-ide-mute hover:bg-ide-bg hover:text-ide-text md:h-8 md:w-8"
                         title={t("terminal.ssh.editProfile")}
                         aria-label={t("terminal.ssh.editProfile")}
                         onClick={startEditProfile}
@@ -624,46 +656,54 @@ const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                   </div>
 
                   {!selectionOnly && (
-                    <Field label={t("terminal.ssh.remoteCwd")}>
+                    <Field label={t("terminal.ssh.remoteCwd")} htmlFor={idFor("remote-cwd")}>
                       <Input
+                        id={idFor("remote-cwd")}
+                        name="remote-cwd"
                         value={cwd}
                         onChange={(event) => setCwd(event.target.value)}
-                        className="border-ide-border bg-ide-bg font-mono"
+                        className="h-11 border-ide-border bg-ide-bg font-mono text-base md:h-9 md:text-sm"
                         placeholder="."
                       />
                     </Field>
                   )}
 
                   {showPassword && (
-                    <Field label={t("terminal.ssh.password")}>
+                    <Field label={t("terminal.ssh.password")} htmlFor={idFor("password")}>
                       <Input
+                        id={idFor("password")}
+                        name="password"
                         type="password"
                         autoComplete="off"
                         value={auth.password || ""}
                         onChange={(event) => setAuth((value) => ({ ...value, password: event.target.value }))}
-                        className="border-ide-border bg-ide-bg"
+                        className="h-11 border-ide-border bg-ide-bg text-base md:h-9 md:text-sm"
                       />
                     </Field>
                   )}
 
                   {showPrivateKey && (
-                    <Field label={t("terminal.ssh.privateKey")}>
+                    <Field label={t("terminal.ssh.privateKey")} htmlFor={idFor("private-key")}>
                       <Textarea
+                        id={idFor("private-key")}
+                        name="private-key"
                         value={auth.private_key || ""}
                         onChange={(event) => setAuth((value) => ({ ...value, private_key: event.target.value }))}
-                        className="max-h-32 min-h-20 resize-y border-ide-border bg-ide-bg font-mono text-xs"
+                        className="max-h-32 min-h-24 resize-y border-ide-border bg-ide-bg font-mono text-base md:min-h-20 md:text-xs"
                       />
                     </Field>
                   )}
 
                   {showPrivateKey && (
-                    <Field label={t("terminal.ssh.passphrase")}>
+                    <Field label={t("terminal.ssh.passphrase")} htmlFor={idFor("passphrase")}>
                       <Input
+                        id={idFor("passphrase")}
+                        name="passphrase"
                         type="password"
                         autoComplete="off"
                         value={auth.passphrase || ""}
                         onChange={(event) => setAuth((value) => ({ ...value, passphrase: event.target.value }))}
-                        className="border-ide-border bg-ide-bg"
+                        className="h-11 border-ide-border bg-ide-bg text-base md:h-9 md:text-sm"
                       />
                     </Field>
                   )}
@@ -683,7 +723,11 @@ const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                   )}
 
                   <div className="flex justify-end border-t border-ide-border pt-4">
-                    <Button onClick={connectProfile} disabled={submitting || loading}>
+                    <Button
+                      onClick={connectProfile}
+                      disabled={submitting || loading}
+                      className="h-11 w-full md:h-9 md:w-auto"
+                    >
                       {submitting ? <Loader2 className="animate-spin" /> : selectionOnly ? <Check /> : <Power />}
                       {selectionOnly ? t("common.select") : t("terminal.ssh.openTerminal")}
                     </Button>
@@ -696,35 +740,46 @@ const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
       </Dialog>
 
       <Dialog open={!!challenge} onOpenChange={(nextOpen) => !nextOpen && setChallenge(null)}>
-        <DialogContent className="border-ide-border bg-ide-panel text-ide-text md:max-w-lg">
-          <DialogHeader className="text-left">
+        <DialogContent className="overflow-x-hidden border-ide-border bg-ide-panel text-ide-text md:max-w-lg">
+          <DialogHeader className="pr-10 text-left">
             <DialogTitle className="flex items-center gap-2 text-base">
               <ShieldAlert size={17} className="text-yellow-500" />
               {t("terminal.ssh.hostKeyTitle")}
             </DialogTitle>
-            <DialogDescription className="text-sm text-ide-mute">{t("terminal.ssh.hostKeyConfirm")}</DialogDescription>
+            <DialogDescription className="break-words text-sm text-ide-mute">
+              {t("terminal.ssh.hostKeyConfirm")}
+            </DialogDescription>
           </DialogHeader>
           {challenge && (
             <dl className="grid gap-2 border-y border-ide-border py-3 text-xs">
-              <div className="grid grid-cols-[90px_1fr] gap-3">
+              <div className="grid min-w-0 gap-1 md:grid-cols-[90px_1fr] md:gap-3">
                 <dt className="text-ide-mute">{t("terminal.ssh.endpoint")}</dt>
                 <dd className="break-all font-mono">{challenge.endpoint}</dd>
               </div>
-              <div className="grid grid-cols-[90px_1fr] gap-3">
+              <div className="grid min-w-0 gap-1 md:grid-cols-[90px_1fr] md:gap-3">
                 <dt className="text-ide-mute">{t("terminal.ssh.keyType")}</dt>
                 <dd className="break-all font-mono">{challenge.key_type}</dd>
               </div>
-              <div className="grid grid-cols-[90px_1fr] gap-3">
+              <div className="grid min-w-0 gap-1 md:grid-cols-[90px_1fr] md:gap-3">
                 <dt className="text-ide-mute">{t("terminal.ssh.fingerprint")}</dt>
                 <dd className="break-all font-mono">{challenge.fingerprint}</dd>
               </div>
             </dl>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setChallenge(null)} disabled={submitting}>
+            <Button
+              variant="outline"
+              onClick={() => setChallenge(null)}
+              disabled={submitting}
+              className="h-11 w-full md:h-9 md:w-auto"
+            >
               {t("common.cancel")}
             </Button>
-            <Button onClick={() => void confirmHostKey()} disabled={submitting}>
+            <Button
+              onClick={() => void confirmHostKey()}
+              disabled={submitting}
+              className="h-11 w-full md:h-9 md:w-auto"
+            >
               {submitting ? <Loader2 className="animate-spin" /> : <Check />}
               {t("terminal.ssh.trustAndConnect")}
             </Button>
@@ -733,37 +788,47 @@ const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
       </Dialog>
 
       <Dialog open={!!changedHostKey} onOpenChange={(nextOpen) => !nextOpen && setChangedHostKey(null)}>
-        <DialogContent className="border-red-500/40 bg-ide-panel text-ide-text md:max-w-lg">
-          <DialogHeader className="text-left">
+        <DialogContent className="overflow-x-hidden border-red-500/40 bg-ide-panel text-ide-text md:max-w-lg">
+          <DialogHeader className="pr-10 text-left">
             <DialogTitle className="flex items-center gap-2 text-base text-red-500">
               <ShieldAlert size={17} />
               {t("terminal.ssh.hostKeyChangedTitle")}
             </DialogTitle>
-            <DialogDescription className="text-sm text-ide-mute">
+            <DialogDescription className="break-words text-sm text-ide-mute">
               {t("terminal.ssh.hostKeyChangedConfirm")}
             </DialogDescription>
           </DialogHeader>
           {changedHostKey && (
             <dl className="grid gap-2 border-y border-ide-border py-3 text-xs">
-              <div className="grid grid-cols-[110px_1fr] gap-3">
+              <div className="grid min-w-0 gap-1 md:grid-cols-[110px_1fr] md:gap-3">
                 <dt className="text-ide-mute">{t("terminal.ssh.endpoint")}</dt>
                 <dd className="break-all font-mono">{changedHostKey.endpoint}</dd>
               </div>
-              <div className="grid grid-cols-[110px_1fr] gap-3">
+              <div className="grid min-w-0 gap-1 md:grid-cols-[110px_1fr] md:gap-3">
                 <dt className="text-ide-mute">{t("terminal.ssh.previousFingerprint")}</dt>
                 <dd className="break-all font-mono">{changedHostKey.expectedFingerprint}</dd>
               </div>
-              <div className="grid grid-cols-[110px_1fr] gap-3">
+              <div className="grid min-w-0 gap-1 md:grid-cols-[110px_1fr] md:gap-3">
                 <dt className="text-ide-mute">{t("terminal.ssh.presentedFingerprint")}</dt>
                 <dd className="break-all font-mono text-red-500">{changedHostKey.presentedFingerprint}</dd>
               </div>
             </dl>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setChangedHostKey(null)} disabled={submitting}>
+            <Button
+              variant="outline"
+              onClick={() => setChangedHostKey(null)}
+              disabled={submitting}
+              className="h-11 w-full md:h-9 md:w-auto"
+            >
               {t("common.cancel")}
             </Button>
-            <Button variant="destructive" onClick={() => void resetChangedHostKey()} disabled={submitting}>
+            <Button
+              variant="destructive"
+              onClick={() => void resetChangedHostKey()}
+              disabled={submitting}
+              className="h-11 w-full md:h-9 md:w-auto"
+            >
               {submitting ? <Loader2 className="animate-spin" /> : <Trash2 />}
               {t("terminal.ssh.resetHostKey")}
             </Button>

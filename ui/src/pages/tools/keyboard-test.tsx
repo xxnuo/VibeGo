@@ -1,6 +1,7 @@
-import { Keyboard as KeyboardIcon } from "lucide-react";
+import { Keyboard as KeyboardIcon, List } from "lucide-react";
 import React, { useCallback, useRef, useState } from "react";
 import type { KeyEvent } from "@/components/keyboard";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useTranslation } from "@/lib/i18n";
 import { registerPage } from "@/pages/registry";
 import type { PageViewProps } from "@/pages/types";
@@ -30,6 +31,7 @@ function formatEvent(e: KeyEvent): string {
 const KeyboardTestView: React.FC<PageViewProps> = () => {
   const locale = useAppStore((s) => s.locale);
   const t = useTranslation(locale);
+  const isMobile = useIsMobile();
   const [text, setText] = useState<string>("");
   const [eventLog, setEventLog] = useState<EventLogEntry[]>([]);
   const nextId = useRef(0);
@@ -37,6 +39,7 @@ const KeyboardTestView: React.FC<PageViewProps> = () => {
   const logRef = useRef<HTMLDivElement>(null);
   const historyRef = useRef<string[]>([]);
   const [useNativeKb, setUseNativeKb] = useState(false);
+  const [eventLogVisible, setEventLogVisible] = useState(false);
 
   const scrollBottom = useCallback((ref: React.RefObject<HTMLDivElement | null>) => {
     requestAnimationFrame(() => {
@@ -329,34 +332,65 @@ const KeyboardTestView: React.FC<PageViewProps> = () => {
             {t("plugin.keyboardTest.title")}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={handleClear}
-          style={{
-            padding: "4px 12px",
-            borderRadius: "6px",
-            border: "1px solid var(--ide-border)",
-            background: "transparent",
-            color: "var(--ide-text)",
-            fontSize: "12px",
-            cursor: "pointer",
-          }}
-        >
-          {t("plugin.keyboardTest.clear")}
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {isMobile && (
+            <button
+              type="button"
+              onClick={() => setEventLogVisible((visible) => !visible)}
+              aria-label={t("plugin.keyboardTest.eventLog")}
+              aria-controls="keyboard-test-event-log"
+              aria-expanded={eventLogVisible}
+              title={t("plugin.keyboardTest.eventLog")}
+              style={{
+                minHeight: "44px",
+                minWidth: "44px",
+                display: "grid",
+                placeItems: "center",
+                padding: "0",
+                borderRadius: "6px",
+                border: "1px solid var(--ide-border)",
+                background: eventLogVisible ? "var(--ide-panel)" : "transparent",
+                color: "var(--ide-text)",
+                cursor: "pointer",
+              }}
+            >
+              <List size={16} />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleClear}
+            aria-label={t("plugin.keyboardTest.clear")}
+            style={{
+              minHeight: "44px",
+              padding: "4px 12px",
+              borderRadius: "6px",
+              border: "1px solid var(--ide-border)",
+              background: "transparent",
+              color: "var(--ide-text)",
+              fontSize: "12px",
+              cursor: "pointer",
+            }}
+          >
+            {t("plugin.keyboardTest.clear")}
+          </button>
+        </div>
       </div>
 
       <div
         style={{
           flex: 1,
+          minHeight: 0,
           display: "flex",
-          flexDirection: "row",
+          flexDirection: isMobile ? "column" : "row",
           overflow: "hidden",
           position: "relative",
         }}
       >
         <textarea
           ref={textareaRef}
+          name="keyboard-test-input"
+          aria-label={t("plugin.keyboardTest.placeholder")}
           value={text}
           onChange={(e) => {
             historyRef.current.push(text);
@@ -371,10 +405,12 @@ const KeyboardTestView: React.FC<PageViewProps> = () => {
           placeholder={t("plugin.keyboardTest.placeholder")}
           style={{
             flex: 1,
+            minHeight: 0,
+            width: isMobile ? "100%" : undefined,
             padding: "16px",
             paddingBottom: "260px", // space for floating keyboard
             fontFamily: "var(--font-mono)",
-            fontSize: "14px",
+            fontSize: "16px",
             lineHeight: 1.6,
             color: "var(--ide-text)",
             background: "var(--ide-panel)",
@@ -385,63 +421,69 @@ const KeyboardTestView: React.FC<PageViewProps> = () => {
           }}
         />
 
-        <div
-          ref={logRef}
-          style={{
-            width: "130px", // a bit more room for text
-            flexShrink: 0,
-            overflowY: "auto",
-            padding: "12px 8px 260px", // bottom padding so list can scroll past keyboard
-            fontSize: "12px",
-            fontFamily: "var(--font-mono)",
-            color: "var(--ide-mute)",
-            background: "var(--ide-bg)",
-            borderLeft: "1px solid var(--ide-border)",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
+        {(!isMobile || eventLogVisible) && (
           <div
+            ref={logRef}
+            id="keyboard-test-event-log"
             style={{
-              fontSize: "11px",
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "0.5px",
-              marginBottom: "8px",
-              color: "var(--ide-text)",
-              opacity: 0.6,
+              width: isMobile ? "100%" : "130px", // a bit more room for text
+              height: isMobile ? "clamp(112px, 34%, 168px)" : undefined,
+              flex: isMobile ? "0 1 clamp(112px, 34%, 168px)" : "0 0 130px",
+              minHeight: isMobile ? "112px" : undefined,
+              overflowY: "auto",
+              padding: isMobile ? "8px 8px 16px" : "12px 8px 260px", // bottom padding so list can scroll past keyboard
+              fontSize: "12px",
+              fontFamily: "var(--font-mono)",
+              color: "var(--ide-mute)",
+              background: "var(--ide-bg)",
+              borderLeft: isMobile ? "none" : "1px solid var(--ide-border)",
+              borderTop: isMobile ? "1px solid var(--ide-border)" : "none",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
-            {t("plugin.keyboardTest.eventLog")}
-          </div>
-          {eventLog.map((entry) => (
             <div
-              key={entry.id}
               style={{
-                padding: "4px 6px",
-                borderRadius: "4px",
-                marginBottom: "4px",
-                display: "flex",
-                justifyContent: "space-between",
-                gap: "8px",
-                background: "var(--ide-panel)",
+                fontSize: "11px",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+                marginBottom: "8px",
+                color: "var(--ide-text)",
+                opacity: 0.6,
               }}
             >
-              <span
+              {t("plugin.keyboardTest.eventLog")}
+            </div>
+            {eventLog.map((entry) => (
+              <div
+                key={entry.id}
                 style={{
-                  color: "var(--ide-text)",
-                  fontWeight: entry.event.type === "char" ? 400 : 600,
-                  wordBreak: "break-all",
-                  whiteSpace: "pre-wrap",
-                  textAlign: "center",
-                  width: "100%",
+                  padding: "4px 6px",
+                  borderRadius: "4px",
+                  marginBottom: "4px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "8px",
+                  background: "var(--ide-panel)",
                 }}
               >
-                {entry.formatted}
-              </span>
-            </div>
-          ))}
-        </div>
+                <span
+                  style={{
+                    color: "var(--ide-text)",
+                    fontWeight: entry.event.type === "char" ? 400 : 600,
+                    wordBreak: "break-all",
+                    whiteSpace: "pre-wrap",
+                    textAlign: "center",
+                    width: "100%",
+                  }}
+                >
+                  {entry.formatted}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

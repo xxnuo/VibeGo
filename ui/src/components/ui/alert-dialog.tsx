@@ -7,10 +7,104 @@ import { AlertDialog as AlertDialogPrimitive } from "radix-ui"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
+function useFocusRestore(open: boolean | undefined) {
+  const restoreRef = React.useRef<HTMLElement | null>(null)
+  const previousOpenRef = React.useRef(open)
+
+  React.useInsertionEffect(() => {
+    if (typeof document === "undefined") return
+
+    if (open && !previousOpenRef.current) {
+      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      restoreRef.current = active
+      if (active && active !== document.body) active.blur()
+    }
+
+  }, [open])
+
+  React.useEffect(() => {
+    if (typeof document === "undefined") return
+
+    let cleanup: (() => void) | undefined
+
+    if (!open && previousOpenRef.current) {
+      const target = restoreRef.current
+      restoreRef.current = null
+      if (target?.isConnected) {
+        let frame = 0
+        let timeout = 0
+        let observer: MutationObserver | null = null
+        cleanup = () => {
+          cancelAnimationFrame(frame)
+          window.clearTimeout(timeout)
+          observer?.disconnect()
+        }
+        const restore = () => {
+          if (!target.isConnected) {
+            cleanup?.()
+            return
+          }
+          const active = document.activeElement instanceof HTMLElement ? document.activeElement : null
+          if (
+            active &&
+            active !== document.body &&
+            !active.closest('[aria-hidden="true"]') &&
+            !active.closest('[data-slot="alert-dialog-content"]')
+          ) {
+            cleanup?.()
+            return
+          }
+          if (!target.closest('[aria-hidden="true"]')) {
+            target.focus({ preventScroll: true })
+            cleanup?.()
+          }
+        }
+        frame = requestAnimationFrame(restore)
+        observer = new MutationObserver(restore)
+        observer.observe(document.body, {
+          attributes: true,
+          childList: true,
+          subtree: true,
+          attributeFilter: ["aria-hidden"],
+        })
+        timeout = window.setTimeout(() => {
+          restore()
+          cleanup?.()
+        }, 500)
+      }
+    }
+
+    previousOpenRef.current = open
+    return cleanup
+  }, [open])
+}
+
 function AlertDialog({
+  open,
+  defaultOpen,
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
-  return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />
+  const controlled = open !== undefined
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen ?? false)
+  const effectiveOpen = controlled ? open : uncontrolledOpen
+  const handleOpenChange = React.useCallback(
+    (nextOpen: boolean) => {
+      if (!controlled) setUncontrolledOpen(nextOpen)
+      onOpenChange?.(nextOpen)
+    },
+    [controlled, onOpenChange]
+  )
+
+  useFocusRestore(effectiveOpen)
+  return (
+    <AlertDialogPrimitive.Root
+      data-slot="alert-dialog"
+      {...props}
+      {...(controlled ? { open } : { defaultOpen })}
+      onOpenChange={handleOpenChange}
+    />
+  )
 }
 
 function AlertDialogTrigger({
@@ -47,6 +141,7 @@ function AlertDialogOverlay({
 
 function AlertDialogContent({
   className,
+  onCloseAutoFocus,
   size = "default",
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Content> & {
@@ -58,10 +153,14 @@ function AlertDialogContent({
       <AlertDialogPrimitive.Content
         data-slot="alert-dialog-content"
         data-size={size}
+        onCloseAutoFocus={(event) => {
+          if (onCloseAutoFocus) onCloseAutoFocus(event)
+          else event.preventDefault()
+        }}
         className={cn(
           "group/alert-dialog-content fixed z-50 grid w-full gap-4 bg-background shadow-lg duration-200 outline-none",
           "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
-          "inset-x-0 top-auto bottom-0 translate-x-0 translate-y-0 max-h-[calc(100dvh-0.75rem)] overflow-y-auto rounded-t-2xl rounded-b-none border-t border-x-0 border-b-0 p-4 pb-5",
+          "inset-x-0 top-auto bottom-0 translate-x-0 translate-y-0 max-h-[calc(100dvh_-_env(safe-area-inset-top)_-_0.75rem)] overflow-y-auto rounded-t-2xl rounded-b-none border-t border-x-0 border-b-0 p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]",
           "md:inset-auto md:top-[50%] md:left-[50%] md:-translate-x-[50%] md:-translate-y-[50%] md:w-full md:rounded-2xl md:border md:p-6 md:pb-6",
           "data-[size=sm]:md:max-w-sm data-[size=default]:md:max-w-lg",
           className

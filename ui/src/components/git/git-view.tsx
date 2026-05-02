@@ -1,4 +1,5 @@
 import {
+  AlertCircle,
   ArrowDown,
   ArrowUp,
   CloudUpload,
@@ -10,9 +11,13 @@ import {
   GitGraph,
   GitPullRequest,
   History,
+  ListRestart,
   Loader2,
+  MoreHorizontal,
   RefreshCw,
+  RotateCcw,
   Settings2,
+  SkipForward,
 } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -34,7 +39,10 @@ import BranchSelector from "@/components/git/branch-selector";
 import DesktopGitWorkspace from "@/components/git/desktop-git-workspace";
 import GitChangesView from "@/components/git/git-changes-view";
 import GitHistoryView from "@/components/git/git-history-view";
+import GitMobileActions from "@/components/git/git-mobile-actions";
 import GitRepositoryDialog from "@/components/git/git-repository-dialog";
+import GitRepositorySettings from "@/components/git/git-repository-settings";
+import GithubPanel from "@/components/git/github-panel";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePageTopBar } from "@/hooks/use-page-top-bar";
 import { getTranslation, type Locale } from "@/lib/i18n";
@@ -126,6 +134,18 @@ export const getHistoryCherryPickRequest = (commits: GitCommit[]) => {
   return { commit: "", action: "start" as const, options: { commits: hashes } };
 };
 
+const gitOperationTranslationKey = (operation: string): string => {
+  switch (operation) {
+    case "cherry-pick":
+      return "cherryPick";
+    case "reset":
+    case "reset-to-commit":
+      return "resetToCommit";
+    default:
+      return operation;
+  }
+};
+
 const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, onConflict, isActive = true }) => {
   const t = (key: string) => getTranslation(locale, key);
   const dialog = useDialog();
@@ -134,10 +154,14 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
   const [repositoryDialogMode, setRepositoryDialogMode] = useState<"create" | "clone" | null>(null);
   const [repositorySettingsOpen, setRepositorySettingsOpen] = useState(false);
   const [githubPanelOpen, setGithubPanelOpen] = useState(false);
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
+  const mobileActionsTriggerRef = useRef<HTMLElement | null>(null);
   // Keep commit selection outside the responsive views so changing viewport or
   // switching between Changes and History does not lose the user's selection.
   const [selectedHistoryHashes, setSelectedHistoryHashes] = useState<string[]>([]);
   const branchTriggerRef = useRef<HTMLButtonElement>(null);
+  const changesTabRef = useRef<HTMLButtonElement>(null);
+  const historyTabRef = useRef<HTMLButtonElement>(null);
   const currentSessionId = useSessionStore((s) => s.currentSessionId);
   const openFolder = useSessionStore((s) => s.openFolder);
   const {
@@ -707,13 +731,29 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
     if (aheadCount > 0 || tagCount > 0) return { label: pushLabel, icon: <ArrowUp size={14} />, action: handlePush };
     return { label: t("git.fetch"), icon: <RefreshCw size={14} />, action: handleFetch };
   }, [hasRemote, aheadCount, behindCount, tagsToPush, tagsToPushError, handleFetch, handlePull, handlePush, t]);
+  const operationInProgress = operation?.state === "in_progress" || operation?.state === "conflicts";
+  const operationCanSkip =
+    operation?.operation === "rebase" || operation?.operation === "cherry-pick" || operation?.operation === "revert";
+  const operationLabel = operation
+    ? getTranslation(locale, `git.${gitOperationTranslationKey(operation.operation)}`) || operation.operation
+    : "";
+  const focusMobileTab = useCallback(
+    (tab: "changes" | "history") => {
+      setActiveTab(tab);
+      window.requestAnimationFrame(() => {
+        const targetRef = tab === "changes" ? changesTabRef : historyTabRef;
+        if (targetRef.current?.isConnected) targetRef.current.focus();
+      });
+    },
+    [setActiveTab]
+  );
 
   const topBarConfig = useMemo(() => {
     if (!isActive) return null;
     if (isRepo !== true) {
       return {
         show: true,
-        leftButtons: [{ icon: <GitGraph size={18} />, active: true }],
+        leftButtons: [],
         centerContent: null,
         rightButtons: [],
       };
@@ -794,41 +834,84 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
     }
     return {
       show: true,
-      leftButtons: [{ icon: <GitGraph size={18} />, active: true }],
+      leftButtons: [],
       centerContent: (
-        <div className="flex items-center gap-1 h-full">
-          <div
+        <div
+          className="flex h-full items-center gap-0.5 min-[360px]:gap-1"
+          role="tablist"
+          aria-label={t("sidebar.git")}
+        >
+          <button
+            ref={changesTabRef}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "changes"}
+            tabIndex={activeTab === "changes" ? 0 : -1}
             onClick={() => setActiveTab("changes")}
-            className={`shrink-0 px-2.5 h-7 rounded-md flex items-center gap-1 text-xs border transition-all cursor-pointer ${
+            onKeyDown={(event) => {
+              if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+              event.preventDefault();
+              focusMobileTab("history");
+            }}
+            aria-label={`${t("git.changes")}${allFiles.length > 0 ? ` (${allFiles.length})` : ""}`}
+            className={`flex h-11 min-w-11 shrink-0 items-center justify-center gap-0.5 rounded-md border px-1.5 text-xs transition-all min-[360px]:gap-1 min-[360px]:px-2.5 ${
               activeTab === "changes"
                 ? "bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm"
                 : "bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text"
             }`}
           >
-            <FileText size={12} />
+            <FileText size={12} className="hidden min-[360px]:block" />
             <span className="font-medium">
               {t("git.changes")}
-              {allFiles.length > 0 && ` (${allFiles.length})`}
+              {allFiles.length > 0 && <span className="hidden min-[390px]:inline"> ({allFiles.length})</span>}
             </span>
-          </div>
-          <div
+          </button>
+          <button
+            ref={historyTabRef}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "history"}
+            tabIndex={activeTab === "history" ? 0 : -1}
             onClick={() => setActiveTab("history")}
-            className={`shrink-0 px-2.5 h-7 rounded-md flex items-center gap-1 text-xs border transition-all cursor-pointer ${
+            onKeyDown={(event) => {
+              if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+              event.preventDefault();
+              focusMobileTab("changes");
+            }}
+            className={`flex h-11 min-w-11 shrink-0 items-center justify-center gap-0.5 rounded-md border px-1.5 text-xs transition-all min-[360px]:gap-1 min-[360px]:px-2.5 ${
               activeTab === "history"
                 ? "bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm"
                 : "bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text"
             }`}
           >
-            <History size={12} />
+            <History size={12} className="hidden min-[360px]:block" />
             <span className="font-medium">{t("git.history")}</span>
-          </div>
+          </button>
         </div>
       ),
       rightButtons: [
         {
           icon: <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />,
+          title: t("git.refresh"),
           onClick: handleRefresh,
           disabled: isLoading,
+        },
+        {
+          icon: <MoreHorizontal size={18} />,
+          title: t("git.moreActions"),
+          onClick: () => {
+            const activeElement = document.activeElement;
+            if (activeElement instanceof HTMLElement && activeElement !== document.body) {
+              mobileActionsTriggerRef.current = activeElement;
+            } else {
+              mobileActionsTriggerRef.current =
+                Array.from(document.querySelectorAll<HTMLElement>("button[aria-label]")).find(
+                  (element) => element.getAttribute("aria-label") === t("git.moreActions")
+                ) ?? null;
+            }
+            setMobileActionsOpen(true);
+          },
+          active: mobileActionsOpen,
         },
       ],
     };
@@ -841,6 +924,7 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
     isLoading,
     t,
     setActiveTab,
+    focusMobileTab,
     handleRefresh,
     path,
     currentBranch,
@@ -850,6 +934,7 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
     smartAction,
     repositorySettingsOpen,
     githubPanelOpen,
+    mobileActionsOpen,
   ]);
 
   usePageTopBar(topBarConfig, [topBarConfig]);
@@ -883,11 +968,21 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
 
   const handleStashDrop = useCallback(
     async (index: number, oid?: string) => {
+      const stashEntry = stashes.find((entry) => entry.index === index && (!oid || entry.oid === oid));
+      const confirmed = await dialog.confirm(
+        t("git.stashDropConfirmTitle"),
+        (t("git.stashDropConfirmMessage") || "{message}").replace(
+          "{message}",
+          stashEntry?.message || `stash@{${index}}`
+        ),
+        { confirmText: t("git.drop"), confirmVariant: "danger" }
+      );
+      if (!confirmed) return;
       if (!(await stashDrop(index, oid))) {
         await dialog.alert(t("git.operationFailed"), getOrCreateGitStore(groupId).getState().error || undefined);
       }
     },
-    [dialog, groupId, stashDrop, t]
+    [dialog, groupId, stashDrop, stashes, t]
   );
 
   const handleFileClick = useCallback(
@@ -1113,27 +1208,30 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
             <span className="text-ide-text text-sm font-medium">{t("git.notARepo")}</span>
             <span className="text-ide-mute text-xs max-w-[280px]">{t("git.notARepoHint")}</span>
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-2">
+          <div className="flex w-full max-w-sm flex-col items-stretch justify-center gap-2 sm:w-auto sm:max-w-none sm:flex-row sm:flex-wrap sm:items-center">
             <button
+              type="button"
               onClick={handleInitRepo}
               disabled={isLoading}
-              className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-ide-accent text-ide-bg hover:bg-ide-accent/80 transition-colors disabled:opacity-50"
+              className="flex min-h-11 items-center justify-center gap-2 rounded-md bg-ide-accent px-3 py-2 text-sm font-medium text-ide-bg transition-colors hover:bg-ide-accent/80 disabled:opacity-50"
             >
               <GitGraph size={16} />
               {t("git.initRepo")}
             </button>
             <button
+              type="button"
               onClick={() => setRepositoryDialogMode("create")}
               disabled={isLoading}
-              className="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-ide-text border border-ide-border bg-ide-panel hover:bg-ide-bg transition-colors disabled:opacity-50"
+              className="flex min-h-11 items-center justify-center gap-2 rounded-md border border-ide-border bg-ide-panel px-3 py-2 text-sm text-ide-text transition-colors hover:bg-ide-bg disabled:opacity-50"
             >
               <FolderPlus size={16} />
               {t("git.createRepositoryAction")}
             </button>
             <button
+              type="button"
               onClick={() => setRepositoryDialogMode("clone")}
               disabled={isLoading}
-              className="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-ide-text border border-ide-border bg-ide-panel hover:bg-ide-bg transition-colors disabled:opacity-50"
+              className="flex min-h-11 items-center justify-center gap-2 rounded-md border border-ide-border bg-ide-panel px-3 py-2 text-sm text-ide-text transition-colors hover:bg-ide-bg disabled:opacity-50"
             >
               <Download size={16} />
               {t("git.cloneRepositoryAction")}
@@ -1158,15 +1256,19 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
     <>
       <div className="flex flex-col h-full bg-ide-bg">
         <div
-          className={`h-9 items-center gap-2 px-3 bg-ide-panel border-b border-ide-border shrink-0 ${isMobile ? "flex" : "hidden"}`}
+          className={`h-11 items-center gap-2 border-b border-ide-border bg-ide-panel px-3 ${isMobile ? "flex" : "hidden"}`}
         >
           <button
-            className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-ide-text hover:bg-ide-accent/10 active:bg-ide-accent/15 transition-colors min-w-0"
+            type="button"
+            className="flex min-h-11 min-w-0 flex-1 items-center gap-1.5 rounded px-2 py-1 text-xs text-ide-text transition-colors hover:bg-ide-accent/10 active:bg-ide-accent/15"
             onClick={() => setShowBranchSelector(true)}
             disabled={branches.length === 0}
+            aria-haspopup="dialog"
+            aria-expanded={showBranchSelector}
+            aria-label={`${t("git.branches")}: ${currentBranch || t("git.branches")}`}
           >
             <GitBranch size={14} className="text-ide-accent shrink-0" />
-            <span className="truncate max-w-[120px]">{currentBranch || "branch"}</span>
+            <span className="truncate">{currentBranch || "branch"}</span>
             {(aheadCount > 0 || behindCount > 0) && (
               <span className="flex items-center gap-1 shrink-0">
                 {aheadCount > 0 && (
@@ -1184,20 +1286,78 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
               </span>
             )}
           </button>
-          <div className="flex-1" />
           {(hasRemote || aheadCount > 0 || (!tagsToPushError && tagsToPush.length > 0)) && (
             <button
-              className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-ide-accent hover:bg-ide-accent/10 active:bg-ide-accent/15 transition-colors disabled:opacity-50 shrink-0"
+              type="button"
+              className="flex min-h-11 max-w-[48%] shrink-0 items-center gap-1.5 rounded px-2 py-1 text-xs text-ide-accent transition-colors hover:bg-ide-accent/10 active:bg-ide-accent/15 disabled:opacity-50"
               onClick={() => {
                 void smartAction.action();
               }}
               disabled={isLoading}
+              title={smartAction.label}
             >
               {smartAction.icon}
-              <span>{smartAction.label}</span>
+              <span className="truncate">{smartAction.label}</span>
             </button>
           )}
         </div>
+
+        {isMobile && error && !operationInProgress && (
+          <div
+            className="flex min-h-10 items-center gap-2 border-b border-red-500/30 bg-red-500/10 px-3 py-2"
+            role="alert"
+            aria-live="assertive"
+          >
+            <AlertCircle size={14} className="shrink-0 text-red-400" />
+            <span className="min-w-0 flex-1 truncate text-xs text-red-400" title={error}>
+              {error}
+            </span>
+          </div>
+        )}
+
+        {isMobile && operationInProgress && operation && (
+          <div
+            className="flex min-h-12 flex-wrap items-center gap-2 border-b border-orange-500/30 bg-orange-500/10 px-2 py-1.5"
+            role="status"
+            aria-live="polite"
+          >
+            <AlertCircle size={14} className="shrink-0 text-orange-400" />
+            <span className="min-w-0 flex-1 truncate text-xs text-orange-300">
+              {operationLabel}
+              {operation.progress ? ` ${operation.progress.position}/${operation.progress.total}` : ""}
+              {operation.progress?.currentCommitSummary ? ` · ${operation.progress.currentCommitSummary}` : ""}
+            </span>
+            {operationCanSkip && (
+              <button
+                type="button"
+                className="flex min-h-11 items-center gap-1 rounded-sm px-2 text-[11px] text-ide-text hover:bg-ide-panel disabled:opacity-50"
+                onClick={() => void handleOperationAction("skip")}
+                disabled={isLoading}
+              >
+                <SkipForward size={13} />
+                {t("git.skip")}
+              </button>
+            )}
+            <button
+              type="button"
+              className="flex min-h-11 items-center gap-1 rounded-sm px-2 text-[11px] text-ide-text hover:bg-ide-panel disabled:opacity-50"
+              onClick={() => void handleOperationAction("continue")}
+              disabled={isLoading}
+            >
+              <ListRestart size={13} />
+              {t("git.continue")}
+            </button>
+            <button
+              type="button"
+              className="flex min-h-11 items-center gap-1 rounded-sm px-2 text-[11px] text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+              onClick={() => void handleOperationAction("abort")}
+              disabled={isLoading}
+            >
+              <RotateCcw size={13} />
+              {t("git.abort")}
+            </button>
+          </div>
+        )}
 
         <div className="flex-1 overflow-hidden">
           {!isMobile ? (
@@ -1328,7 +1488,6 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
               onRevert={handleHistoryRevert}
               onResetToCommit={handleHistoryReset}
               onSquash={handleHistorySquash}
-              onReorder={handleHistoryReorder}
             />
           )}
         </div>
@@ -1354,6 +1513,61 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
         onPrune={handlePruneRemote}
         anchorRef={isMobile ? undefined : branchTriggerRef}
       />
+      {isMobile && (
+        <GitMobileActions
+          open={mobileActionsOpen}
+          onOpenChange={setMobileActionsOpen}
+          locale={locale}
+          isLoading={isLoading}
+          operation={operation}
+          selectedCommit={selectedCommit}
+          currentBranch={currentBranch}
+          aheadCount={aheadCount}
+          repositorySettingsOpen={repositorySettingsOpen}
+          githubPanelOpen={githubPanelOpen}
+          returnFocusRef={mobileActionsTriggerRef}
+          onOpenRepositorySettings={() => {
+            setMobileActionsOpen(false);
+            setGithubPanelOpen(false);
+            setRepositorySettingsOpen(true);
+          }}
+          onOpenGithub={() => {
+            setMobileActionsOpen(false);
+            setRepositorySettingsOpen(false);
+            setGithubPanelOpen(true);
+          }}
+          onMerge={handleMerge}
+          onRebase={handleRebase}
+          onCherryPick={handleCherryPick}
+          onRevert={handleRevert}
+          onResetToCommit={handleResetToCommit}
+          onPush={handlePush}
+          onOperationAction={handleOperationAction}
+          onOperationStarted={() => setMobileActionsOpen(false)}
+        />
+      )}
+      {isMobile && repositorySettingsOpen && (
+        <GitRepositorySettings
+          path={path}
+          locale={locale}
+          returnFocusRef={mobileActionsTriggerRef}
+          onClose={() => setRepositorySettingsOpen(false)}
+          onChanged={handleRefresh}
+          onOpenWorktree={(worktreePath) => void openFolder(worktreePath)}
+        />
+      )}
+      {isMobile && githubPanelOpen && (
+        <GithubPanel
+          path={path}
+          locale={locale}
+          returnFocusRef={mobileActionsTriggerRef}
+          remoteUrls={remoteUrls}
+          currentBranch={currentBranch}
+          headHash={commits[0]?.hash}
+          onClose={() => setGithubPanelOpen(false)}
+          onChanged={handleRefresh}
+        />
+      )}
     </>
   );
 };

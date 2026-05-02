@@ -89,10 +89,10 @@ const GitImageDiffView: React.FC<GitImageDiffProps> = ({
   return (
     <div className="flex h-full min-h-0 flex-col bg-ide-bg">
       {hasBoth && (
-        <div className="flex min-h-8 items-center justify-end gap-1 border-b border-ide-border bg-ide-panel/50 px-2">
+        <div className="flex min-h-11 items-center justify-end gap-1 border-b border-ide-border bg-ide-panel/50 px-2 md:min-h-8">
           <button
             type="button"
-            className={`px-2 py-1 text-[10px] ${mode === "two-up" ? "bg-ide-accent/15 text-ide-text" : "text-ide-mute hover:bg-ide-panel"}`}
+            className={`inline-flex min-h-11 min-w-11 items-center justify-center px-2 py-1 text-[10px] md:min-h-0 md:min-w-0 ${mode === "two-up" ? "bg-ide-accent/15 text-ide-text" : "text-ide-mute hover:bg-ide-panel"}`}
             onClick={() => setMode("two-up")}
             aria-pressed={mode === "two-up"}
           >
@@ -100,7 +100,7 @@ const GitImageDiffView: React.FC<GitImageDiffProps> = ({
           </button>
           <button
             type="button"
-            className={`px-2 py-1 text-[10px] ${mode === "swipe" ? "bg-ide-accent/15 text-ide-text" : "text-ide-mute hover:bg-ide-panel"}`}
+            className={`inline-flex min-h-11 min-w-11 items-center justify-center px-2 py-1 text-[10px] md:min-h-0 md:min-w-0 ${mode === "swipe" ? "bg-ide-accent/15 text-ide-text" : "text-ide-mute hover:bg-ide-panel"}`}
             onClick={() => setMode("swipe")}
             aria-pressed={mode === "swipe"}
           >
@@ -115,7 +115,7 @@ const GitImageDiffView: React.FC<GitImageDiffProps> = ({
             {(newSource || newTruncated) && renderImage(newSource, t("git.imageCurrent"), newSize, newTruncated)}
           </div>
         ) : (
-          <div className="relative flex min-h-full min-w-[320px] items-stretch justify-center overflow-hidden bg-ide-bg p-3">
+          <div className="relative flex min-h-full min-w-0 items-stretch justify-center overflow-hidden bg-ide-bg p-3">
             <div className="relative flex min-h-64 w-full max-w-4xl items-center justify-center overflow-hidden bg-ide-panel">
               {newSource && (
                 <img
@@ -137,6 +137,8 @@ const GitImageDiffView: React.FC<GitImageDiffProps> = ({
               <span>{t("git.imagePrevious")}</span>
               <input
                 type="range"
+                id="git-image-diff-swipe"
+                name="git-image-diff-swipe"
                 min="0"
                 max="100"
                 value={swipePercent}

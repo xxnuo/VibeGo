@@ -81,20 +81,22 @@ const GroupButton: React.FC<GroupButtonProps> = ({
     if (isExpanded) {
       return (
         <div
-          className={`flex h-full items-center gap-0.5 px-1 ${
+          className={`flex h-11 min-h-11 items-center gap-0.5 px-1 ${
             hasMultipleGroups ? "bg-ide-panel/70 border border-ide-border/30 rounded-md shadow-inner" : ""
           }`}
         >
           {genericGroup.pages.map((page) => (
             <button
               key={page.id}
+              type="button"
               onClick={(event) => onPageClick(genericGroup, page.id, event.currentTarget)}
-              className={`px-2 h-full rounded flex items-center transition-all ${
+              className={`h-11 min-h-11 min-w-11 px-2 rounded flex items-center justify-center transition-all ${
                 isActive && genericGroup.activePageId === page.id
                   ? "text-ide-accent"
                   : "text-ide-mute hover:text-ide-text"
               }`}
               title={workspacePath ? `${getPageTitle(page.type)} - ${workspacePath}` : getPageTitle(page.type)}
+              aria-label={workspacePath ? `${getPageTitle(page.type)} - ${workspacePath}` : getPageTitle(page.type)}
             >
               {getPageTypeIcon(page.type)}
             </button>
@@ -104,11 +106,13 @@ const GroupButton: React.FC<GroupButtonProps> = ({
     }
     return (
       <button
+        type="button"
         onClick={(event) => onGroupClick(group, event.currentTarget)}
-        className={`px-3 h-full rounded flex items-center gap-2 transition-all ${
+        className={`h-11 min-h-11 min-w-11 px-3 rounded flex items-center justify-center gap-2 transition-all ${
           isActive ? "bg-ide-panel text-ide-accent shadow-sm" : "text-ide-mute hover:text-ide-text"
         }`}
         title={groupTitle}
+        aria-label={groupTitle}
       >
         {GROUP_TYPE_ICONS.group}
       </button>
@@ -119,11 +123,13 @@ const GroupButton: React.FC<GroupButtonProps> = ({
     const toolGroup = group as ToolGroup;
     return (
       <button
+        type="button"
         onClick={(event) => onGroupClick(group, event.currentTarget)}
-        className={`px-3 h-full rounded flex items-center gap-2 transition-all ${
+        className={`h-11 min-h-11 min-w-11 px-3 rounded flex items-center justify-center gap-2 transition-all ${
           isActive ? "bg-ide-panel text-ide-accent shadow-sm" : "text-ide-mute hover:text-ide-text"
         }`}
         title={getTitle(group)}
+        aria-label={getTitle(group)}
       >
         {getToolIcon(toolGroup.pageId)}
       </button>
@@ -132,11 +138,13 @@ const GroupButton: React.FC<GroupButtonProps> = ({
 
   return (
     <button
+      type="button"
       onClick={(event) => onGroupClick(group, event.currentTarget)}
-      className={`px-3 h-full rounded flex items-center gap-2 transition-all ${
+      className={`h-11 min-h-11 min-w-11 px-3 rounded flex items-center justify-center gap-2 transition-all ${
         isActive ? "bg-ide-panel text-ide-accent shadow-sm" : "text-ide-mute hover:text-ide-text"
       }`}
       title={getTitle(group)}
+      aria-label={getTitle(group)}
     >
       {GROUP_TYPE_ICONS[group.type] || GROUP_TYPE_ICONS.tool}
     </button>
@@ -162,18 +170,19 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick, onNewPage }) => {
 
   const [compactMode] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
+  const sortRestoreFocusRef = useRef<HTMLElement | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastClickTime = useRef<Record<string, number>>({});
   const [isFullscreen, setIsFullscreen] = useState(false);
   const cornerButtonClass =
-    "shrink-0 w-8 h-8 rounded-md text-ide-accent hover:bg-ide-accent hover:text-ide-bg flex items-center justify-center border border-ide-border transition-colors";
+    "shrink-0 w-11 h-11 rounded-md text-ide-accent hover:bg-ide-accent hover:text-ide-bg flex items-center justify-center border border-ide-border transition-colors";
 
   const handleGroupClick = useCallback(
     (group: PageGroup, target: HTMLElement) => {
       const now = Date.now();
       const lastClick = lastClickTime.current[group.id] || 0;
 
-      if (group.type === "group") {
+      if (group.type === "group" && activeGroupId === group.id) {
         showWorkspaceHint(group, target);
       }
 
@@ -189,11 +198,13 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick, onNewPage }) => {
 
   const handlePageClick = useCallback(
     (group: GenericGroup, pageId: string, target: HTMLElement) => {
-      showWorkspaceHint(group, target);
+      if (activeGroupId === group.id && group.activePageId === pageId) {
+        showWorkspaceHint(group, target);
+      }
       setActiveGroup(group.id);
       setActivePage(group.id, pageId);
     },
-    [setActiveGroup, setActivePage, showWorkspaceHint]
+    [activeGroupId, setActiveGroup, setActivePage, showWorkspaceHint]
   );
 
   const shouldExpand = (group: PageGroup) => {
@@ -294,7 +305,7 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick, onNewPage }) => {
     ...taskbarReorder.bindItem(id),
     style: taskbarReorder.getItemStyle(id),
     className: cn(
-      "shrink-0 relative transition-transform",
+      "h-11 min-h-11 shrink-0 relative transition-transform",
       taskbarReorder.activeId === id && "z-50 opacity-95 shadow-lg cursor-grabbing",
       taskbarReorder.overId === id && "ring-1 ring-ide-accent rounded-lg"
     ),
@@ -345,12 +356,16 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick, onNewPage }) => {
     const canCloseAll = isGroup && groups.some((group) => !(group.type === "home" && groups.length <= 1));
     return (
       <TaskbarItemMenu
+        key={taskbarItem.id}
         title={taskbarItem.type === "custom" ? taskbarItem.item.label : getGroupTitle(taskbarItem.group)}
         onActivate={() => activateItem(taskbarItem)}
         onClose={isGroup ? () => closeGroup(taskbarItem.group) : undefined}
         onCloseOthers={isGroup ? () => closeAllGroups(taskbarItem.group.id) : undefined}
         onCloseAll={isGroup ? () => closeAllGroups() : undefined}
-        onSort={() => setSortOpen(true)}
+        onSort={(restoreFocusTo) => {
+          sortRestoreFocusRef.current = restoreFocusTo?.isConnected ? restoreFocusTo : null;
+          setSortOpen(true);
+        }}
         canClose={canClose}
         canCloseOthers={canCloseOthers}
         canCloseAll={canCloseAll}
@@ -396,13 +411,15 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick, onNewPage }) => {
           {...getDragProps(taskbarItem.id)}
         >
           <button
+            type="button"
             onClick={item.onClick}
-            className={`px-3 h-10 rounded flex items-center gap-2 transition-all relative ${
+            className={`h-11 min-h-11 min-w-11 px-3 rounded flex items-center justify-center gap-2 transition-all relative ${
               bottomBarConfig.activeItemId === item.id
                 ? "bg-ide-panel text-ide-accent shadow-sm"
                 : "text-ide-mute hover:text-ide-text"
             }`}
             title={item.label}
+            aria-label={item.label}
           >
             {item.icon}
             {item.badge && (
@@ -420,48 +437,58 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick, onNewPage }) => {
 
   return (
     <>
-      <footer className="md:hidden h-14 pb-safe bg-ide-panel border-t border-ide-border flex items-center justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.1)] overflow-hidden">
-        <button onClick={onMenuClick} className="h-full px-4 flex items-center gap-3">
-          <div className={cornerButtonClass}>
-            <Menu size={18} />
-          </div>
+      <footer className="md:hidden h-[calc(3.5rem_+_env(safe-area-inset-bottom))] min-h-[calc(3.5rem_+_env(safe-area-inset-bottom))] items-center gap-2 overflow-hidden border-t border-ide-border bg-ide-panel pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] pb-[env(safe-area-inset-bottom)] shadow-[0_-5px_15px_rgba(0,0,0,0.1)] z-20 flex">
+        <button
+          type="button"
+          onClick={onMenuClick}
+          className={cornerButtonClass}
+          title={t("common.menu") || "Menu"}
+          aria-label={t("common.menu") || "Menu"}
+        >
+          <Menu size={18} />
         </button>
 
         <div
           ref={containerRef}
-          className="flex h-10 bg-ide-bg rounded-lg p-1 border border-ide-border gap-1 overflow-x-auto custom-scrollbar touch-pan-x max-w-[70vw]"
+          className="flex h-[46px] min-h-[46px] min-w-0 flex-1 gap-1 overflow-x-auto rounded-md border border-ide-border bg-ide-bg custom-scrollbar touch-pan-x"
         >
           {orderedItems.length > 0 ? (
             orderedItems.map(renderItem)
           ) : isOnlyHome && onNewPage ? (
             <button
+              type="button"
               onClick={onNewPage}
-              className="px-3 h-full rounded flex items-center gap-2 transition-all text-ide-mute hover:text-ide-accent"
+              className="h-11 min-h-11 min-w-11 px-3 rounded flex items-center justify-center gap-2 transition-all text-ide-mute hover:text-ide-accent"
               title={t("common.newPage")}
+              aria-label={t("common.newPage")}
             >
               <Plus size={18} />
             </button>
           ) : (
-            <div className="w-8" />
+            <div className="w-11" />
           )}
           {orderedItems.length > 0 && onNewPage && !useCustomItems && (
             <button
+              type="button"
               onClick={onNewPage}
-              className="px-3 h-full rounded flex items-center gap-2 transition-all text-ide-mute hover:text-ide-accent shrink-0"
+              className="h-11 min-h-11 min-w-11 px-3 rounded flex items-center justify-center gap-2 transition-all text-ide-mute hover:text-ide-accent shrink-0"
               title={t("common.newPage")}
+              aria-label={t("common.newPage")}
             >
               <Plus size={18} />
             </button>
           )}
         </div>
 
-        <div className="flex items-center gap-2 px-4">
+        <div className="flex shrink-0 items-center gap-2">
           {rightButtons.map((button, index) => (
             <button
               key={index}
+              type="button"
               onClick={button.onClick}
               disabled={button.disabled}
               title={button.label}
+              aria-label={button.label}
               className={`${cornerButtonClass} ${button.active ? "bg-ide-accent text-ide-bg border-ide-accent" : ""} ${button.disabled ? "opacity-50 cursor-not-allowed" : ""}`}
             >
               {button.icon}
@@ -475,6 +502,7 @@ const BottomBar: React.FC<BottomBarProps> = ({ onMenuClick, onNewPage }) => {
         entries={sortEntries}
         onOpenChange={setSortOpen}
         onApply={(order) => setTaskbarOrder(order)}
+        restoreFocusRef={sortRestoreFocusRef}
       />
       <WorkspaceHintBubble hint={workspaceHint} />
     </>

@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { GitConflictResolveMode, GitConflictStages } from "@/api/git";
 import { gitApi } from "@/api/git";
 import { buildConflictDocuments } from "@/components/git/conflict-utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { Locale } from "@/stores";
 import "@/lib/monaco";
 import { useAppStore } from "@/stores/app-store";
@@ -71,6 +72,7 @@ const getLanguageFromFilename = (filename?: string): string => {
 const ConflictView: React.FC<ConflictViewProps> = ({ repoPath, filePath, locale, onResolve, onCancel }) => {
   const t = i18n[locale] || i18n.en;
   const appTheme = useAppStore((s) => s.theme);
+  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [conflictHash, setConflictHash] = useState("");
@@ -81,6 +83,13 @@ const ConflictView: React.FC<ConflictViewProps> = ({ repoPath, filePath, locale,
   const [activeTab, setActiveTab] = useState<"compare" | "edit">("compare");
   const compareModelIdRef = useRef(`git-conflict-compare-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const editModelIdRef = useRef(`git-conflict-edit-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const compareTabRef = useRef<HTMLButtonElement | null>(null);
+  const editTabRef = useRef<HTMLButtonElement | null>(null);
+  const initialFocusDoneRef = useRef(false);
+
+  const compareTabId = `${compareModelIdRef.current}-tab`;
+  const editTabId = `${editModelIdRef.current}-tab`;
+  const panelId = `${compareModelIdRef.current}-panel`;
 
   const editorTheme = useMemo(() => {
     return appTheme === "light" ? "light" : "vs-dark";
@@ -115,6 +124,27 @@ const ConflictView: React.FC<ConflictViewProps> = ({ repoPath, filePath, locale,
     };
     loadContent();
   }, [repoPath, filePath]);
+
+  useEffect(() => {
+    if (loading || loadError || initialFocusDoneRef.current) return;
+    initialFocusDoneRef.current = true;
+    window.requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (!(active instanceof HTMLElement) || active === document.body || !active.isConnected) {
+        compareTabRef.current?.focus();
+      }
+    });
+  }, [loading, loadError]);
+
+  const handleModeTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const nextTab = event.key === "ArrowRight" ? "edit" : "compare";
+    setActiveTab(nextTab);
+    window.requestAnimationFrame(() => {
+      (nextTab === "compare" ? compareTabRef : editTabRef).current?.focus();
+    });
+  };
 
   const handleUseOurs = () => {
     if (stages?.ours.deleted) {
@@ -154,33 +184,51 @@ const ConflictView: React.FC<ConflictViewProps> = ({ repoPath, filePath, locale,
   }
 
   return (
-    <div className="h-full flex flex-col bg-ide-bg">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-ide-border bg-ide-panel/50">
-        <div className="flex items-center gap-2">
-          <AlertTriangle size={16} className="text-yellow-500" />
-          <span className="text-sm font-medium text-ide-text">{filename}</span>
-          <span className="text-xs text-ide-mute">{t.title}</span>
+    <div className="flex h-full flex-col bg-ide-bg" role="region" aria-label={t.title}>
+      <div
+        className={`border-b border-ide-border bg-ide-panel/50 px-3 py-2 ${
+          isMobile ? "flex flex-col gap-2" : "flex items-center justify-between"
+        }`}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <AlertTriangle size={16} className="shrink-0 text-yellow-500" />
+          <span className="min-w-0 truncate text-sm font-medium text-ide-text" title={filename}>
+            {filename}
+          </span>
+          <span className="shrink-0 text-xs text-ide-mute">{t.title}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className={isMobile ? "grid grid-cols-2 gap-2" : "flex items-center gap-2"}>
           <button
             onClick={handleUseOurs}
-            className="px-2 py-1 text-xs bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30"
+            className={`bg-blue-500/20 px-2 text-xs text-blue-400 hover:bg-blue-500/30 ${
+              isMobile ? "min-h-11 min-w-0 rounded-sm py-2 leading-tight" : "rounded py-1"
+            }`}
           >
             {stages?.ours.deleted ? t.deleteOurs : t.useOurs}
           </button>
           <button
             onClick={handleUseTheirs}
-            className="px-2 py-1 text-xs bg-green-500/20 text-green-400 rounded hover:bg-green-500/30"
+            className={`bg-green-500/20 px-2 text-xs text-green-400 hover:bg-green-500/30 ${
+              isMobile ? "min-h-11 min-w-0 rounded-sm py-2 leading-tight" : "rounded py-1"
+            }`}
           >
             {stages?.theirs.deleted ? t.deleteTheirs : t.useTheirs}
           </button>
         </div>
       </div>
 
-      <div className="flex border-b border-ide-border">
+      <div className="flex border-b border-ide-border" role="tablist" aria-label={t.title}>
         <button
+          type="button"
+          ref={compareTabRef}
+          id={compareTabId}
+          role="tab"
+          aria-selected={activeTab === "compare"}
+          aria-controls={panelId}
+          tabIndex={activeTab === "compare" ? 0 : -1}
           onClick={() => setActiveTab("compare")}
-          className={`px-4 py-2 text-xs font-medium transition-colors ${
+          onKeyDown={handleModeTabKeyDown}
+          className={`${isMobile ? "min-h-11 flex-1 truncate px-2" : "px-4 py-2"} text-xs font-medium transition-colors ${
             activeTab === "compare"
               ? "text-ide-accent border-b-2 border-ide-accent"
               : "text-ide-mute hover:text-ide-text"
@@ -189,8 +237,16 @@ const ConflictView: React.FC<ConflictViewProps> = ({ repoPath, filePath, locale,
           {t.ours} vs {t.theirs}
         </button>
         <button
+          type="button"
+          ref={editTabRef}
+          id={editTabId}
+          role="tab"
+          aria-selected={activeTab === "edit"}
+          aria-controls={panelId}
+          tabIndex={activeTab === "edit" ? 0 : -1}
           onClick={() => setActiveTab("edit")}
-          className={`px-4 py-2 text-xs font-medium transition-colors ${
+          onKeyDown={handleModeTabKeyDown}
+          className={`${isMobile ? "min-h-11 flex-1 truncate px-2" : "px-4 py-2"} text-xs font-medium transition-colors ${
             activeTab === "edit" ? "text-ide-accent border-b-2 border-ide-accent" : "text-ide-mute hover:text-ide-text"
           }`}
         >
@@ -198,7 +254,12 @@ const ConflictView: React.FC<ConflictViewProps> = ({ repoPath, filePath, locale,
         </button>
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div
+        id={panelId}
+        role="tabpanel"
+        aria-labelledby={activeTab === "compare" ? compareTabId : editTabId}
+        className="flex-1 overflow-hidden"
+      >
         {activeTab === "compare" ? (
           <DiffEditor
             original={ours}
@@ -211,7 +272,7 @@ const ConflictView: React.FC<ConflictViewProps> = ({ repoPath, filePath, locale,
             modifiedModelPath={`${compareModelIdRef.current}-modified`}
             options={{
               readOnly: true,
-              renderSideBySide: true,
+              renderSideBySide: !isMobile,
               minimap: { enabled: false },
               scrollBeyondLastLine: false,
               fontSize: 13,
@@ -237,7 +298,7 @@ const ConflictView: React.FC<ConflictViewProps> = ({ repoPath, filePath, locale,
             options={{
               readOnly: false,
               originalEditable: false,
-              renderSideBySide: true,
+              renderSideBySide: !isMobile,
               minimap: { enabled: false },
               scrollBeyondLastLine: false,
               fontSize: 13,
@@ -247,10 +308,19 @@ const ConflictView: React.FC<ConflictViewProps> = ({ repoPath, filePath, locale,
         )}
       </div>
 
-      <div className="flex items-center justify-end gap-2 px-3 py-2 border-t border-ide-border bg-ide-panel/30">
+      <div
+        className={`gap-2 border-t border-ide-border bg-ide-panel/30 px-3 ${
+          isMobile
+            ? "grid grid-cols-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+            : "flex items-center justify-end py-2"
+        }`}
+      >
         <button
+          type="button"
           onClick={onCancel}
-          className="px-4 py-1.5 text-sm text-ide-mute hover:text-ide-text flex items-center gap-1"
+          className={`flex items-center justify-center gap-1 px-4 text-sm text-ide-mute hover:text-ide-text ${
+            isMobile ? "min-h-11 py-2" : "py-1.5"
+          }`}
         >
           <X size={14} />
           {t.cancel}
@@ -258,7 +328,9 @@ const ConflictView: React.FC<ConflictViewProps> = ({ repoPath, filePath, locale,
         <button
           onClick={() => void handleAccept()}
           disabled={!conflictHash || bothSidesDeleted}
-          className="px-4 py-1.5 text-sm bg-ide-accent text-ide-bg rounded flex items-center gap-1 hover:bg-ide-accent/80 disabled:cursor-not-allowed disabled:opacity-50"
+          className={`flex items-center justify-center gap-1 bg-ide-accent px-4 text-sm text-ide-bg hover:bg-ide-accent/80 disabled:cursor-not-allowed disabled:opacity-50 ${
+            isMobile ? "min-h-11 rounded-sm py-2" : "rounded py-1.5"
+          }`}
         >
           <Check size={14} />
           {t.accept}

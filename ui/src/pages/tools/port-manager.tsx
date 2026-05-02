@@ -13,7 +13,7 @@ import {
   Timer,
   Trash2,
 } from "lucide-react";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useId, useMemo, useState } from "react";
 import type { ForwardRule, PortInfo } from "@/api/port";
 import {
   AlertDialog,
@@ -78,76 +78,77 @@ const PortRow: React.FC<{
     <div className="border-b border-ide-border">
       <button
         type="button"
-        className="w-full flex items-center px-3 sm:px-4 py-2.5 sm:py-2 hover:bg-ide-panel/50 transition-colors cursor-pointer text-left"
+        className="flex min-h-11 w-full min-w-0 cursor-pointer items-center px-3 py-2.5 text-left transition-colors hover:bg-ide-panel/50 md:min-h-0 md:px-4 md:py-2"
         onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
       >
-        <div className="w-5 shrink-0 flex items-center">
+        <div className="flex w-5 shrink-0 items-center">
           {expanded ? (
             <ChevronDown size={14} className="text-ide-mute" />
           ) : (
             <ChevronRight size={14} className="text-ide-mute" />
           )}
         </div>
-        <div className="w-16 sm:w-20 shrink-0">
+        <div className="w-16 shrink-0 md:w-20">
           <span className="font-mono font-semibold text-sm text-ide-text">{port.port}</span>
         </div>
-        <div className="w-14 sm:w-16 shrink-0">
+        <div className="w-14 shrink-0 md:w-16">
           <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${getProtocolColor(port.protocol)}`}>
             {port.protocol.toUpperCase()}
           </span>
         </div>
-        <div className="hidden sm:block flex-1 min-w-0 text-xs text-ide-mute truncate font-mono">{port.localAddr}</div>
-        <div className="hidden sm:block w-16 shrink-0">
+        <div className="hidden min-w-0 flex-1 truncate font-mono text-xs text-ide-mute md:block">{port.localAddr}</div>
+        <div className="hidden w-16 shrink-0 md:block">
           {port.status && (
             <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-500/15 text-green-500">
               {t("plugin.portManager.listening")}
             </span>
           )}
         </div>
-        <div className="hidden sm:block w-16 shrink-0 text-xs text-ide-mute font-mono">
+        <div className="hidden w-16 shrink-0 font-mono text-xs text-ide-mute md:block">
           {port.pid > 0 ? port.pid : "-"}
         </div>
-        <div className="flex-1 sm:flex-none sm:w-32 shrink-0 text-xs text-ide-text truncate">
-          {port.processName || "-"}
-          <span className="sm:hidden text-ide-mute ml-1">{port.pid > 0 && `(${port.pid})`}</span>
+        <div className="flex min-w-0 flex-1 shrink-0 items-center text-xs text-ide-text md:flex-none md:w-32">
+          <span className="min-w-0 truncate">{port.processName || "-"}</span>
+          {port.pid > 0 && <span className="ml-1 shrink-0 text-ide-mute md:hidden">({port.pid})</span>}
         </div>
       </button>
 
       {expanded && (
-        <div className="px-3 sm:px-4 pb-3 pt-1 bg-ide-panel/30">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-xs mb-3">
-            <div>
+        <div className="min-w-0 bg-ide-panel/30 px-3 pb-3 pt-1 md:px-4">
+          <div className="mb-3 grid min-w-0 grid-cols-2 gap-x-4 gap-y-2 text-xs md:grid-cols-4">
+            <div className="min-w-0">
               <span className="text-ide-mute block">{t("plugin.portManager.port")}</span>
               <span className="text-ide-text font-mono font-semibold">{port.port}</span>
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-ide-mute block">{t("plugin.portManager.protocol")}</span>
               <span className="text-ide-text font-mono">{port.protocol.toUpperCase()}</span>
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-ide-mute block">{t("plugin.portManager.localAddr")}</span>
-              <span className="text-ide-text font-mono">{port.localAddr}</span>
+              <span className="break-all font-mono text-ide-text md:break-normal">{port.localAddr}</span>
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-ide-mute block">{t("plugin.portManager.status")}</span>
               <span className="text-green-500">{port.status || "-"}</span>
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-ide-mute block">{t("plugin.portManager.pid")}</span>
               <span className="text-ide-text font-mono">{port.pid > 0 ? port.pid : "-"}</span>
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-ide-mute block">{t("plugin.portManager.processName")}</span>
-              <span className="text-ide-text">{port.processName || "-"}</span>
+              <span className="break-words text-ide-text md:break-normal">{port.processName || "-"}</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex flex-col items-stretch gap-2 md:flex-row md:flex-wrap md:items-center">
             {port.protocol === "tcp" && (
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 text-xs gap-1"
+                className="h-11 w-full gap-1 text-xs md:h-7 md:w-auto"
                 onClick={(e) => {
                   e.stopPropagation();
                   const addr = port.localAddr.startsWith("0.0.0.0")
@@ -165,7 +166,7 @@ const PortRow: React.FC<{
             <Button
               variant="outline"
               size="sm"
-              className="h-7 text-xs gap-1"
+              className="h-11 w-full gap-1 text-xs md:h-7 md:w-auto"
               onClick={(e) => {
                 e.stopPropagation();
                 onCreateForward(port.port);
@@ -178,7 +179,7 @@ const PortRow: React.FC<{
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 text-xs gap-1 text-red-500 border-red-500/30 hover:bg-red-500/10 hover:text-red-600"
+                className="h-11 w-full gap-1 border-red-500/30 text-xs text-red-500 hover:bg-red-500/10 hover:text-red-600 md:h-7 md:w-auto"
                 onClick={(e) => {
                   e.stopPropagation();
                   onKill(port.pid);
@@ -199,6 +200,7 @@ const PortRow: React.FC<{
 const PortManagerView: React.FC<PageViewProps> = () => {
   const locale = useAppStore((s) => s.locale);
   const t = useTranslation(locale);
+  const fieldId = useId();
   const refreshOptions = useMemo(() => getRefreshOptions(t), [t]);
 
   const [refreshInterval, setRefreshInterval] = useState<number>(5000);
@@ -348,26 +350,32 @@ const PortManagerView: React.FC<PageViewProps> = () => {
     <div className="h-full flex flex-col bg-ide-bg overflow-hidden">
       <div className="shrink-0 px-3 sm:px-4 py-2 border-b border-ide-border">
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className="relative flex-1 sm:flex-none">
+          <div className="relative min-w-0 flex-1 md:flex-none">
             <Search
               size={14}
               className="absolute left-2 top-1/2 -translate-y-1/2 text-ide-mute sm:w-4 sm:h-4 sm:left-2.5"
             />
             <Input
+              id={`${fieldId}-search`}
+              name="port-search"
+              aria-label={t("plugin.portManager.search")}
               placeholder={t("plugin.portManager.search")}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full sm:w-40 md:w-48 pl-7 sm:pl-8 h-7 sm:h-8 text-xs sm:text-sm bg-ide-panel border-ide-border"
+              className="h-11 w-full border-ide-border bg-ide-panel pl-7 text-base md:h-8 md:w-48 md:pl-8 md:text-sm"
             />
           </div>
           <Select value={refreshInterval.toString()} onValueChange={(v) => setRefreshInterval(Number(v))}>
-            <SelectTrigger className="w-16 sm:w-20 h-7 sm:h-8 text-xs sm:text-sm bg-ide-panel border-ide-border">
-              <Timer size={12} className="mr-0.5 sm:mr-1 sm:w-3.5 sm:h-3.5" />
+            <SelectTrigger
+              aria-label={t("plugin.portManager.refresh")}
+              className="h-11 min-h-11 w-20 shrink-0 border-ide-border bg-ide-panel px-2 text-xs md:h-8 md:min-h-0 md:px-3 md:text-sm"
+            >
+              <Timer size={12} className="hidden md:block md:size-3.5" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {refreshOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
+                <SelectItem key={opt.value} value={opt.value} className="min-h-11 md:min-h-0">
                   {opt.label}
                 </SelectItem>
               ))}
@@ -379,8 +387,8 @@ const PortManagerView: React.FC<PageViewProps> = () => {
       <div className="flex-1 overflow-hidden">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
           <div className="shrink-0 px-3 sm:px-4 pt-2">
-            <TabsList>
-              <TabsTrigger value="ports" className="text-xs gap-1">
+            <TabsList className="min-h-11 md:min-h-9">
+              <TabsTrigger value="ports" className="min-h-11 gap-1 px-3 text-xs md:min-h-0 md:px-2">
                 <Network size={14} />
                 {t("plugin.portManager.ports")}
                 {portData?.ports && (
@@ -389,7 +397,7 @@ const PortManagerView: React.FC<PageViewProps> = () => {
                   </span>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="forwards" className="text-xs gap-1">
+              <TabsTrigger value="forwards" className="min-h-11 gap-1 px-3 text-xs md:min-h-0 md:px-2">
                 <ArrowRightLeft size={14} />
                 {t("plugin.portManager.forwards")}
                 {forwardData?.forwards && forwardData.forwards.length > 0 && (
@@ -403,7 +411,7 @@ const PortManagerView: React.FC<PageViewProps> = () => {
 
           <TabsContent value="ports" className="flex-1 overflow-hidden mt-0 px-0">
             <div className="h-full overflow-auto">
-              <div className="hidden sm:flex items-center px-3 sm:px-4 py-2 border-b border-ide-border bg-ide-bg text-xs font-medium text-ide-mute sticky top-0 z-10">
+              <div className="sticky top-0 z-10 hidden items-center border-b border-ide-border bg-ide-bg px-3 py-2 text-xs font-medium text-ide-mute md:flex md:px-4">
                 <div className="w-5 shrink-0" />
                 <div className="w-20 shrink-0">{t("plugin.portManager.port")}</div>
                 <div className="w-16 shrink-0">{t("plugin.portManager.protocol")}</div>
@@ -441,7 +449,7 @@ const PortManagerView: React.FC<PageViewProps> = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 text-xs gap-1"
+                  className="h-11 gap-1 text-xs md:h-7"
                   onClick={() => {
                     setAddError("");
                     setAddDialogOpen(true);
@@ -462,7 +470,7 @@ const PortManagerView: React.FC<PageViewProps> = () => {
                   filteredForwards.map((fwd: ForwardRule) => (
                     <div
                       key={fwd.id}
-                      className="flex items-center gap-3 px-3 sm:px-4 py-3 border-b border-ide-border hover:bg-ide-panel/50 transition-colors"
+                      className="flex min-w-0 items-center gap-2 border-b border-ide-border px-3 py-3 transition-colors hover:bg-ide-panel/50 md:gap-3 md:px-4"
                     >
                       <div
                         className={`w-2 h-2 rounded-full shrink-0 ${fwd.enabled ? "bg-green-500" : "bg-gray-400"}`}
@@ -476,19 +484,22 @@ const PortManagerView: React.FC<PageViewProps> = () => {
                             {fwd.protocol.toUpperCase()}
                           </span>
                           <ArrowRightLeft size={12} className="text-ide-mute" />
-                          <span className="font-mono text-xs text-ide-mute truncate">{fwd.targetAddr}</span>
+                          <span className="min-w-0 max-w-full truncate font-mono text-xs text-ide-mute">
+                            {fwd.targetAddr}
+                          </span>
                         </div>
                         {fwd.error && <div className="mt-1 text-[10px] text-red-500 truncate">{fwd.error}</div>}
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex shrink-0 items-center gap-1">
                         {fwd.protocol !== "udp" && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 w-7 p-0 text-ide-mute hover:text-ide-text"
+                            className="size-11 p-0 text-ide-mute hover:text-ide-text md:size-7"
                             onClick={() => handleOpenForward(fwd)}
                             disabled={!fwd.enabled}
                             title={t("plugin.portManager.openInBrowser")}
+                            aria-label={t("plugin.portManager.openInBrowser")}
                           >
                             <ExternalLink size={14} />
                           </Button>
@@ -496,20 +507,24 @@ const PortManagerView: React.FC<PageViewProps> = () => {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className={`h-7 w-7 p-0 ${fwd.enabled ? "text-green-500 hover:text-orange-500" : "text-gray-400 hover:text-green-500"}`}
+                          className={`size-11 p-0 md:size-7 ${fwd.enabled ? "text-green-500 hover:text-orange-500" : "text-gray-400 hover:text-green-500"}`}
                           onClick={() => handleToggleForward(fwd.id, !fwd.enabled)}
                           disabled={toggleForwardMutation.isPending}
+                          aria-label={t(fwd.enabled ? "plugin.portManager.disable" : "plugin.portManager.enable")}
+                          title={t(fwd.enabled ? "plugin.portManager.disable" : "plugin.portManager.enable")}
                         >
                           {fwd.enabled ? <Power size={14} /> : <PowerOff size={14} />}
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                          className="size-11 p-0 text-red-500 hover:bg-red-500/10 hover:text-red-600 md:size-7"
                           onClick={() => {
                             setRemoveTarget(fwd);
                             setRemoveDialogOpen(true);
                           }}
+                          aria-label={t("plugin.portManager.remove")}
+                          title={t("plugin.portManager.remove")}
                         >
                           <Trash2 size={14} />
                         </Button>
@@ -539,7 +554,9 @@ const PortManagerView: React.FC<PageViewProps> = () => {
           </AlertDialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1.5">
-              <label className="text-xs text-ide-mute">{t("plugin.portManager.protocol")}</label>
+              <label htmlFor={`${fieldId}-protocol`} className="text-xs text-ide-mute">
+                {t("plugin.portManager.protocol")}
+              </label>
               <Select
                 value={newProtocol}
                 onValueChange={(v) => {
@@ -547,19 +564,34 @@ const PortManagerView: React.FC<PageViewProps> = () => {
                   setAddError("");
                 }}
               >
-                <SelectTrigger className="h-8 text-sm bg-ide-panel border-ide-border">
+                <SelectTrigger
+                  id={`${fieldId}-protocol`}
+                  aria-label={t("plugin.portManager.protocol")}
+                  className="h-11 min-h-11 border-ide-border bg-ide-panel text-sm md:h-8 md:min-h-0"
+                >
                   <SelectValue placeholder={t("plugin.portManager.selectProtocol")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="tcp">{t("plugin.portManager.tcp")}</SelectItem>
-                  <SelectItem value="udp">{t("plugin.portManager.udp")}</SelectItem>
-                  <SelectItem value="http">{t("plugin.portManager.http")}</SelectItem>
+                  <SelectItem value="tcp" className="min-h-11 md:min-h-0">
+                    {t("plugin.portManager.tcp")}
+                  </SelectItem>
+                  <SelectItem value="udp" className="min-h-11 md:min-h-0">
+                    {t("plugin.portManager.udp")}
+                  </SelectItem>
+                  <SelectItem value="http" className="min-h-11 md:min-h-0">
+                    {t("plugin.portManager.http")}
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-ide-mute">{t("plugin.portManager.listenPort")}</label>
+              <label htmlFor={`${fieldId}-listen-port`} className="text-xs text-ide-mute">
+                {t("plugin.portManager.listenPort")}
+              </label>
               <Input
+                id={`${fieldId}-listen-port`}
+                name="listen-port"
+                aria-label={t("plugin.portManager.listenPort")}
                 type="number"
                 placeholder={t("plugin.portManager.listenPortPlaceholder")}
                 value={newListenPort}
@@ -567,19 +599,24 @@ const PortManagerView: React.FC<PageViewProps> = () => {
                   setNewListenPort(e.target.value);
                   setAddError("");
                 }}
-                className="h-8 text-sm bg-ide-panel border-ide-border"
+                className="h-11 border-ide-border bg-ide-panel text-base md:h-8 md:text-sm"
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-ide-mute">{t("plugin.portManager.targetAddr")}</label>
+              <label htmlFor={`${fieldId}-target-address`} className="text-xs text-ide-mute">
+                {t("plugin.portManager.targetAddr")}
+              </label>
               <Input
+                id={`${fieldId}-target-address`}
+                name="target-address"
+                aria-label={t("plugin.portManager.targetAddr")}
                 placeholder={newProtocol === "http" ? "http://localhost:8080" : "localhost:8080"}
                 value={newTargetAddr}
                 onChange={(e) => {
                   setNewTargetAddr(e.target.value);
                   setAddError("");
                 }}
-                className="h-8 text-sm bg-ide-panel border-ide-border"
+                className="h-11 border-ide-border bg-ide-panel text-base md:h-8 md:text-sm"
               />
               <p className="text-[10px] text-ide-mute">
                 {newProtocol === "http" ? t("plugin.portManager.httpHint") : t("plugin.portManager.tcpHint")}
@@ -588,11 +625,11 @@ const PortManagerView: React.FC<PageViewProps> = () => {
             {addError && <div className="text-xs text-red-500 bg-red-500/10 px-3 py-2 rounded-md">{addError}</div>}
           </div>
           <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="text-sm">{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogCancel className="min-h-11 text-sm md:min-h-0">{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleAddForward}
               disabled={!newListenPort || !newTargetAddr || addForwardMutation.isPending}
-              className="text-sm"
+              className="min-h-11 text-sm md:min-h-0"
             >
               {addForwardMutation.isPending ? t("plugin.portManager.creating") : t("plugin.portManager.create")}
             </AlertDialogAction>
@@ -614,12 +651,12 @@ const PortManagerView: React.FC<PageViewProps> = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="text-sm">{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogCancel className="min-h-11 text-sm md:min-h-0">{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleRemoveForward}
               variant="destructive"
               disabled={removeForwardMutation.isPending}
-              className="text-sm"
+              className="min-h-11 text-sm md:min-h-0"
             >
               {t("plugin.portManager.remove")}
             </AlertDialogAction>
@@ -637,12 +674,12 @@ const PortManagerView: React.FC<PageViewProps> = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="text-sm">{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogCancel className="min-h-11 text-sm md:min-h-0">{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleKillProcess}
               variant="destructive"
               disabled={killProcessMutation.isPending}
-              className="text-sm"
+              className="min-h-11 text-sm md:min-h-0"
             >
               {t("plugin.portManager.killProcess")}
             </AlertDialogAction>

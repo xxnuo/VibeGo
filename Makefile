@@ -1,4 +1,4 @@
-.PHONY: generate-docs clean-code format dev-server dev-ui build clean-dist build-frontend build-backend package-backend test-release-packaging verify-release build-release bump prepare-test test download-sherpa thirdparty verify-waveterm-reference
+.PHONY: generate-docs clean-code format dev-server dev-ui desktop-dev desktop-build build clean-dist build-frontend build-backend package-backend test-release-packaging verify-release build-release bump prepare-test test download-sherpa thirdparty verify-waveterm-reference
 
 VERSION ?= $(shell git describe --tags --match 'v*' 2>/dev/null || echo v0.0.0-dev)
 DIST_DIR ?= dist
@@ -9,6 +9,11 @@ RELEASE_TARGETS ?= android/arm64 linux/amd64 linux/arm64 darwin/amd64 darwin/arm
 CURRENT_GOOS ?= $(shell go env GOOS)
 CURRENT_GOARCH ?= $(shell go env GOARCH)
 CGO_ENABLED ?= 1
+DESKTOP_EXT := $(if $(filter windows,$(CURRENT_GOOS)),.exe,)
+DESKTOP_LDFLAGS := -s -w -X github.com/xxnuo/vibego/internal/version.Version=$(VERSION)
+ifeq ($(CURRENT_GOOS),windows)
+DESKTOP_LDFLAGS += -H windowsgui -linkmode external -extldflags=-Wl,--subsystem,windows
+endif
 
 generate-docs:
 	@echo "Generating docs..."
@@ -27,6 +32,20 @@ dev-server:
 
 dev-ui:
 	cd ui && pnpm run dev --host
+
+desktop-dev:
+	@set -eu; \
+	(cd $(UI_DIR) && pnpm run dev --host 127.0.0.1) & \
+	ui_pid=$$!; \
+	trap 'kill $$ui_pid 2>/dev/null || true' EXIT INT TERM; \
+	VG_DESKTOP_PORT=11984 VG_DESKTOP_DEV_UI=http://127.0.0.1:15173 CGO_ENABLED=1 go run -tags "desktop" .
+
+desktop-build:
+	$(MAKE) build-frontend
+	@mkdir -p build/bin
+	CGO_ENABLED=1 go build -tags "desktop" -trimpath -ldflags "$(DESKTOP_LDFLAGS)" -o build/bin/vibego-desktop$(DESKTOP_EXT) .
+	CGO_ENABLED=1 go build -tags "desktop_window,gtk3,production" -trimpath -ldflags "$(DESKTOP_LDFLAGS)" -o build/bin/vibego-window$(DESKTOP_EXT) .
+	CGO_ENABLED=1 go build -tags "desktop_server" -trimpath -ldflags "$(DESKTOP_LDFLAGS)" -o build/bin/vibego-server$(DESKTOP_EXT) .
 
 build:
 	$(MAKE) clean-dist

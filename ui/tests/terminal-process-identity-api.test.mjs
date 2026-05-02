@@ -68,3 +68,20 @@ test("preserves shared ApiError statuses for missing and unsupported runtimes", 
     });
   }
 });
+
+test("resets a terminal in place with an encoded id", async (t) => {
+  const { terminalApi } = await loadTerminalApi(t);
+  const requests = [];
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url: String(url), options });
+    return new Response(JSON.stringify({ ok: true, terminal: { id: "term/a ?", status: "running" } }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  const result = await terminalApi.reset("term/a ?");
+  assert.equal(requests[0].url, "/api/terminal/term%2Fa%20%3F/reset");
+  assert.equal(requests[0].options.method, "POST");
+  assert.equal(result.terminal.id, "term/a ?");
+});

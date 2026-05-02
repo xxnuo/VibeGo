@@ -24,7 +24,7 @@ const ContextSheet: React.FC<ContextSheetProps> = ({
 }) => {
   return (
     <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
-      <DrawerContent className="bg-ide-panel border-ide-border">
+      <DrawerContent className="max-h-[min(80dvh,36rem)] bg-ide-panel border-ide-border">
         {title && (
           <DrawerHeader className="pb-2">
             <DrawerTitle className="text-ide-text text-sm">{title}</DrawerTitle>
@@ -34,6 +34,7 @@ const ContextSheet: React.FC<ContextSheetProps> = ({
           {items.map((item, index) => (
             <button
               key={index}
+              type="button"
               onClick={() => {
                 item.onClick();
                 onClose();

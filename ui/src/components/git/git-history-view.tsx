@@ -6,14 +6,21 @@ import {
   Clock,
   Copy,
   GitCommit as GitCommitIcon,
+  GitMerge,
   Loader2,
+  MoreHorizontal,
   Plus,
+  RotateCcw,
+  Square,
+  SquareCheck,
   Tag,
   Trash2,
   Undo2,
+  X,
 } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CommitFileInfo, GitCommit } from "@/api/git";
+import { areHistoryCommitsContiguous } from "@/components/git/git-history-selection";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   ContextMenu,
@@ -22,6 +29,8 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { getIntlLocale, getTranslation, type Locale } from "@/lib/i18n";
 
 type AvatarPlatform = "github" | "gitlab" | "gravatar";
@@ -161,8 +170,6 @@ export interface GitHistoryViewProps {
   onResetCommit?: (commit: GitCommit) => unknown;
   onSquash?: (commits: GitCommit[], squashOnto: GitCommit) => unknown;
   onSquashCommits?: (commits: GitCommit[], squashOnto: GitCommit) => unknown;
-  onReorder?: (commits: GitCommit[], beforeCommit: GitCommit) => unknown;
-  onReorderCommits?: (commits: GitCommit[], beforeCommit: GitCommit) => unknown;
 }
 
 const formatRelativeTime = (dateStr: string, locale: Locale, t: (key: string) => string): string => {
@@ -230,7 +237,7 @@ const CopyHashButton: React.FC<{ hash: string; locale: Locale }> = ({ hash, loca
   const shortHash = hash.substring(0, 7);
   return (
     <button
-      className="flex items-center gap-0.5 font-mono px-1 py-0.5 rounded hover:bg-ide-accent/10 text-ide-mute hover:text-ide-accent transition-colors"
+      className="flex min-h-11 items-center gap-0.5 rounded px-2 font-mono text-ide-mute transition-colors hover:bg-ide-accent/10 hover:text-ide-accent md:min-h-0 md:px-1 md:py-0.5"
       onClick={(e) => {
         e.stopPropagation();
         void copyText(hash);
@@ -251,7 +258,7 @@ const CopyTagButton: React.FC<{ tag: string; locale: Locale }> = ({ tag, locale 
   const t = (key: string) => getTranslation(locale, key);
   return (
     <button
-      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-ide-mute/10 hover:bg-ide-accent/10 text-ide-text"
+      className="inline-flex min-h-11 max-w-full items-center gap-1 rounded bg-ide-mute/10 px-2 text-ide-text hover:bg-ide-accent/10 md:min-h-0 md:px-1.5 md:py-0.5"
       onClick={(e) => {
         e.stopPropagation();
         void copyText(tag);
@@ -284,6 +291,7 @@ interface CommitItemProps {
   onDeleteTag: (tag: string) => void;
   onFileClick: (filePath: string) => void;
   files: CommitFileInfo[];
+  onSelectionToggle: () => void;
   onSummaryClick: (event: React.MouseEvent<HTMLDivElement>) => void;
   onSummaryKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void;
   onContextMenu: (event: React.MouseEvent<HTMLDivElement>) => void;
@@ -307,6 +315,7 @@ const CommitItem: React.FC<CommitItemProps> = ({
   onDeleteTag,
   onFileClick,
   files,
+  onSelectionToggle,
   onSummaryClick,
   onSummaryKeyDown,
   onContextMenu,
@@ -333,7 +342,7 @@ const CommitItem: React.FC<CommitItemProps> = ({
           data-selected={isMultiSelected ? "true" : "false"}
         >
           <div
-            className="flex items-start gap-2.5 px-3 py-2.5 cursor-pointer hover:bg-ide-accent/10 active:bg-ide-accent/15"
+            className="flex min-w-0 items-start gap-1.5 px-2 py-2.5 cursor-pointer hover:bg-ide-accent/10 active:bg-ide-accent/15 sm:gap-2.5 sm:px-3"
             onClick={onSummaryClick}
             onKeyDown={onSummaryKeyDown}
             role="option"
@@ -341,6 +350,18 @@ const CommitItem: React.FC<CommitItemProps> = ({
             data-expanded={isExpanded ? "true" : "false"}
             tabIndex={0}
           >
+            <button
+              type="button"
+              className="flex size-11 shrink-0 items-center justify-center rounded-sm text-ide-mute hover:bg-ide-accent/10 md:hidden"
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelectionToggle();
+              }}
+              aria-label={isMultiSelected ? t("git.clearSelection") : t("common.select")}
+              aria-pressed={isMultiSelected}
+            >
+              {isMultiSelected ? <SquareCheck size={16} className="text-ide-accent" /> : <Square size={16} />}
+            </button>
             <Avatar className="mt-0.5 size-7 shrink-0">
               {authorAvatarUrl ? (
                 <img src={authorAvatarUrl} alt={commit.author} className="aspect-square size-full rounded-full" />
@@ -361,13 +382,13 @@ const CommitItem: React.FC<CommitItemProps> = ({
                   {tags.length > 1 && <span className="text-[10px] text-ide-mute">+{tags.length - 1}</span>}
                 </div>
               )}
-              <div className="flex items-center gap-2 mt-0.5 text-[10px] text-ide-mute">
-                <span>{commit.author}</span>
-                <span className="flex items-center gap-0.5">
+              <div className="mt-0.5 flex min-w-0 items-center gap-2 overflow-hidden text-[10px] text-ide-mute">
+                <span className="truncate">{commit.author}</span>
+                <span className="flex shrink-0 items-center gap-0.5">
                   <Clock size={9} />
                   {formatRelativeTime(commit.date, locale, t)}
                 </span>
-                <span className="flex items-center gap-0.5 font-mono">
+                <span className="hidden shrink-0 items-center gap-0.5 font-mono sm:flex">
                   <GitCommitIcon size={9} />
                   {shortHash}
                 </span>
@@ -394,16 +415,17 @@ const CommitItem: React.FC<CommitItemProps> = ({
                   {commit.message.split("\n").slice(1).join("\n").trim()}
                 </div>
               )}
-              <div className="px-3 py-1 flex items-center justify-between gap-2 text-[10px] text-ide-mute">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-1 px-3 py-1 text-[10px] text-ide-mute">
+                <div className="flex min-w-0 items-center gap-1">
                   <span>
                     {files.length} {t("git.filesChanged")}
                   </span>
                   <CopyHashButton hash={commit.hash} locale={locale} />
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="ml-auto flex items-center gap-1">
                   <button
-                    className="px-2 py-0.5 rounded flex items-center gap-1 text-ide-accent hover:bg-ide-accent/10 disabled:opacity-50"
+                    type="button"
+                    className="flex min-h-11 items-center gap-1 rounded-sm px-2 text-ide-accent hover:bg-ide-accent/10 disabled:opacity-50 md:min-h-9"
                     onClick={(e) => {
                       e.stopPropagation();
                       onCreateTag();
@@ -415,7 +437,8 @@ const CommitItem: React.FC<CommitItemProps> = ({
                   </button>
                   {canUndoCommit && (
                     <button
-                      className="px-2 py-0.5 rounded flex items-center gap-1 text-ide-accent hover:bg-ide-accent/10 disabled:opacity-50"
+                      type="button"
+                      className="flex min-h-11 items-center gap-1 rounded-sm px-2 text-ide-accent hover:bg-ide-accent/10 disabled:opacity-50 md:min-h-9"
                       onClick={(e) => {
                         e.stopPropagation();
                         onUndoCommit();
@@ -442,7 +465,7 @@ const CommitItem: React.FC<CommitItemProps> = ({
                         )}
                         {isUnpushedTag && !tagPushCheckDisabled && (
                           <button
-                            className="p-0.5 rounded text-ide-mute hover:text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+                            className="flex size-11 items-center justify-center rounded-sm text-ide-mute hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50 md:size-auto md:p-0.5"
                             onClick={(e) => {
                               e.stopPropagation();
                               onDeleteTag(tag);
@@ -459,9 +482,10 @@ const CommitItem: React.FC<CommitItemProps> = ({
                 </div>
               )}
               {files.map((file) => (
-                <div
+                <button
+                  type="button"
                   key={file.path}
-                  className="flex items-center gap-2 px-4 py-1 hover:bg-ide-accent/10 cursor-pointer active:bg-ide-accent/15"
+                  className="flex min-h-11 w-full items-center gap-2 px-4 py-1 text-left hover:bg-ide-accent/10 active:bg-ide-accent/15 md:min-h-10"
                   onClick={(e) => {
                     e.stopPropagation();
                     onFileClick(file.path);
@@ -470,8 +494,8 @@ const CommitItem: React.FC<CommitItemProps> = ({
                   <span className={`w-3 text-center font-bold text-[10px] ${getStatusColor(file.status)}`}>
                     {file.status[0]?.toUpperCase() || "?"}
                   </span>
-                  <span className="text-xs text-ide-text truncate">{file.path}</span>
-                </div>
+                  <span className="min-w-0 flex-1 truncate text-xs text-ide-text">{file.path}</span>
+                </button>
               ))}
             </div>
           )}
@@ -509,18 +533,21 @@ const GitHistoryView: React.FC<GitHistoryViewProps> = ({
   onResetCommit,
   onSquash,
   onSquashCommits,
-  onReorder,
-  onReorderCommits,
 }) => {
   const t = useCallback((key: string) => getTranslation(locale, key), [locale]);
+  const isMobile = useIsMobile();
   const [expandedHash, setExpandedHash] = useState<string | null>(null);
   const [internalSelectedHashes, setInternalSelectedHashes] = useState<string[]>(
     () => selectedCommitHashes?.slice() ?? []
   );
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const [contextSelectionHashes, setContextSelectionHashes] = useState<string[]>([]);
   const contextSelectionHashesRef = useRef<string[]>([]);
   const selectionAnchorRef = useRef<string | null>(null);
   const loadingMoreRef = useRef(false);
+  const mobileActionsTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const mobileActionsFallbackHashRef = useRef<string | null>(null);
+  const mobileActionsWasOpenRef = useRef(false);
   const platforms = useMemo(() => detectPlatforms(remoteUrls), [remoteUrls]);
   const unpushedTags = useMemo(() => new Set(tagsToPush), [tagsToPush]);
 
@@ -530,7 +557,6 @@ const GitHistoryView: React.FC<GitHistoryViewProps> = ({
     return source.filter((hash, index) => loadedHashes.has(hash) && source.indexOf(hash) === index);
   }, [internalSelectedHashes, loadedHashes, selectedCommitHashes]);
   const selectedHashSet = useMemo(() => new Set(effectiveSelectedHashes), [effectiveSelectedHashes]);
-
   useEffect(() => {
     if (selectedCommitHashes !== undefined) return;
     setInternalSelectedHashes((current) => {
@@ -555,6 +581,34 @@ const GitHistoryView: React.FC<GitHistoryViewProps> = ({
     [commits]
   );
 
+  const selectedCommits = useMemo(
+    () => commits.filter((commit) => selectedHashSet.has(commit.hash)),
+    [commits, selectedHashSet]
+  );
+  const selectedIsContiguous = useMemo(
+    () => areHistoryCommitsContiguous(commits, selectedCommits),
+    [commits, selectedCommits]
+  );
+
+  useEffect(() => {
+    const wasOpen = mobileActionsWasOpenRef.current;
+    mobileActionsWasOpenRef.current = mobileActionsOpen;
+    if (mobileActionsOpen || !wasOpen) return;
+
+    const trigger = mobileActionsTriggerRef.current;
+    const fallbackHash = mobileActionsFallbackHashRef.current;
+    window.requestAnimationFrame(() => {
+      if (trigger?.isConnected) {
+        trigger.focus();
+        return;
+      }
+      const commitRow = Array.from(document.querySelectorAll<HTMLElement>("[data-commit-hash]")).find(
+        (element) => element.dataset.commitHash === fallbackHash
+      );
+      commitRow?.querySelector<HTMLElement>('[role="option"]')?.focus();
+    });
+  }, [mobileActionsOpen]);
+
   const emitSelection = useCallback(
     (hashes: string[]) => {
       const next = Array.from(new Set(hashes)).filter((hash) => loadedHashes.has(hash));
@@ -564,6 +618,28 @@ const GitHistoryView: React.FC<GitHistoryViewProps> = ({
       return next;
     },
     [commitsForHashes, loadedHashes, onSelectedCommitHashesChange, onSelectedCommitsChange, selectedCommitHashes]
+  );
+
+  const clearSelection = useCallback(() => {
+    selectionAnchorRef.current = null;
+    contextSelectionHashesRef.current = [];
+    setContextSelectionHashes([]);
+    emitSelection([]);
+    setMobileActionsOpen(false);
+  }, [emitSelection]);
+
+  const toggleMobileSelection = useCallback(
+    (commit: GitCommit) => {
+      const current = effectiveSelectedHashes;
+      const next = current.includes(commit.hash)
+        ? current.filter((hash) => hash !== commit.hash)
+        : [...current, commit.hash];
+      if (!selectionAnchorRef.current || !loadedHashes.has(selectionAnchorRef.current)) {
+        selectionAnchorRef.current = commit.hash;
+      }
+      emitSelection(next);
+    },
+    [effectiveSelectedHashes, emitSelection, loadedHashes]
   );
 
   const handleToggle = useCallback(
@@ -625,11 +701,15 @@ const GitHistoryView: React.FC<GitHistoryViewProps> = ({
   const handleSummaryClick = useCallback(
     (commit: GitCommit, event: React.MouseEvent<HTMLDivElement>) => {
       const hasModifier = event.shiftKey || event.metaKey || event.ctrlKey;
-      selectCommit(commit, event);
-      // Modified clicks are selection gestures and must not change which row is expanded.
-      if (!hasModifier) handleToggle(commit);
+      if (!isMobile) {
+        selectCommit(commit, event);
+      }
+      if (!isMobile && hasModifier) {
+        return;
+      }
+      handleToggle(commit);
     },
-    [handleToggle, selectCommit]
+    [handleToggle, isMobile, selectCommit]
   );
 
   const handleContextMenu = useCallback(
@@ -674,7 +754,6 @@ const GitHistoryView: React.FC<GitHistoryViewProps> = ({
   const revertAction = onRevert ?? onRevertCommit;
   const resetAction = onResetToCommit ?? onResetCommit;
   const squashAction = onSquash ?? onSquashCommits;
-  const reorderAction = onReorder ?? onReorderCommits;
 
   const handleScroll = useCallback(
     (e: React.UIEvent<HTMLDivElement>) => {
@@ -702,7 +781,54 @@ const GitHistoryView: React.FC<GitHistoryViewProps> = ({
   const unpushedCount = aheadCount > 0 ? aheadCount : 0;
 
   return (
-    <div className="h-full overflow-y-auto bg-ide-bg" onScroll={handleScroll}>
+    <div className="h-full min-w-0 overflow-x-hidden overflow-y-auto bg-ide-bg" onScroll={handleScroll}>
+      {selectedCommits.length > 0 && (
+        <div
+          className="sticky top-0 z-20 flex min-h-12 items-center gap-2 border-b border-ide-border bg-ide-panel px-2 shadow-sm"
+          role="toolbar"
+          aria-label={t("common.selected")}
+        >
+          <span className="min-w-0 flex-1 truncate text-xs font-medium text-ide-text">
+            {selectedCommits.length} {t("common.selected")}
+          </span>
+          <button
+            type="button"
+            className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-sm px-2 text-xs text-ide-accent hover:bg-ide-accent/10 disabled:opacity-50"
+            onClick={() => void cherryPickAction?.(selectedCommits)}
+            disabled={!cherryPickAction || isLoading}
+          >
+            <GitCommitIcon size={14} />
+            {t("git.cherryPick")}
+          </button>
+          <button
+            ref={mobileActionsTriggerRef}
+            type="button"
+            className="flex size-11 shrink-0 items-center justify-center rounded-sm text-ide-mute hover:bg-ide-accent/10 hover:text-ide-text"
+            onClick={() => {
+              mobileActionsFallbackHashRef.current = selectedCommits[0]?.hash ?? null;
+              setMobileActionsOpen(true);
+            }}
+            title={t("git.advancedOperations")}
+            aria-label={t("git.advancedOperations")}
+          >
+            <MoreHorizontal size={17} />
+          </button>
+          <button
+            type="button"
+            className="flex size-11 shrink-0 items-center justify-center rounded-sm text-ide-mute hover:bg-ide-accent/10 hover:text-ide-text"
+            onClick={clearSelection}
+            title={t("git.clearSelection")}
+            aria-label={t("git.clearSelection")}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+      {selectedCommits.length > 1 && !selectedIsContiguous && (
+        <div className="border-b border-yellow-500/20 bg-yellow-500/8 px-3 py-1.5 text-[11px] text-yellow-400">
+          {t("git.nonContiguousSelection")}
+        </div>
+      )}
       {tagsToPushError && (
         <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-500/8 border-b border-yellow-500/20">
           <Tag size={12} className="text-yellow-400" />
@@ -741,6 +867,7 @@ const GitHistoryView: React.FC<GitHistoryViewProps> = ({
           isLoading={isLoading}
           onSummaryClick={(event) => handleSummaryClick(commit, event)}
           onSummaryKeyDown={(event) => handleSummaryKeyDown(commit, event)}
+          onSelectionToggle={() => toggleMobileSelection(commit)}
           onContextMenu={(event) => handleContextMenu(commit, event)}
           renderContextMenu={() => {
             const selected = menuCommits(commit);
@@ -756,16 +883,10 @@ const GitHistoryView: React.FC<GitHistoryViewProps> = ({
                       {t("git.cherryPick")} ({selected.length})
                     </ContextMenuItem>
                     <ContextMenuItem
-                      disabled={!squashAction || isLoading}
+                      disabled={!squashAction || isLoading || !areHistoryCommitsContiguous(commits, selected)}
                       onSelect={() => void squashAction?.(selected, commit)}
                     >
                       {t("git.squash")} ({selected.length})
-                    </ContextMenuItem>
-                    <ContextMenuItem
-                      disabled={!reorderAction || isLoading}
-                      onSelect={() => void reorderAction?.(selected, commit)}
-                    >
-                      {t("git.reorder")} ({selected.length})
                     </ContextMenuItem>
                   </>
                 ) : (
@@ -801,6 +922,80 @@ const GitHistoryView: React.FC<GitHistoryViewProps> = ({
           <Loader2 size={14} className="animate-spin text-ide-mute" />
         </div>
       )}
+      <Drawer open={mobileActionsOpen} onOpenChange={setMobileActionsOpen}>
+        <DrawerContent className="max-h-[min(70dvh,32rem)] border-ide-border bg-ide-panel pb-[max(0.75rem,env(safe-area-inset-bottom))] text-ide-text">
+          <DrawerHeader className="border-b border-ide-border pb-3 text-left">
+            <DrawerTitle className="text-sm text-ide-text">
+              {selectedCommits.length} {t("common.selected")}
+            </DrawerTitle>
+          </DrawerHeader>
+          <div className="p-2">
+            {selectedCommits.length === 1 ? (
+              <>
+                <button
+                  type="button"
+                  className="flex min-h-11 w-full items-center gap-3 rounded-sm px-3 text-left text-sm hover:bg-ide-bg disabled:opacity-50"
+                  onClick={() => {
+                    setMobileActionsOpen(false);
+                    void revertAction?.(selectedCommits[0]);
+                  }}
+                  disabled={!revertAction || isLoading}
+                >
+                  <RotateCcw size={16} className="text-ide-mute" />
+                  {t("git.revert")}
+                </button>
+                <button
+                  type="button"
+                  className="flex min-h-11 w-full items-center gap-3 rounded-sm px-3 text-left text-sm hover:bg-ide-bg disabled:opacity-50"
+                  onClick={() => {
+                    setMobileActionsOpen(false);
+                    void resetAction?.(selectedCommits[0]);
+                  }}
+                  disabled={!resetAction || isLoading}
+                >
+                  <Undo2 size={16} className="text-ide-mute" />
+                  {t("git.resetToCommit")}
+                </button>
+                <button
+                  type="button"
+                  className="flex min-h-11 w-full items-center gap-3 rounded-sm px-3 text-left text-sm hover:bg-ide-bg"
+                  onClick={() => {
+                    copyHash(selectedCommits[0].hash);
+                    setMobileActionsOpen(false);
+                  }}
+                >
+                  <Copy size={16} className="text-ide-mute" />
+                  {t("common.copy")} SHA
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="flex min-h-11 w-full items-center gap-3 rounded-sm px-3 text-left text-sm hover:bg-ide-bg disabled:opacity-50"
+                  onClick={() => {
+                    setMobileActionsOpen(false);
+                    void squashAction?.(selectedCommits, selectedCommits[selectedCommits.length - 1]);
+                  }}
+                  disabled={!squashAction || isLoading || !selectedIsContiguous}
+                >
+                  <GitMerge size={16} className="text-ide-mute" />
+                  {t("git.squash")}
+                </button>
+              </>
+            )}
+            <div className="my-1 border-t border-ide-border" />
+            <button
+              type="button"
+              className="flex min-h-11 w-full items-center gap-3 rounded-sm px-3 text-left text-sm text-ide-mute hover:bg-ide-bg hover:text-ide-text"
+              onClick={clearSelection}
+            >
+              <X size={16} />
+              {t("git.clearSelection")}
+            </button>
+          </div>
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 };

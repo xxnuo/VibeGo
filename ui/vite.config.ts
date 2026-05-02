@@ -10,7 +10,8 @@ const proxyTarget = process.env.VG_DEV_PROXY_TARGET || "http://127.0.0.1:11984";
 const proxy = {
   "/api": {
     target: proxyTarget,
-    changeOrigin: true,
+    // Keep Host aligned with the browser Origin for WebSocket same-origin checks.
+    changeOrigin: false,
     secure: false,
     ws: true,
   },

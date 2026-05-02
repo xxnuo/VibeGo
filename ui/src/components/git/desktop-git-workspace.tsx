@@ -11,12 +11,9 @@ import {
   GitCommit as GitCommitIcon,
   GitMerge,
   History,
-  ListRestart,
-  Play,
   RefreshCw,
   RotateCcw,
   Search,
-  SkipForward,
   Square,
   SquareCheck,
   SquareMinus,
@@ -39,6 +36,8 @@ import type {
 import { gitApi } from "@/api/git";
 import DiffView from "@/components/git/diff-view";
 import GitCommitComposer from "@/components/git/git-commit-composer";
+import { areHistoryCommitsContiguous } from "@/components/git/git-history-selection";
+import GitOperationControls from "@/components/git/git-operation-controls";
 import GitRepositorySettings from "@/components/git/git-repository-settings";
 import GitStashDetail from "@/components/git/git-stash-detail";
 import GithubPanel from "@/components/git/github-panel";
@@ -130,15 +129,8 @@ interface DesktopGitWorkspaceProps {
 }
 
 type SelectionType = "all" | "partial" | "none";
-type GitOperationKind = "merge" | "rebase" | "cherry-pick" | "revert" | "reset";
 
-export function defaultGitOperationRef(
-  operation: GitOperationKind,
-  selectedCommitHash: string | undefined,
-  currentBranch: string
-): string {
-  return operation === "cherry-pick" ? "" : selectedCommitHash || currentBranch;
-}
+export { defaultGitOperationRef } from "@/components/git/git-operation-controls";
 
 const statusMeta: Record<GitFileNode["status"], { key: string; label: string }> = {
   modified: { key: "modified", label: "M" },
@@ -323,9 +315,6 @@ const DesktopGitWorkspace: React.FC<DesktopGitWorkspaceProps> = ({
   const fileDiffRequestRef = useRef(0);
   const historyDiffRequestRef = useRef(0);
   const [operationPanelOpen, setOperationPanelOpen] = useState(false);
-  const [operationKind, setOperationKind] = useState<GitOperationKind>("merge");
-  const [operationRef, setOperationRef] = useState("");
-  const [resetMode, setResetMode] = useState<"soft" | "mixed" | "hard">("mixed");
   const [stashPanelOpen, setStashPanelOpen] = useState(false);
   const [internalSelectedCommitHashes, setInternalSelectedCommitHashes] = useState<string[]>(
     () => selectedCommitHashes?.slice() ?? []
@@ -373,16 +362,10 @@ const DesktopGitWorkspace: React.FC<DesktopGitWorkspaceProps> = ({
     () => commits.filter((commit) => selectedCommitHashSet.has(commit.hash)),
     [commits, selectedCommitHashSet]
   );
-  const selectedHistoryIndexes = useMemo(
-    () => selectedHistoryCommits.map((commit) => commits.findIndex((candidate) => candidate.hash === commit.hash)),
+  const selectedHistoryIsContiguous = useMemo(
+    () => areHistoryCommitsContiguous(commits, selectedHistoryCommits),
     [commits, selectedHistoryCommits]
   );
-  const selectedHistoryIsContiguous = useMemo(() => {
-    if (selectedHistoryIndexes.length <= 1) return true;
-    return selectedHistoryIndexes.every(
-      (index, position) => position === 0 || index === selectedHistoryIndexes[position - 1] + 1
-    );
-  }, [selectedHistoryIndexes]);
   const selectedHistoryNewest = selectedHistoryCommits[0] ?? null;
   const selectedHistoryOldest = selectedHistoryCommits[selectedHistoryCommits.length - 1] ?? null;
 
@@ -579,11 +562,6 @@ const DesktopGitWorkspace: React.FC<DesktopGitWorkspaceProps> = ({
   );
   const selectedCommitTags = selectedCommit?.tags ?? [];
   const operationInProgress = operation?.state === "in_progress" || operation?.state === "conflicts";
-  const operationRefDefault = defaultGitOperationRef(operationKind, selectedCommit?.hash, currentBranch);
-
-  useEffect(() => {
-    if (!operationRef && operationRefDefault) setOperationRef(operationRefDefault);
-  }, [operationRef, operationRefDefault]);
 
   useEffect(() => {
     if (!operationInProgress || !operation) return;
@@ -593,32 +571,9 @@ const DesktopGitWorkspace: React.FC<DesktopGitWorkspaceProps> = ({
       operation.operation === "cherry-pick" ||
       operation.operation === "revert"
     ) {
-      setOperationKind(operation.operation);
       setOperationPanelOpen(true);
     }
   }, [operation, operationInProgress]);
-
-  const runSelectedOperation = useCallback(async () => {
-    const ref = operationRef.trim();
-    if (!ref || isLoading) return;
-    if (operationKind === "reset") {
-      await onResetToCommit(ref, resetMode);
-    } else if (operationKind === "merge") {
-      await onMerge(ref);
-    } else if (operationKind === "rebase") {
-      await onRebase(ref);
-    } else if (operationKind === "cherry-pick") {
-      await onCherryPick(ref);
-    } else {
-      await onRevert(ref);
-    }
-  }, [isLoading, onCherryPick, onMerge, onRebase, onResetToCommit, onRevert, operationKind, operationRef, resetMode]);
-
-  const operationAction =
-    operation?.operation === "merge" ||
-    operation?.operation === "rebase" ||
-    operation?.operation === "cherry-pick" ||
-    operation?.operation === "revert";
 
   useEffect(() => {
     if (selectedFilePath && !allFiles.some((file) => file.path === selectedFilePath)) {
@@ -810,6 +765,8 @@ const DesktopGitWorkspace: React.FC<DesktopGitWorkspaceProps> = ({
       <div className="desktop-git-search">
         <Search size={13} />
         <input
+          id="desktop-git-file-search"
+          name="desktop-git-file-search"
           value={filterText}
           onChange={(event) => setFilterText(event.target.value)}
           placeholder={t("git.searchFiles")}
@@ -1026,7 +983,9 @@ const DesktopGitWorkspace: React.FC<DesktopGitWorkspaceProps> = ({
                         {multi ? (
                           <>
                             <ContextMenuItem
-                              disabled={isLoading || !onSquashCommits || !selectedHistoryIsContiguous}
+                              disabled={
+                                isLoading || !onSquashCommits || !areHistoryCommitsContiguous(commits, menuSelection)
+                              }
                               onSelect={() => void invokeSquash(menuSelection, commit)}
                             >
                               <GitMerge size={13} />
@@ -1471,107 +1430,21 @@ const DesktopGitWorkspace: React.FC<DesktopGitWorkspaceProps> = ({
           {operationPanelOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </button>
         {operationPanelOpen && (
-          <div className="desktop-git-operation-controls">
-            <select
-              className="desktop-git-operation-select"
-              value={operationKind}
-              onChange={(event) => {
-                const next = event.target.value as typeof operationKind;
-                setOperationKind(next);
-                setOperationRef(defaultGitOperationRef(next, selectedCommit?.hash, currentBranch));
-              }}
-              disabled={Boolean(operationInProgress) || isLoading}
-              aria-label={t("git.operation")}
-            >
-              <option value="merge">{t("git.merge")}</option>
-              <option value="rebase">{t("git.rebase")}</option>
-              <option value="cherry-pick">{t("git.cherryPick")}</option>
-              <option value="revert">{t("git.revert")}</option>
-              <option value="reset">{t("git.resetToCommit")}</option>
-            </select>
-            {operationKind === "reset" && (
-              <select
-                className="desktop-git-operation-select"
-                value={resetMode}
-                onChange={(event) => setResetMode(event.target.value as typeof resetMode)}
-                disabled={Boolean(operationInProgress) || isLoading}
-                aria-label={t("git.resetMode")}
-              >
-                <option value="soft">soft</option>
-                <option value="mixed">mixed</option>
-                <option value="hard">hard</option>
-              </select>
-            )}
-            <input
-              className="desktop-git-operation-input"
-              value={operationRef}
-              onChange={(event) => setOperationRef(event.target.value)}
-              placeholder={t("git.commitOrBranch")}
-              aria-label={t("git.commitOrBranch")}
-              disabled={Boolean(operationInProgress) || isLoading}
-            />
-            <button
-              type="button"
-              className="desktop-git-action-button desktop-git-action-button--primary"
-              onClick={() => void runSelectedOperation()}
-              disabled={Boolean(operationInProgress) || isLoading || !operationRef.trim()}
-            >
-              <Play size={12} />
-              {t("git.run")}
-            </button>
-            {aheadCount > 0 && (
-              <button
-                type="button"
-                className="desktop-git-action-button desktop-git-action-button--danger"
-                onClick={() => onPush(true)}
-                disabled={isLoading}
-              >
-                <ArrowUp size={12} />
-                {t("git.forcePush")}
-              </button>
-            )}
-            {operationInProgress && operationAction && (
-              <div className="desktop-git-operation-actions">
-                {(operation?.operation === "rebase" ||
-                  operation?.operation === "cherry-pick" ||
-                  operation?.operation === "revert") && (
-                  <button
-                    type="button"
-                    className="desktop-git-action-button"
-                    onClick={() => void onOperationAction("skip")}
-                    disabled={isLoading}
-                  >
-                    <SkipForward size={12} />
-                    {t("git.skip")}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="desktop-git-action-button"
-                  onClick={() => void onOperationAction("continue")}
-                  disabled={isLoading}
-                >
-                  <ListRestart size={12} />
-                  {t("git.continue")}
-                </button>
-                <button
-                  type="button"
-                  className="desktop-git-action-button desktop-git-action-button--danger"
-                  onClick={() => void onOperationAction("abort")}
-                  disabled={isLoading}
-                >
-                  <RotateCcw size={12} />
-                  {t("git.abort")}
-                </button>
-              </div>
-            )}
-            {operation?.progress && (
-              <div className="desktop-git-operation-progress">
-                {operation.progress.position}/{operation.progress.total}
-                {operation.progress.currentCommitSummary ? ` · ${operation.progress.currentCommitSummary}` : ""}
-              </div>
-            )}
-          </div>
+          <GitOperationControls
+            locale={locale}
+            selectedCommitHash={selectedCommit?.hash}
+            currentBranch={currentBranch}
+            aheadCount={aheadCount}
+            isLoading={isLoading}
+            operation={operation}
+            onMerge={onMerge}
+            onRebase={onRebase}
+            onCherryPick={onCherryPick}
+            onRevert={onRevert}
+            onResetToCommit={onResetToCommit}
+            onPush={onPush}
+            onOperationAction={onOperationAction}
+          />
         )}
       </section>
     </>

@@ -302,6 +302,7 @@ const DiffView: React.FC<DiffViewProps> = ({
   const diffContentWrapperClassName = isMobile ? "min-w-full" : "";
   const diffContentWrapperStyle = isMobile ? { minWidth: `calc(${maxMobileContentColumns}ch + 60px)` } : undefined;
   const diffRowClassName = `w-full flex items-stretch transition-colors ${interactive ? "text-left" : "select-text"}`;
+  const interactiveDiffRowClassName = isMobile ? "min-h-11" : "";
   const diffLeftPaneOuterClassName = isMobile
     ? "sticky left-0 z-10 flex shrink-0 self-stretch border-r border-ide-border bg-ide-bg bg-opacity-100"
     : "sticky left-0 z-10 flex shrink-0 self-stretch border-r border-ide-border/50 bg-ide-bg bg-opacity-100";
@@ -318,14 +319,14 @@ const DiffView: React.FC<DiffViewProps> = ({
     ? "inline-block w-2 shrink-0 text-ide-mute/70"
     : "inline-block w-3 shrink-0 text-ide-mute/70";
   const diffContentClassName = isMobile
-    ? "flex-1 min-w-0 px-2 leading-5 whitespace-pre"
+    ? "flex min-w-0 flex-1 items-center px-2 leading-5 whitespace-pre"
     : "flex-1 min-w-0 pr-2 pl-2 py-0.5 leading-5 whitespace-pre-wrap break-words";
   const diffBodyClassName = isMobile
     ? "flex-1 overflow-auto font-mono text-[11px]"
     : "flex-1 overflow-auto font-mono text-xs";
   const hunkHeaderClassName = isMobile
-    ? `w-full flex items-stretch bg-ide-panel border-b border-ide-border sticky top-0 z-20 ${interactive ? "cursor-pointer" : ""}`
-    : `w-full flex items-stretch bg-ide-panel border-b border-ide-border/50 sticky top-0 z-20 ${interactive ? "cursor-pointer hover:bg-ide-panel/80" : ""}`;
+    ? `sticky top-0 z-20 flex min-h-11 w-full items-stretch border-b border-ide-border bg-ide-panel text-left ${interactive ? "cursor-pointer" : ""}`
+    : `sticky top-0 z-20 flex w-full items-stretch border-b border-ide-border/50 bg-ide-panel text-left ${interactive ? "cursor-pointer hover:bg-ide-panel/80" : ""}`;
   const hunkHeaderLeftClassName = isMobile
     ? "sticky left-0 z-20 flex shrink-0 self-stretch items-center gap-0 border-r border-ide-border bg-ide-panel px-0.5"
     : "sticky left-0 z-20 flex shrink-0 self-stretch items-center gap-2 border-r border-ide-border/50 bg-ide-panel pl-2 pr-2 py-1";
@@ -350,16 +351,20 @@ const DiffView: React.FC<DiffViewProps> = ({
 
   return (
     <div className="h-full flex flex-col bg-ide-bg">
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-ide-border bg-ide-panel/50 gap-3">
+      <div
+        className={`flex items-center justify-between gap-3 border-b border-ide-border bg-ide-panel/50 px-3 ${isMobile ? "min-h-11" : "py-1.5"}`}
+      >
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {interactive && (
             <button
               type="button"
-              className="shrink-0"
+              className={isMobile ? "-ml-3 flex size-11 shrink-0 items-center justify-center" : "shrink-0"}
               onClick={() => {
                 const action = fileSelectionType === "none" ? "include" : "exclude";
                 void runSelectionAction("file", action, [], []);
               }}
+              aria-label={`${fileSelectionType === "none" ? t("git.add") : t("git.reset")}: ${filePath || filename || "Diff View"}`}
+              aria-pressed={fileSelectionType !== "none"}
             >
               {getSelectionIcon(
                 fileSelectionType,
@@ -475,24 +480,41 @@ const DiffView: React.FC<DiffViewProps> = ({
           <div className={diffContentWrapperClassName} style={diffContentWrapperStyle}>
             {displayHunks.map((hunk) => (
               <div key={hunk.id} className="border-b border-ide-border/60 last:border-b-0">
-                <div
-                  className={hunkHeaderClassName}
-                  onClick={() => {
-                    if (!interactive) {
-                      return;
-                    }
-                    const hunkSelectionType = getHunkSelectionType(hunk);
-                    const action = hunkSelectionType === "none" ? "include" : "exclude";
-                    void runSelectionAction("hunk", action, [], [hunk.id]);
-                  }}
-                >
-                  <div className={hunkHeaderLeftClassName}>
-                    <span className={diffCheckboxClassName} />
-                    <span className={diffLineNumberClassName} />
-                    <span className={diffLineNumberClassName} />
+                {interactive ? (
+                  <button
+                    type="button"
+                    className={hunkHeaderClassName}
+                    onClick={() => {
+                      const hunkSelectionType = getHunkSelectionType(hunk);
+                      const action = hunkSelectionType === "none" ? "include" : "exclude";
+                      void runSelectionAction("hunk", action, [], [hunk.id]);
+                    }}
+                    aria-label={`${getHunkSelectionType(hunk) === "none" ? t("git.add") : t("git.reset")}: ${hunk.header}`}
+                    aria-pressed={getHunkSelectionType(hunk) !== "none"}
+                  >
+                    <div className={hunkHeaderLeftClassName}>
+                      <span className={diffCheckboxClassName}>
+                        {getSelectionIcon(
+                          getHunkSelectionType(hunk),
+                          13,
+                          getHunkSelectionType(hunk) === "none" ? "text-ide-mute" : "text-ide-accent"
+                        )}
+                      </span>
+                      <span className={diffLineNumberClassName} />
+                      <span className={diffLineNumberClassName} />
+                    </div>
+                    <span className={hunkHeaderTextClassName}>{hunk.header}</span>
+                  </button>
+                ) : (
+                  <div className={hunkHeaderClassName}>
+                    <div className={hunkHeaderLeftClassName}>
+                      <span className={diffCheckboxClassName} />
+                      <span className={diffLineNumberClassName} />
+                      <span className={diffLineNumberClassName} />
+                    </div>
+                    <span className={hunkHeaderTextClassName}>{hunk.header}</span>
                   </div>
-                  <span className={hunkHeaderTextClassName}>{hunk.header}</span>
-                </div>
+                )}
 
                 {hunk.rows.map((row) => {
                   const rowSelectionType = getRowSelectionType(row);
@@ -521,19 +543,18 @@ const DiffView: React.FC<DiffViewProps> = ({
                     </>
                   );
 
-                  if (interactive) {
+                  if (interactive && row.selectable) {
                     return (
                       <button
                         type="button"
                         key={row.id}
-                        className={`${diffRowClassName} ${getSelectionClassName(row, selected, interactive)}`}
+                        className={`${diffRowClassName} ${interactiveDiffRowClassName} ${getSelectionClassName(row, selected, interactive)}`}
                         onClick={() => {
-                          if (!row.selectable) {
-                            return;
-                          }
                           const action = selected ? "exclude" : "include";
                           void runSelectionAction("line", action, [row.id], []);
                         }}
+                        aria-label={`${selected ? t("git.reset") : t("git.add")}: ${filePath || filename || "Diff View"}, ${t("git.lines")} ${row.newLineNumber ?? row.oldLineNumber ?? ""}`}
+                        aria-pressed={selected}
                       >
                         {rowContent}
                       </button>

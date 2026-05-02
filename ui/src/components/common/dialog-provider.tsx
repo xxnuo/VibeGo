@@ -198,12 +198,14 @@ export const DialogProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             showCloseButton={false}
             onKeyDown={(event) => handleKeyDown(event, dialog)}
             style={{ "--dialog-bottom": viewportInset ? `${viewportInset}px` : undefined } as React.CSSProperties}
-            className="border-ide-border bg-ide-panel text-ide-text shadow-sm md:max-w-md"
+            className="overflow-x-hidden border-ide-border bg-ide-panel text-ide-text shadow-sm md:max-w-md"
           >
             <DialogHeader className="gap-2 text-left">
-              <DialogTitle className="text-base leading-6 text-ide-text">{dialog.title}</DialogTitle>
+              <DialogTitle className="break-words text-base leading-6 text-ide-text">{dialog.title}</DialogTitle>
               {dialog.message && (
-                <DialogDescription className="text-sm leading-6 text-ide-mute">{dialog.message}</DialogDescription>
+                <DialogDescription className="break-words text-sm leading-6 text-ide-mute">
+                  {dialog.message}
+                </DialogDescription>
               )}
             </DialogHeader>
             {dialog.type === "prompt" && (
@@ -214,7 +216,9 @@ export const DialogProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                   onChange={(e) => setInputValue(e.target.value)}
                   placeholder={dialog.placeholder || ""}
                   autoFocus
-                  className="border-ide-border bg-ide-bg text-ide-text placeholder:text-ide-mute focus-visible:ring-ide-accent/30"
+                  name="dialog-prompt"
+                  aria-label={dialog.title}
+                  className="h-11 border-ide-border bg-ide-bg text-ide-text placeholder:text-ide-mute focus-visible:ring-ide-accent/30 md:h-9"
                 />
               </div>
             )}

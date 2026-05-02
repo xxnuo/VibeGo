@@ -19,7 +19,7 @@ import {
   X,
   XCircle,
 } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { fileApi } from "@/api/file";
 import { useDialog } from "@/components/common";
 import { ActionButton } from "@/components/common/action-button";
@@ -33,7 +33,7 @@ interface ProjectMenuProps {
   onClose: () => void;
   locale: Locale;
   onOpenSettings: () => void;
-  onOpenDirectory: () => void;
+  onOpenDirectory: (restoreFocusTo?: HTMLElement | null) => void;
   onShowHomePage: () => void;
   onNewPage: () => void;
 }
@@ -71,6 +71,65 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
   const pageMenuItems = useFrameStore((s) => s.pageMenuItems);
   const removeGroup = useFrameStore((s) => s.removeGroup);
   const closeFolderGroup = useSessionStore((s) => s.closeFolderGroup);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const restorePreviousFocusRef = useRef(true);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    restorePreviousFocusRef.current = true;
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (target?.closest('[data-slot="dialog-content"]')) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const menu = menuRef.current;
+      if (!menu) return;
+      const focusable = Array.from(
+        menu.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      );
+      if (focusable.length === 0) {
+        event.preventDefault();
+        menu.focus({ preventScroll: true });
+        return;
+      }
+      const active = document.activeElement;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!menu.contains(active)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus({ preventScroll: true });
+        return;
+      }
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus({ preventScroll: true });
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus({ preventScroll: true });
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleKeyDown, true);
+      const previousFocus = previousFocusRef.current;
+      if (restorePreviousFocusRef.current && previousFocus?.isConnected) {
+        window.requestAnimationFrame(() => previousFocus.focus());
+      }
+    };
+  }, [isOpen]);
 
   const editMode = usePreviewStore((s) => s.editMode);
   const isDirty = usePreviewStore((s) => s.isDirty);
@@ -95,7 +154,8 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
   };
 
   const handleOpenFolder = () => {
-    onOpenDirectory();
+    restorePreviousFocusRef.current = false;
+    onOpenDirectory(previousFocusRef.current);
     onClose();
   };
 
@@ -332,50 +392,59 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
       <div className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm transition-opacity" onClick={onClose} />
 
       <div
+        ref={menuRef}
         role="dialog"
         aria-modal="true"
         aria-label="VibeGo"
-        className="fixed bottom-0 left-0 right-0 md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[480px] bg-ide-panel border-t md:border border-ide-border md:rounded-2xl shadow-2xl z-50 p-5 font-mono transform transition-transform duration-300"
+        className="fixed bottom-0 left-0 right-0 z-50 flex max-h-[calc(100dvh_-_env(safe-area-inset-top)_-_0.5rem)] flex-col overflow-hidden rounded-t-xl border-t border-ide-border bg-ide-panel px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] font-mono shadow-2xl transition-transform duration-300 md:bottom-auto md:top-1/2 md:left-1/2 md:max-h-[min(85dvh,44rem)] md:w-[480px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl md:border md:p-5"
       >
-        <div className="flex justify-between items-center mb-6 pb-2 border-b border-ide-border">
+        <div className="mb-3 flex shrink-0 items-center justify-between border-b border-ide-border pb-2 md:mb-6">
           <h3 className="font-bold text-ide-text flex items-center gap-2">
             <span className="bg-ide-accent text-ide-bg p-1 rounded-md">
               <Terminal size={18} />
             </span>
             VibeGo
           </h3>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-ide-bg text-ide-text transition-colors">
+          <button
+            ref={closeButtonRef}
+            type="button"
+            onClick={onClose}
+            className="flex h-11 w-11 items-center justify-center rounded-md text-ide-text transition-colors hover:bg-ide-bg md:h-9 md:w-9"
+            aria-label={t("common.close")}
+          >
             <X size={20} />
           </button>
         </div>
 
-        {sections.map((section, index) => (
-          <div
-            key={section.id}
-            className={index === sections.length - 1 ? "mb-6" : "mb-4 pb-4 border-b border-ide-border"}
-          >
-            <div className="text-[10px] text-ide-mute uppercase font-bold mb-3">{section.title}</div>
-            <div className="grid grid-cols-4 gap-1">
-              {section.items.map((item) => (
-                <ActionButton
-                  key={item.id}
-                  icon={item.icon}
-                  label={item.label}
-                  onClick={item.onClick}
-                  badge={item.badge}
-                  title={item.title}
-                />
-              ))}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+          {sections.map((section, index) => (
+            <div
+              key={section.id}
+              className={index === sections.length - 1 ? "mb-3" : "mb-4 pb-4 border-b border-ide-border"}
+            >
+              <div className="text-[10px] text-ide-mute uppercase font-bold mb-3">{section.title}</div>
+              <div className="grid grid-cols-3 gap-1 min-[360px]:grid-cols-4">
+                {section.items.map((item) => (
+                  <ActionButton
+                    key={item.id}
+                    icon={item.icon}
+                    label={item.label}
+                    onClick={item.onClick}
+                    badge={item.badge}
+                    title={item.title}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
 
-        <div className="mt-6 pt-4 border-t border-ide-border flex justify-between text-[10px] text-ide-mute">
+        <div className="mt-3 flex shrink-0 items-center justify-between border-t border-ide-border pt-2 text-[10px] text-ide-mute md:mt-6 md:pt-4">
           <a
             href="https://github.com/xxnuo/VibeGo"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-ide-accent transition-colors underline"
+            className="inline-flex min-h-11 items-center underline transition-colors hover:text-ide-accent md:min-h-0"
           >
             VibeGo{serverVersion ? ` ${serverVersion}` : ""}
           </a>

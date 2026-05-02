@@ -68,42 +68,53 @@ const ImagePreviewContent: React.FC<{ file: FileItem }> = ({ file }) => {
 
   return (
     <div className="h-full w-full flex flex-col bg-ide-bg">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-ide-border bg-ide-panel">
+      <div className="flex min-w-0 items-center gap-1 overflow-x-auto border-b border-ide-border bg-ide-panel px-2 py-2 md:gap-2 md:px-3">
         <button
+          type="button"
           onClick={handleZoomOut}
-          className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-ide-mute hover:bg-ide-bg hover:text-ide-text md:h-auto md:w-auto md:p-1.5"
           title={t("preview.zoomOut")}
+          aria-label={t("preview.zoomOut")}
         >
           <ZoomOut size={18} />
         </button>
-        <span className="text-xs text-ide-mute min-w-[50px] text-center">{Math.round(scale * 100)}%</span>
+        <span className="min-w-11 shrink-0 text-center text-xs text-ide-mute md:min-w-[50px]">
+          {Math.round(scale * 100)}%
+        </span>
         <button
+          type="button"
           onClick={handleZoomIn}
-          className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-ide-mute hover:bg-ide-bg hover:text-ide-text md:h-auto md:w-auto md:p-1.5"
           title={t("preview.zoomIn")}
+          aria-label={t("preview.zoomIn")}
         >
           <ZoomIn size={18} />
         </button>
         <button
+          type="button"
           onClick={handleReset}
-          className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-ide-mute hover:bg-ide-bg hover:text-ide-text md:h-auto md:w-auto md:p-1.5"
           title={t("preview.reset")}
+          aria-label={t("preview.reset")}
         >
           <RotateCcw size={18} />
         </button>
-        <div className="flex-1" />
+        <div className="min-w-2 flex-1" />
         <a
           href={imageUrl}
           download={file.name}
-          className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-ide-mute hover:bg-ide-bg hover:text-ide-text md:h-auto md:w-auto md:p-1.5"
           title={t("preview.download")}
+          aria-label={t("preview.download")}
         >
           <Download size={18} />
         </a>
         <button
+          type="button"
           onClick={() => window.open(imageUrl, "_blank")}
-          className="p-1.5 rounded hover:bg-ide-bg text-ide-mute hover:text-ide-text"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-ide-mute hover:bg-ide-bg hover:text-ide-text md:h-auto md:w-auto md:p-1.5"
           title={t("preview.openInNewTab")}
+          aria-label={t("preview.openInNewTab")}
         >
           <ExternalLink size={18} />
         </button>

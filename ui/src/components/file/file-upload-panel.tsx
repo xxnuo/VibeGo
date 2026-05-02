@@ -106,17 +106,19 @@ const FileUploadPanel: React.FC<FileUploadPanelProps> = ({ open, currentPath, on
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-ide-panel border-ide-border text-ide-text md:max-w-lg">
+      <DialogContent className="overflow-x-hidden border-ide-border bg-ide-panel text-ide-text md:max-w-lg">
         <div className="flex items-center justify-between gap-3 pr-8">
-          <div>
+          <div className="min-w-0 flex-1">
             <h2 className="text-base font-semibold">{t("fileManager.upload")}</h2>
-            <div className="text-xs text-ide-mute truncate max-w-[360px]">{currentPath}</div>
+            <div className="truncate text-xs text-ide-mute">{currentPath}</div>
           </div>
-          <Upload size={20} className="text-ide-mute" />
+          <Upload size={20} className="hidden shrink-0 text-ide-mute sm:block" />
         </div>
 
         <input
           ref={fileInputRef}
+          name="upload-files"
+          aria-label={t("fileManager.upload")}
           type="file"
           multiple
           className="hidden"
@@ -127,6 +129,8 @@ const FileUploadPanel: React.FC<FileUploadPanelProps> = ({ open, currentPath, on
         />
         <input
           ref={folderInputRef}
+          name="upload-folder"
+          aria-label={t("fileManager.uploadFolder")}
           type="file"
           multiple
           className="hidden"
@@ -152,11 +156,11 @@ const FileUploadPanel: React.FC<FileUploadPanelProps> = ({ open, currentPath, on
             handleFiles(e.dataTransfer.files, t("fileManager.uploadFiles"));
           }}
         >
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-2">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center justify-center gap-2 bg-ide-panel px-3 py-3 text-sm hover:bg-ide-border"
+              className="flex min-h-11 min-w-0 items-center justify-center gap-2 bg-ide-panel px-3 py-3 text-sm hover:bg-ide-border"
             >
               <FileUp size={18} />
               {t("fileManager.uploadFiles")}
@@ -164,7 +168,7 @@ const FileUploadPanel: React.FC<FileUploadPanelProps> = ({ open, currentPath, on
             <button
               type="button"
               onClick={() => folderInputRef.current?.click()}
-              className="flex items-center justify-center gap-2 bg-ide-panel px-3 py-3 text-sm hover:bg-ide-border"
+              className="flex min-h-11 min-w-0 items-center justify-center gap-2 bg-ide-panel px-3 py-3 text-sm hover:bg-ide-border"
             >
               <FolderUp size={18} />
               {t("fileManager.uploadFolder")}
@@ -173,7 +177,7 @@ const FileUploadPanel: React.FC<FileUploadPanelProps> = ({ open, currentPath, on
           <div className="mt-3 text-center text-xs text-ide-mute">{t("fileManager.dropToUpload")}</div>
         </div>
 
-        <div className="space-y-2 max-h-[36vh] overflow-y-auto">
+        <div className="max-h-[36vh] space-y-2 overflow-y-auto overscroll-contain">
           {records.length === 0 ? (
             <div className="py-6 text-center text-xs text-ide-mute">{t("fileManager.noUploadRecords")}</div>
           ) : (
@@ -218,7 +222,7 @@ const FileUploadPanel: React.FC<FileUploadPanelProps> = ({ open, currentPath, on
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="flex items-center gap-2 bg-ide-bg px-3 py-2 text-sm hover:bg-ide-border"
+            className="flex min-h-11 w-full items-center justify-center gap-2 bg-ide-bg px-3 py-2 text-sm hover:bg-ide-border sm:w-auto md:min-h-9"
           >
             <X size={16} />
             {t("common.close")}

@@ -323,9 +323,13 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
                   : t("settings.speech.voice.releaseToSend")}
           </div>
           <div className="tk-voice-actions">
-            <div
+            <button
+              type="button"
               className="tk-voice-action tk-voice-action--cancel"
               aria-hidden={!voiceHold}
+              aria-label={t("settings.speech.voice.tapToCancel")}
+              tabIndex={voiceHold ? 0 : -1}
+              disabled={!voiceHold || asrStatus === "recognizing"}
               onPointerDown={
                 voiceHold
                   ? (e) => {
@@ -335,16 +339,25 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
                     }
                   : undefined
               }
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.detail === 0 && asrStatus !== "recognizing") void handleMicToggle("cancel");
+              }}
             >
               <Undo2 size={24} strokeWidth={2.3} />
               {voiceHold && <span className="tk-voice-action-label">{t("settings.speech.voice.tapToCancel")}</span>}
-            </div>
+            </button>
             <div className="tk-voice-action tk-voice-action--continue" aria-hidden="true">
               <AudioLines size={26} strokeWidth={2.2} />
             </div>
-            <div
+            <button
+              type="button"
               className="tk-voice-action tk-voice-action--commit"
               aria-hidden={!voiceHold}
+              aria-label={t("settings.speech.voice.tapToSend")}
+              tabIndex={voiceHold ? 0 : -1}
+              disabled={!voiceHold || asrStatus === "recognizing"}
               onPointerDown={
                 voiceHold
                   ? (e) => {
@@ -354,11 +367,16 @@ const KeyboardCore: React.FC<KeyboardProps> = ({ onKeyEvent, layout = KEYBOARD_Q
                     }
                   : undefined
               }
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.detail === 0 && asrStatus !== "recognizing") void handleMicToggle("stop");
+              }}
             >
               <ArrowUp size={26} strokeWidth={2.3} />
               <MoreVertical size={12} strokeWidth={3} />
               {voiceHold && <span className="tk-voice-action-label">{t("settings.speech.voice.tapToSend")}</span>}
-            </div>
+            </button>
           </div>
         </div>
       )}

@@ -123,68 +123,77 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, locale }) 
   const isDisabled = loading || !key.trim() || isBanned;
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-ide-bg z-[99999]">
-      <div className="w-full max-w-sm mx-auto px-4">
-        <div className={shake ? "animate-[login-shake_0.5s_ease-in-out]" : ""}>
-          <div className="text-center py-6">
-            <div className="inline-flex items-center justify-center w-14 h-14 bg-ide-panel border border-ide-border rounded-2xl mb-3">
-              <Terminal size={28} className="text-ide-accent" />
-            </div>
-            <h1 className="text-xl font-bold text-ide-text">{t(locale, "title")}</h1>
-          </div>
-
-          <div className="bg-ide-panel border border-ide-border rounded-xl p-4">
-            <div className="flex items-center gap-1.5 text-xs text-ide-mute mb-3">
-              <Lock size={12} />
-              <span>{t(locale, "subtitle")}</span>
-            </div>
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <input
-                ref={inputRef}
-                type="password"
-                value={key}
-                onChange={(e) => setKey(e.target.value)}
-                placeholder={t(locale, "placeholder")}
-                disabled={loading || isBanned}
-                autoComplete="current-password"
-                className={`w-full px-3 py-2.5 bg-ide-bg border rounded-lg text-ide-text placeholder-ide-mute text-sm focus:outline-none transition-colors ${
-                  error ? "border-red-500 focus:border-red-500" : "border-ide-border focus:border-ide-accent"
-                } ${isBanned ? "opacity-50 cursor-not-allowed" : ""}`}
-              />
-
-              <button
-                type="submit"
-                disabled={isDisabled}
-                className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-opacity ${
-                  isDisabled
-                    ? "bg-ide-accent/50 text-ide-bg cursor-not-allowed"
-                    : "bg-ide-accent text-ide-bg hover:opacity-90 active:opacity-80"
-                }`}
-              >
-                {loading ? t(locale, "logging") : t(locale, "login")}
-              </button>
-            </form>
-
-            {(error || (remaining !== null && remaining > 0 && !isBanned)) && (
-              <div className="mt-3 text-center text-sm">
-                {error && (
-                  <div className="text-red-500">
-                    {error}
-                    {isBanned && (
-                      <span className="ml-1 font-mono text-xs">
-                        ({t(locale, "retryIn")} {retryAfter}
-                        {t(locale, "seconds")})
-                      </span>
-                    )}
-                  </div>
-                )}
-                {remaining !== null && remaining > 0 && !isBanned && (
-                  <div className="text-ide-mute text-xs mt-1">
-                    {remaining} {t(locale, "remaining")}
-                  </div>
-                )}
+    <div className="fixed inset-0 z-[99999] overflow-y-auto bg-ide-bg">
+      <div className="flex min-h-full w-full items-center justify-center px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="w-full max-w-sm mx-auto">
+          <div className={shake ? "animate-[login-shake_0.5s_ease-in-out]" : ""}>
+            <div className="text-center py-6">
+              <div className="inline-flex items-center justify-center w-14 h-14 bg-ide-panel border border-ide-border rounded-2xl mb-3">
+                <Terminal size={28} className="text-ide-accent" />
               </div>
-            )}
+              <h1 className="text-xl font-bold text-ide-text">{t(locale, "title")}</h1>
+            </div>
+
+            <div className="bg-ide-panel border border-ide-border rounded-xl p-4">
+              <div className="flex items-center gap-1.5 text-xs text-ide-mute mb-3">
+                <Lock size={12} />
+                <span>{t(locale, "subtitle")}</span>
+              </div>
+              <form onSubmit={handleSubmit} className="space-y-3">
+                <input
+                  ref={inputRef}
+                  type="password"
+                  id="login-key"
+                  name="key"
+                  aria-label={t(locale, "placeholder")}
+                  value={key}
+                  onChange={(e) => setKey(e.target.value)}
+                  placeholder={t(locale, "placeholder")}
+                  disabled={loading || isBanned}
+                  autoComplete="current-password"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  aria-invalid={Boolean(error)}
+                  aria-describedby="login-feedback"
+                  className={`h-11 w-full px-3 bg-ide-bg border rounded-lg text-ide-text placeholder-ide-mute text-base md:text-sm focus:outline-none transition-colors ${
+                    error ? "border-red-500 focus:border-red-500" : "border-ide-border focus:border-ide-accent"
+                  } ${isBanned ? "opacity-50 cursor-not-allowed" : ""}`}
+                />
+
+                <button
+                  type="submit"
+                  disabled={isDisabled}
+                  className={`min-h-11 w-full flex items-center justify-center gap-2 px-4 rounded-lg font-medium text-sm transition-opacity ${
+                    isDisabled
+                      ? "bg-ide-accent/50 text-ide-bg cursor-not-allowed"
+                      : "bg-ide-accent text-ide-bg hover:opacity-90 active:opacity-80"
+                  }`}
+                >
+                  {loading ? t(locale, "logging") : t(locale, "login")}
+                </button>
+              </form>
+
+              {(error || (remaining !== null && remaining > 0 && !isBanned)) && (
+                <div id="login-feedback" role="status" aria-live="polite" className="mt-3 text-center text-sm">
+                  {error && (
+                    <div className="text-red-500">
+                      {error}
+                      {isBanned && (
+                        <span className="ml-1 font-mono text-xs">
+                          ({t(locale, "retryIn")} {retryAfter}
+                          {t(locale, "seconds")})
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {remaining !== null && remaining > 0 && !isBanned && (
+                    <div className="text-ide-mute text-xs mt-1">
+                      {remaining} {t(locale, "remaining")}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

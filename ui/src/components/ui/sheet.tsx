@@ -74,9 +74,15 @@ function SheetContent({
         )}
         {...props}
       >
+        {(side === "top" || side === "right" || side === "left") && (
+          <div aria-hidden="true" className="h-[env(safe-area-inset-top)] shrink-0 md:hidden" />
+        )}
         {children}
+        {(side === "bottom" || side === "right" || side === "left") && (
+          <div aria-hidden="true" className="h-[env(safe-area-inset-bottom)] shrink-0 md:hidden" />
+        )}
         {showCloseButton && (
-          <SheetPrimitive.Close className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-secondary">
+          <SheetPrimitive.Close className="absolute top-[max(0.75rem,env(safe-area-inset-top))] right-3 inline-flex h-11 w-11 items-center justify-center rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none md:top-4 md:right-4 md:h-8 md:w-8 data-[state=open]:bg-secondary">
             <XIcon className="size-4" />
             <span className="sr-only">Close</span>
           </SheetPrimitive.Close>

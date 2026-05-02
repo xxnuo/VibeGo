@@ -11,6 +11,7 @@ import type { TerminalInstanceHandle, TerminalInstanceStateUpdate } from "@/comp
 import TerminalInstance from "@/components/terminal/terminal-instance";
 import TerminalListManager from "@/components/terminal/terminal-list-manager";
 import TerminalSplitView from "@/components/terminal/terminal-split-view";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { usePageTopBar } from "@/hooks/use-page-top-bar";
 import { terminalKeys, useTerminalCreate, useTerminalRename } from "@/hooks/use-terminal";
 import { useTranslation } from "@/lib/i18n";
@@ -68,6 +69,7 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
   const queryClient = useQueryClient();
   const locale = useAppStore((s) => s.locale);
   const t = useTranslation(locale);
+  const isMobile = useIsMobile();
   const currentSessionId = useSessionStore((s) => s.currentSessionId);
   const sessionLoading = useSessionStore((s) => s.loading);
   const sessionInitialized = useSessionStore((s) => s.sessionInitialized);
@@ -462,15 +464,17 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
           void handleSplit("vertical");
         },
       },
-      {
+    ];
+    if (!isMobile) {
+      items.push({
         id: "split-right",
         icon: <Columns size={18} />,
         label: t("terminal.splitRight"),
         onClick: () => {
           void handleSplit("horizontal");
         },
-      },
-    ];
+      });
+    }
     if (hasSplit) {
       items.push({
         id: "close-split",
@@ -482,7 +486,17 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
       });
     }
     return items;
-  }, [focusedTerminal, handleRenameTerminal, handleSplit, handleCloseSplit, hasSplit, listManagerOpen, showHistory, t]);
+  }, [
+    focusedTerminal,
+    handleRenameTerminal,
+    handleSplit,
+    handleCloseSplit,
+    hasSplit,
+    isMobile,
+    listManagerOpen,
+    showHistory,
+    t,
+  ]);
 
   useEffect(() => {
     setPageMenuItems(pageMenuItems);
@@ -508,7 +522,7 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
                 <div
                   key={terminal.id}
                   onClick={() => handleTabClick(terminal.id)}
-                  className={`shrink-0 px-2 h-7 rounded-md flex items-center gap-1 text-xs border transition-all cursor-pointer ${
+                  className={`flex h-11 shrink-0 cursor-pointer items-center gap-1 rounded-md border px-2 text-xs transition-all md:h-7 ${
                     isActive
                       ? "bg-ide-panel border-ide-accent text-ide-accent border-b-2 shadow-sm"
                       : isClosed
@@ -534,11 +548,13 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
                     </span>
                   )}
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       void handleCloseTerminalPages([terminal.id]);
                     }}
-                    className="hover:text-red-500 rounded-full p-0.5 hover:bg-ide-bg"
+                    className="flex size-11 shrink-0 items-center justify-center rounded-sm text-ide-mute hover:bg-ide-bg hover:text-red-500 md:size-auto md:rounded-full md:p-0.5"
+                    aria-label={`${t("common.close")} ${terminal.name}`}
                   >
                     <X size={12} />
                   </button>

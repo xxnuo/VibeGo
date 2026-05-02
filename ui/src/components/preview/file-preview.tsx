@@ -135,8 +135,9 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file }) => {
             <p className="text-sm">{t("preview.notAvailable")}</p>
             <div className="flex flex-col gap-2">
               <button
+                type="button"
                 onClick={loadFileAsCode}
-                className="flex items-center gap-2 px-4 py-2 bg-ide-panel border border-ide-border text-ide-text rounded text-sm hover:bg-ide-bg"
+                className="flex min-h-11 items-center gap-2 rounded border border-ide-border bg-ide-panel px-4 text-sm text-ide-text hover:bg-ide-bg"
               >
                 <Code size={18} />
                 {t("preview.openAsText")}
@@ -144,7 +145,8 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file }) => {
               <a
                 href={fileApi.downloadUrl(file.path)}
                 download={file.name}
-                className="flex items-center justify-center gap-2 px-4 py-2 bg-ide-accent text-ide-bg rounded text-sm hover:opacity-90"
+                className="flex min-h-11 items-center justify-center gap-2 rounded bg-ide-accent px-4 text-sm text-ide-bg hover:opacity-90"
+                aria-label={t("preview.download")}
               >
                 <Download size={18} />
                 {t("preview.download")}

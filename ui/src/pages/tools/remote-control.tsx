@@ -80,7 +80,7 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
 
   return (
     <div className="h-full flex flex-col bg-ide-bg overflow-auto">
-      <div className="flex-1 flex flex-col items-center justify-start px-4 py-5 gap-5 max-w-lg mx-auto w-full">
+      <div className="flex-1 flex flex-col items-center justify-start px-4 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] gap-5 max-w-lg mx-auto w-full">
         <div className="w-full bg-ide-panel rounded-xl border border-ide-border p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -93,28 +93,34 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="p-2 rounded-lg bg-ide-bg border border-ide-border hover:bg-ide-border/50 active:scale-95 transition-all"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-ide-bg border border-ide-border hover:bg-ide-border/50 active:scale-95 transition-all"
               onClick={() => doAction("vol-down", () => remoteApi.volumeDown())}
               disabled={loading === "vol-down"}
+              aria-label={t("plugin.remoteControl.volumeDown")}
             >
               <Minus size={16} className="text-ide-text" />
             </button>
             <input
               ref={volumeSliderRef}
               type="range"
+              id="remote-control-volume"
+              name="remote-control-volume"
               min={0}
               max={100}
               value={volume}
               onChange={handleVolumeChange}
-              onMouseUp={() => handleVolumeCommit(volume)}
-              onTouchEnd={() => handleVolumeCommit(volume)}
-              className="flex-1 h-2 rounded-full appearance-none cursor-pointer accent-blue-500 slider-volume"
+              onPointerUp={() => handleVolumeCommit(volume)}
+              onKeyUp={() => handleVolumeCommit(volume)}
+              aria-label={t("plugin.remoteControl.volume")}
+              aria-valuetext={`${volume}%`}
+              className="h-11 min-w-0 flex-1 appearance-none bg-transparent cursor-pointer accent-blue-500 slider-volume"
             />
             <button
               type="button"
-              className="p-2 rounded-lg bg-ide-bg border border-ide-border hover:bg-ide-border/50 active:scale-95 transition-all"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-ide-bg border border-ide-border hover:bg-ide-border/50 active:scale-95 transition-all"
               onClick={() => doAction("vol-up", () => remoteApi.volumeUp())}
               disabled={loading === "vol-up"}
+              aria-label={t("plugin.remoteControl.volumeUp")}
             >
               <Plus size={16} className="text-ide-text" />
             </button>
@@ -123,7 +129,7 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
           <div className="flex items-center gap-2 justify-center">
             <button
               type="button"
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg border transition-all active:scale-95 ${
+              className={`flex min-h-11 items-center gap-1.5 px-4 rounded-lg border transition-all active:scale-95 ${
                 muted
                   ? "bg-red-500/15 border-red-500/30 text-red-500"
                   : "bg-ide-bg border-ide-border text-ide-text hover:bg-ide-border/50"
@@ -148,25 +154,28 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
           <div className="flex items-center justify-center gap-3">
             <button
               type="button"
-              className="p-3 rounded-xl bg-ide-bg border border-ide-border hover:bg-ide-border/50 active:scale-90 transition-all"
+              className="flex h-12 w-12 items-center justify-center rounded-xl bg-ide-bg border border-ide-border hover:bg-ide-border/50 active:scale-90 transition-all"
               onClick={() => doAction("prev", () => remoteApi.mediaPrevious())}
               disabled={loading === "prev"}
+              aria-label={t("plugin.remoteControl.previous")}
             >
               <SkipBack size={22} className="text-ide-text" />
             </button>
             <button
               type="button"
-              className="p-4 rounded-2xl bg-green-500/15 border border-green-500/30 hover:bg-green-500/25 active:scale-90 transition-all"
+              className="flex h-15 w-15 items-center justify-center rounded-2xl bg-green-500/15 border border-green-500/30 hover:bg-green-500/25 active:scale-90 transition-all"
               onClick={() => doAction("play", () => remoteApi.mediaPlayPause())}
               disabled={loading === "play"}
+              aria-label={t("plugin.remoteControl.playPause")}
             >
               <Play size={28} className="text-green-500" />
             </button>
             <button
               type="button"
-              className="p-3 rounded-xl bg-ide-bg border border-ide-border hover:bg-ide-border/50 active:scale-90 transition-all"
+              className="flex h-12 w-12 items-center justify-center rounded-xl bg-ide-bg border border-ide-border hover:bg-ide-border/50 active:scale-90 transition-all"
               onClick={() => doAction("next", () => remoteApi.mediaNext())}
               disabled={loading === "next"}
+              aria-label={t("plugin.remoteControl.next")}
             >
               <SkipForward size={22} className="text-ide-text" />
             </button>
@@ -182,7 +191,7 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
           <div className="flex items-center justify-center gap-3">
             <button
               type="button"
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-ide-bg border border-ide-border hover:bg-ide-border/50 active:scale-95 transition-all"
+              className="min-h-11 flex-1 flex items-center justify-center gap-2 px-2 rounded-xl bg-ide-bg border border-ide-border hover:bg-ide-border/50 active:scale-95 transition-all"
               onClick={() => doAction("screen-off", () => remoteApi.screenOff())}
               disabled={loading === "screen-off"}
             >
@@ -191,7 +200,7 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
             </button>
             <button
               type="button"
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-ide-bg border border-ide-border hover:bg-ide-border/50 active:scale-95 transition-all"
+              className="min-h-11 flex-1 flex items-center justify-center gap-2 px-2 rounded-xl bg-ide-bg border border-ide-border hover:bg-ide-border/50 active:scale-95 transition-all"
               onClick={() => doAction("screen-on", () => remoteApi.screenOn())}
               disabled={loading === "screen-on"}
             >
@@ -210,13 +219,13 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
         }
         .slider-volume::-webkit-slider-thumb {
           -webkit-appearance: none;
-          width: 20px;
-          height: 20px;
+          width: 24px;
+          height: 24px;
           border-radius: 50%;
           background: #3b82f6;
           border: 2px solid white;
           box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-          margin-top: -6px;
+          margin-top: -8px;
           cursor: pointer;
         }
         .slider-volume::-moz-range-track {
@@ -230,8 +239,8 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
           height: 8px;
         }
         .slider-volume::-moz-range-thumb {
-          width: 20px;
-          height: 20px;
+          width: 24px;
+          height: 24px;
           border-radius: 50%;
           background: #3b82f6;
           border: 2px solid white;

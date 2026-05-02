@@ -1,6 +1,9 @@
-import { Check, ChevronRight, Clock, Edit2, Layers, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, Clock, Edit2, GripVertical, Layers, Trash2, X } from "lucide-react";
 import React from "react";
+import { toast } from "sonner";
 import { useDialog } from "@/components/common";
+import { reorderBlockTermItems } from "@/components/terminal/blockterm-session-settings";
+import { useReorderableList } from "@/hooks/use-reorderable-list";
 import { getIntlLocale, type Locale, useTranslation } from "@/lib/i18n";
 import { useSessionStore } from "@/stores/session-store";
 
@@ -20,10 +23,28 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({ onSwitchSession, 
   const deleteSession = useSessionStore((s) => s.deleteSession);
   const clearAllSessions = useSessionStore((s) => s.clearAllSessions);
   const renameSession = useSessionStore((s) => s.renameSession);
+  const reorderSessions = useSessionStore((s) => s.reorderSessions);
   const switchSession = useSessionStore((s) => s.switchSession);
 
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editName, setEditName] = React.useState("");
+
+  const handleReorder = React.useCallback(
+    (fromId: string, toId: string) => {
+      const next = reorderBlockTermItems(sessions, fromId, toId);
+      if (next.every((session, index) => session.id === sessions[index]?.id)) return;
+      void reorderSessions(next.map((session) => session.id)).catch((error) => {
+        toast.error(error instanceof Error ? error.message : t("common.saveFailed"));
+      });
+    },
+    [reorderSessions, sessions, t]
+  );
+  const sessionReorder = useReorderableList({
+    ids: sessions.map((session) => session.id),
+    axis: "y",
+    onReorder: handleReorder,
+    disabled: sessionsLoading || workspaceLoading || editingId !== null,
+  });
 
   React.useEffect(() => {
     loadSessions();
@@ -57,8 +78,12 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({ onSwitchSession, 
       setEditingId(null);
       return;
     }
-    await renameSession(sessionId, editName.trim());
-    setEditingId(null);
+    try {
+      await renameSession(sessionId, editName.trim());
+      setEditingId(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("common.saveFailed"));
+    }
   };
 
   const handleSwitch = async (sessionId: string) => {
@@ -106,10 +131,12 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({ onSwitchSession, 
         </div>
         {sessions.length > 0 && (
           <button
+            type="button"
             onClick={handleClearAll}
             disabled={workspaceLoading}
-            className="text-xs text-ide-mute hover:text-red-500 flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex min-h-11 min-w-11 items-center justify-center gap-1 text-xs text-ide-mute transition-colors hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 sm:min-w-0"
             title={t("session.clearAll")}
+            aria-label={t("session.clearAll")}
           >
             <Trash2 size={12} />
             <span className="hidden sm:inline">{t("session.clearAll")}</span>
@@ -132,13 +159,19 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({ onSwitchSession, 
             return (
               <div
                 key={session.id}
+                {...sessionReorder.bindItem(session.id)}
+                style={sessionReorder.getItemStyle(session.id)}
+                data-blockterm-workspace-session-id={session.id}
                 onClick={() => handleSwitch(session.id)}
-                className={`group flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg border transition-all ${
+                className={`group relative flex items-center gap-2 rounded-lg border p-2.5 transition-all sm:gap-3 sm:p-3 ${
                   isCurrent
                     ? "bg-ide-accent/10 border-ide-accent/30 cursor-default"
                     : "border-transparent hover:bg-ide-bg cursor-pointer hover:border-ide-border"
+                } ${sessionReorder.activeId === session.id ? "z-10 cursor-grabbing opacity-95 shadow-sm" : ""} ${
+                  sessionReorder.overId === session.id ? "ring-1 ring-ide-accent" : ""
                 }`}
               >
+                <GripVertical size={14} className="shrink-0 cursor-grab text-ide-mute" aria-hidden="true" />
                 <div
                   className={`p-1.5 sm:p-2 rounded-lg flex-shrink-0 ${isCurrent ? "bg-ide-accent/20" : "bg-ide-bg group-hover:bg-ide-panel"}`}
                 >
@@ -148,27 +181,33 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({ onSwitchSession, 
 
                 <div className="flex-1 min-w-0">
                   {isEditing ? (
-                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-1" data-drag-ignore onClick={(e) => e.stopPropagation()}>
                       <input
                         type="text"
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
-                        className="flex-1 px-2 py-0.5 bg-ide-bg border border-ide-accent rounded text-sm text-ide-text outline-none"
+                        name={`session-name-${session.id}`}
+                        aria-label={t("session.rename")}
+                        className="h-11 min-h-11 flex-1 px-2 bg-ide-bg border border-ide-accent rounded text-sm text-ide-text outline-none sm:h-auto sm:min-h-0 sm:py-0.5"
                         autoFocus
                         onKeyDown={(e) => {
-                          if (e.key === "Enter") handleRename(session.id);
+                          if (e.key === "Enter") void handleRename(session.id);
                           if (e.key === "Escape") setEditingId(null);
                         }}
                       />
                       <button
-                        onClick={() => handleRename(session.id)}
-                        className="p-1 text-green-500 hover:bg-ide-panel rounded"
+                        type="button"
+                        onClick={() => void handleRename(session.id)}
+                        className="flex h-11 w-11 items-center justify-center rounded text-green-500 hover:bg-ide-panel sm:h-auto sm:w-auto sm:p-1"
+                        aria-label={t("dialog.confirm")}
                       >
                         <Check size={14} />
                       </button>
                       <button
+                        type="button"
                         onClick={() => setEditingId(null)}
-                        className="p-1 text-red-500 hover:bg-ide-panel rounded"
+                        className="flex h-11 w-11 items-center justify-center rounded text-red-500 hover:bg-ide-panel sm:h-auto sm:w-auto sm:p-1"
+                        aria-label={t("common.cancel")}
                       >
                         <X size={14} />
                       </button>
@@ -192,17 +231,23 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({ onSwitchSession, 
                 {!isEditing && (
                   <div className="flex items-center gap-1">
                     <button
+                      type="button"
+                      data-drag-ignore
                       onClick={(e) => startEditing(e, session)}
-                      className="p-1.5 rounded hover:bg-ide-bg-hover text-ide-mute hover:text-ide-accent opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block"
+                      className="hidden h-11 w-11 items-center justify-center rounded text-ide-mute opacity-0 transition-opacity hover:bg-ide-bg-hover hover:text-ide-accent sm:flex sm:h-auto sm:w-auto sm:p-1.5 sm:group-hover:opacity-100"
                       title={t("session.rename")}
+                      aria-label={t("session.rename")}
                     >
                       <Edit2 size={14} />
                     </button>
                     <button
+                      type="button"
+                      data-drag-ignore
                       onClick={(e) => handleDelete(e, session.id)}
                       disabled={workspaceLoading}
-                      className="p-1.5 rounded hover:bg-ide-bg-hover text-ide-mute hover:text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex h-11 w-11 items-center justify-center rounded text-ide-mute hover:bg-ide-bg-hover hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50 sm:h-auto sm:w-auto sm:p-1.5"
                       title={t("session.delete")}
+                      aria-label={t("session.delete")}
                     >
                       <Trash2 size={14} />
                     </button>

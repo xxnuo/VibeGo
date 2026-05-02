@@ -499,7 +499,7 @@ const BlockTermLineAIPanel: React.FC<BlockTermLineAIPanelProps> = ({
                       <button
                         key={codeBlock.index}
                         type="button"
-                        className="inline-flex min-h-8 items-center gap-1.5 border border-ide-border px-2 text-xs text-ide-mute hover:bg-ide-panel hover:text-ide-text"
+                        className="inline-flex min-h-11 items-center gap-1.5 border border-ide-border px-3 text-xs text-ide-mute hover:bg-ide-panel hover:text-ide-text md:min-h-8 md:px-2"
                         onClick={() => {
                           const edit = buildBlockTermLineAIRefillEdit(message.content, codeBlock.index);
                           if (edit) onRefill(edit);
@@ -519,7 +519,7 @@ const BlockTermLineAIPanel: React.FC<BlockTermLineAIPanelProps> = ({
                   <button
                     type="button"
                     data-blockterm-line-ai-retry
-                    className="mt-2 inline-flex min-h-8 items-center gap-1.5 border border-ide-border px-2 text-xs text-ide-mute hover:bg-ide-panel hover:text-ide-text"
+                    className="mt-2 inline-flex min-h-11 items-center gap-1.5 border border-ide-border px-3 text-xs text-ide-mute hover:bg-ide-panel hover:text-ide-text md:min-h-8 md:px-2"
                     onClick={() =>
                       retryRun(message.request as BlockTermLineAIRunInput, message.id, !!message.restartOnRetry)
                     }
@@ -553,7 +553,7 @@ const BlockTermLineAIPanel: React.FC<BlockTermLineAIPanelProps> = ({
           <button
             type="button"
             data-blockterm-line-ai-send
-            className="flex size-9 shrink-0 items-center justify-center bg-ide-accent text-ide-on-accent disabled:bg-ide-border disabled:text-ide-mute disabled:opacity-50"
+            className="flex size-11 shrink-0 items-center justify-center bg-ide-accent text-ide-on-accent disabled:bg-ide-border disabled:text-ide-mute disabled:opacity-50 md:size-9"
             onClick={sendPrompt}
             disabled={!!activeRunId || !draft.trim()}
             title={t("plugin.blockTerm.lineAI.send")}

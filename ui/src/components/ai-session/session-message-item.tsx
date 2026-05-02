@@ -59,7 +59,13 @@ const SessionMessageItem: React.FC<SessionMessageItemProps> = ({
         </span>
         <div className="flex shrink-0 items-center gap-1">
           <span className="max-w-[40vw] truncate text-ide-mute">{formatDateTime(message.ts, locale)}</span>
-          <Button variant="ghost" size="icon-xs" onClick={() => onCopy(message.content)}>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => onCopy(message.content)}
+            aria-label={t("common.copy")}
+            className="size-11 md:size-6"
+          >
             <Copy size={12} />
           </Button>
         </div>
@@ -72,7 +78,7 @@ const SessionMessageItem: React.FC<SessionMessageItemProps> = ({
           type="button"
           aria-expanded={expanded}
           onClick={() => onExpandedChange(!expanded)}
-          className="mt-2 inline-flex items-center gap-1 text-xs text-ide-mute transition-colors hover:text-ide-text"
+          className="mt-2 inline-flex min-h-11 items-center gap-1 px-2 text-xs text-ide-mute transition-colors hover:text-ide-text md:min-h-0 md:px-0"
         >
           {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           {expanded ? t("plugin.aiSessionManager.collapseContent") : t("plugin.aiSessionManager.expandContent")}

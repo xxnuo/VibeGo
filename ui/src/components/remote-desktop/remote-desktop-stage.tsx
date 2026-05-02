@@ -6,6 +6,7 @@ interface StageProps {
   runtime: RemoteDesktopRuntime;
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   stageRef: React.RefObject<HTMLDivElement | null>;
+  isMobile: boolean;
   t: (key: string) => string;
   onPointerMove: (event: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerDown: (event: React.PointerEvent<HTMLCanvasElement>) => void;
@@ -23,6 +24,7 @@ export const RemoteDesktopStage: React.FC<StageProps> = ({
   runtime,
   canvasRef,
   stageRef,
+  isMobile,
   t,
   onPointerMove,
   onPointerDown,
@@ -87,6 +89,7 @@ export const RemoteDesktopStage: React.FC<StageProps> = ({
       : null;
 
   const handleEdgeMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (isMobile && event.pointerType === "touch") return;
     onPointerMove(event);
     if (runtime.viewConfig.scrollMode !== "edge") return;
     const stage = stageRef.current;
@@ -114,14 +117,15 @@ export const RemoteDesktopStage: React.FC<StageProps> = ({
           ? "overflow-auto"
           : "overflow-hidden"
       }`}
-      onPointerLeave={() => {
+      onPointerLeave={(event) => {
+        if (isMobile && event.pointerType === "touch") return;
         onReleaseInput();
         if (edgeTimerRef.current != null) window.clearInterval(edgeTimerRef.current);
         edgeTimerRef.current = null;
       }}
     >
       {runtime.state === "idle" ? (
-        <div className="grid min-h-full min-w-full place-items-center p-4 pb-12">
+        <div className="grid min-h-full min-w-full place-items-center p-4 pb-24 md:pb-12">
           <div className="flex flex-col items-center gap-3 text-xs text-ide-mute">
             <div className="grid h-16 w-16 place-items-center border border-ide-border bg-ide-panel text-ide-mute">
               <Power size={22} />
@@ -130,7 +134,7 @@ export const RemoteDesktopStage: React.FC<StageProps> = ({
             {runtime.status?.inputSetupRequired && (
               <button
                 type="button"
-                className="border border-ide-border bg-ide-panel px-3 py-1.5 text-xs text-ide-text hover:bg-ide-hover disabled:opacity-60"
+                className="min-h-11 border border-ide-border bg-ide-panel px-3 py-1.5 text-xs text-ide-text hover:bg-ide-hover disabled:opacity-60 md:min-h-0"
                 disabled={runtime.installingHelper}
                 onClick={runtime.installInputHelper}
               >
@@ -183,31 +187,42 @@ export const RemoteDesktopStage: React.FC<StageProps> = ({
         </div>
       )}
       <QosOverlay runtime={runtime} t={t} />
-      <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between gap-2 border-t border-ide-border bg-ide-panel/95 px-3 py-1.5 text-[11px] text-ide-mute">
-        <div className="flex min-w-0 items-center gap-2">
-          {runtime.controlEnabled ? <EyeOff size={12} /> : <Eye size={12} />}
-          <span>{t(`plugin.remoteDesktop.state.${runtime.state}`)}</span>
-          {runtime.status?.wayland && <span>{t("plugin.remoteDesktop.waylandLimited")}</span>}
-          {runtime.status?.inputBackend && <span>{runtime.status.inputBackend}</span>}
+      <div className="absolute bottom-[calc(3.5rem+env(safe-area-inset-bottom))] left-0 right-0 grid min-h-8 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-t border-ide-border bg-ide-panel/95 px-3 py-1.5 text-[11px] text-ide-mute md:bottom-0">
+        <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+          {runtime.controlEnabled ? <EyeOff size={12} className="shrink-0" /> : <Eye size={12} className="shrink-0" />}
+          <span className="shrink-0 whitespace-nowrap">{t(`plugin.remoteDesktop.state.${runtime.state}`)}</span>
+          {runtime.message && <span className="min-w-0 flex-1 truncate text-red-400">{runtime.message}</span>}
+          {runtime.status?.wayland && (
+            <span className="hidden min-w-0 truncate min-[360px]:block">
+              {t("plugin.remoteDesktop.waylandLimited")}
+            </span>
+          )}
+          {runtime.status?.inputBackend && (
+            <span className="hidden min-w-0 truncate min-[360px]:block">{runtime.status.inputBackend}</span>
+          )}
           {runtime.status?.inputSetupRequired && (
             <button
               type="button"
-              className="border border-ide-border px-2 py-0.5 text-ide-text hover:bg-ide-hover disabled:opacity-60"
+              className="min-h-11 shrink-0 whitespace-nowrap border border-ide-border px-2 py-0.5 text-ide-text hover:bg-ide-hover disabled:opacity-60 md:min-h-0"
               disabled={runtime.installingHelper}
               onClick={runtime.installInputHelper}
             >
               {runtime.installingHelper ? "Installing" : "Install helper"}
             </button>
           )}
-          {runtime.message && <span className="truncate text-red-400">{runtime.message}</span>}
         </div>
-        <div className="shrink-0 flex items-center gap-2">
-          <MonitorUp size={12} />
-          <span>
-            {runtime.frameMeta
-              ? `${runtime.frameMeta.width}x${runtime.frameMeta.height} #${runtime.frameMeta.seq}`
-              : "-"}
-          </span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <MonitorUp size={12} className="shrink-0" />
+          {runtime.frameMeta ? (
+            <>
+              <span className="whitespace-nowrap tabular-nums">
+                {runtime.frameMeta.width}x{runtime.frameMeta.height}
+              </span>
+              <span className="hidden whitespace-nowrap tabular-nums min-[360px]:inline">#{runtime.frameMeta.seq}</span>
+            </>
+          ) : (
+            <span>-</span>
+          )}
         </div>
       </div>
     </div>

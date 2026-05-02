@@ -53,6 +53,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenFolder, locale }) => {
             <div className="text-xs text-ide-mute uppercase font-bold">{t("home.openDirectory")}</div>
             <div className="flex flex-col sm:flex-row gap-2">
               <button
+                type="button"
                 onClick={() => setPickerOpen(true)}
                 className="flex items-center justify-center gap-2 px-4 py-3 bg-ide-accent text-ide-bg rounded-lg font-medium hover:opacity-90 transition-opacity"
               >
@@ -64,13 +65,15 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenFolder, locale }) => {
                   type="text"
                   value={pathInput}
                   onChange={(e) => setPathInput(e.target.value)}
-                  className="flex-1 min-w-0 px-3 sm:px-4 py-2 bg-ide-panel border border-ide-border rounded-lg text-ide-text placeholder-ide-mute focus:outline-none focus:border-ide-accent text-sm"
+                  name="directory-path"
+                  aria-label={t("home.enterPath")}
+                  className="flex-1 min-w-0 min-h-11 px-3 sm:px-4 py-2 bg-ide-panel border border-ide-border rounded-lg text-base sm:text-sm text-ide-text placeholder-ide-mute focus:outline-none focus:border-ide-accent"
                   placeholder={t("home.enterPath")}
                 />
                 <button
                   type="submit"
                   disabled={!pathInput.trim()}
-                  className="px-3 sm:px-4 py-2 bg-ide-panel border border-ide-border rounded-lg text-ide-text hover:bg-ide-bg disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  className="min-h-11 px-3 sm:px-4 py-2 bg-ide-panel border border-ide-border rounded-lg text-ide-text hover:bg-ide-bg disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                   {t("common.open")}
                 </button>

@@ -7,6 +7,25 @@
   color: var(--ide-text);
 }
 
+/* DialogContent supplies the portal, backdrop and modal semantics. */
+.github-panel-dialog-content {
+  top: 42px;
+  right: 18px;
+  bottom: auto;
+  left: auto;
+  width: min(440px, calc(100vw - 36px));
+  max-width: none;
+  max-height: calc(100dvh - 60px);
+  translate: none !important;
+  transform: none;
+  gap: 0;
+  border: 1px solid var(--ide-border);
+  border-radius: 5px;
+  box-shadow: 0 10px 26px rgb(0 0 0 / 22%);
+  padding: 0;
+  overflow: hidden;
+}
+
 .github-panel-heading,
 .github-panel-repository,
 .github-panel-account,
@@ -345,25 +364,6 @@
   }
 }
 
-.github-panel-overlay {
-  position: fixed;
-  z-index: 50;
-  inset: 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  background: color-mix(in srgb, #000 18%, transparent);
-  padding: 42px 18px 18px;
-}
-
-.github-panel-overlay > .github-panel {
-  width: min(440px, 100%);
-  max-height: calc(100vh - 60px);
-  border: 1px solid var(--ide-border);
-  border-radius: 5px;
-  box-shadow: 0 10px 26px rgb(0 0 0 / 22%);
-}
-
 .github-panel-header {
   display: flex;
   min-height: 34px;
@@ -422,6 +422,8 @@
 
 .github-panel-content {
   max-height: none;
+  min-height: 0;
+  flex: 1 1 auto;
   overflow: auto;
   background: var(--ide-bg);
 }
@@ -782,17 +784,140 @@
   padding: 4px 5px;
 }
 
-@media (max-width: 640px) {
-  .github-panel-overlay {
-    align-items: flex-end;
-    padding: 0;
-  }
-
-  .github-panel-overlay > .github-panel {
+@media (max-width: 767px) {
+  .github-panel-dialog-content {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
     width: 100%;
-    max-height: 86vh;
+    max-width: 100%;
+    max-height: 86dvh;
     border-right: 0;
     border-bottom: 0;
-    border-radius: 5px 5px 0 0;
+    border-radius: 8px 8px 0 0;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
   }
+
+  .github-panel-header {
+    min-height: 56px;
+    padding: 8px 12px;
+  }
+
+  .github-panel-title {
+    font-size: 14px;
+  }
+
+  .github-panel-icon-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .github-panel-section {
+    padding: 12px;
+  }
+
+  .github-panel-section-heading {
+    min-height: 32px;
+    font-size: 13px;
+  }
+
+  .github-panel-tab {
+    min-height: 44px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .github-panel-inline {
+    flex-wrap: wrap;
+  }
+
+  .github-panel-inline > input,
+  .github-panel-publish > input,
+  .github-panel-form > input,
+  .github-panel-form textarea {
+    min-height: 44px;
+    padding: 8px 10px;
+    font-size: 16px;
+  }
+
+  .github-panel-form textarea {
+    min-height: 96px;
+  }
+
+  .github-panel-button {
+    min-height: 44px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .github-panel-auth-controls > .github-panel-inline:first-child > input {
+    flex: 1 1 calc(100% - 28px);
+  }
+
+  .github-panel-auth-controls > .github-panel-inline:first-child > .github-panel-button {
+    flex: 1 1 100%;
+  }
+
+  .github-panel-auth-controls > .github-panel-inline:nth-child(2) > .github-panel-button {
+    flex: 1 1 calc(50% - 3px);
+  }
+
+  .github-panel-form > .github-panel-inline > input {
+    flex: 1 1 calc(50% - 3px);
+    min-width: min(100%, 140px);
+  }
+
+  .github-panel-form > .github-panel-inline > .github-panel-button {
+    flex: 1 1 100%;
+  }
+
+  .github-panel-check {
+    min-height: 44px;
+    font-size: 12px;
+  }
+
+  .github-panel-check input {
+    width: 20px;
+    height: 20px;
+  }
+
+  .github-panel-list-row {
+    min-height: 44px;
+    padding: 8px 0;
+    font-size: 12px;
+  }
+
+  .github-panel-action-toggle {
+    min-height: 44px;
+  }
+
+  .github-panel-field-label {
+    min-height: 44px;
+    font-size: 12px;
+  }
+
+  .github-panel-field-label select {
+    min-height: 44px;
+    max-width: 70%;
+    padding: 8px 10px;
+    font-size: 16px;
+  }
+
+  .github-panel-device {
+    min-height: 44px;
+    font-size: 11px;
+  }
+
+  .github-panel-device-link {
+    min-height: 44px;
+    padding: 0 4px;
+  }
+
+  .github-panel-section-heading > .github-panel-link {
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+  }
+
 }

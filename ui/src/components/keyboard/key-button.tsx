@@ -118,6 +118,7 @@ const KeyButton: React.FC<KeyButtonProps> = ({
     slideAccum: 0,
     didSlide: false,
     firedByRepeat: false,
+    keyboardActive: false,
     isVoiceGesture: false,
     voiceTarget: null as VoiceReleaseTarget | null,
   });
@@ -393,6 +394,46 @@ const KeyButton: React.FC<KeyButtonProps> = ({
     e.preventDefault();
   }, []);
 
+  const handleKeyboardDown = useCallback(
+    (e: React.KeyboardEvent<HTMLButtonElement>) => {
+      const isActivation = e.key === "Enter" || e.key === " ";
+      const isArrowAction =
+        keyDef.id === "arrows" && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key);
+      if (!isActivation && !isArrowAction) return;
+      e.preventDefault();
+      if (e.repeat || stateRef.current.keyboardActive) return;
+      stateRef.current.keyboardActive = true;
+      if (isArrowAction) {
+        onKeyOutput(e.key, true);
+      } else if (keyDef.value === "Mic") {
+        onKeyOutput("Mic", true, "start");
+      } else {
+        fireKey(null);
+      }
+    },
+    [fireKey, keyDef.id, keyDef.value, onKeyOutput]
+  );
+
+  const handleKeyboardUp = useCallback(
+    (e: React.KeyboardEvent<HTMLButtonElement>) => {
+      const isActivation = e.key === "Enter" || e.key === " ";
+      const isArrowAction =
+        keyDef.id === "arrows" && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key);
+      if (!isActivation && !isArrowAction) return;
+      e.preventDefault();
+      if (!stateRef.current.keyboardActive) return;
+      stateRef.current.keyboardActive = false;
+      if (isActivation && keyDef.value === "Mic") onKeyOutput("Mic", true, "stop");
+    },
+    [keyDef.id, keyDef.value, onKeyOutput]
+  );
+
+  const handleKeyboardBlur = useCallback(() => {
+    if (!stateRef.current.keyboardActive) return;
+    stateRef.current.keyboardActive = false;
+    if (keyDef.value === "Mic") onKeyOutput("Mic", true, "stop");
+  }, [keyDef.value, onKeyOutput]);
+
   const isFnKey = keyDef.type === "modifier" || keyDef.type === "action";
   const isSpace = keyDef.slider === "horizontal";
   const labelSmall = keyDef.label.length > 2;
@@ -425,15 +466,21 @@ const KeyButton: React.FC<KeyButtonProps> = ({
   );
 
   return (
-    <div
+    <button
+      type="button"
       className={classes}
       style={{ "--key-flex": keyDef.width ?? 1 } as React.CSSProperties}
       data-edge={edge}
+      aria-label={keyDef.value.trim() || (keyDef.id === "arrows" ? "Arrow keys" : "Space")}
+      aria-pressed={MODIFIER_KEYS.has(keyDef.value) ? modState !== undefined && modState !== "inactive" : undefined}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
       onContextMenu={handleContextMenu}
+      onKeyDown={handleKeyboardDown}
+      onKeyUp={handleKeyboardUp}
+      onBlur={handleKeyboardBlur}
     >
       {SWIPE_DIRS.map((dir) => {
         const sub = keyDef.sub?.[dir];
@@ -453,7 +500,7 @@ const KeyButton: React.FC<KeyButtonProps> = ({
       <span className={`tk-label${labelSmall ? " tk-label--small" : ""}`}>{displayLabel}</span>
       {swipeSubVal && pressed && renderSwipePreview(DISPLAY_LABELS[swipeSubVal] || swipeSubVal, swipeSubVal.length > 1)}
       {sliding && renderSwipePreview(<MoveHorizontal size={20} strokeWidth={2} />)}
-    </div>
+    </button>
   );
 };
 

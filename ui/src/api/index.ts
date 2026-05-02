@@ -1,5 +1,6 @@
 export * from "@/api/ai-session";
 export * from "@/api/auth";
+export * from "@/api/codex";
 export * from "@/api/file";
 export * from "@/api/git";
 export * from "@/api/process";

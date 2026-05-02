@@ -30,7 +30,7 @@ const TerminalTabs: React.FC<TerminalTabsProps> = ({ terminals, activeTerminalId
             else tabsRef.current.delete(terminal.id);
           }}
           onClick={() => onTabClick(terminal.id)}
-          className={`group shrink-0 px-3 h-7 rounded-md flex items-center gap-2 text-xs border transition-all cursor-pointer select-none ${
+          className={`group flex h-11 shrink-0 cursor-pointer select-none items-center gap-2 rounded-md border px-2 text-xs transition-all md:h-7 md:px-3 ${
             activeTerminalId === terminal.id
               ? "bg-ide-bg border-ide-border text-ide-text shadow-sm"
               : "bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text"
@@ -40,8 +40,10 @@ const TerminalTabs: React.FC<TerminalTabsProps> = ({ terminals, activeTerminalId
             {terminal.name}
           </span>
           <button
+            type="button"
             onClick={(e) => handleCloseTab(e, terminal.id)}
-            className="hover:text-red-500 rounded-full p-0.5 hover:bg-ide-panel opacity-0 group-hover:opacity-100 transition-opacity"
+            className="flex size-11 shrink-0 items-center justify-center rounded-sm text-ide-mute transition-opacity hover:bg-ide-panel hover:text-red-500 md:size-auto md:rounded-full md:p-0.5 md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
+            aria-label={`Close ${terminal.name}`}
           >
             <X size={12} />
           </button>

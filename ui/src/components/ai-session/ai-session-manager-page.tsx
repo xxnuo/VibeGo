@@ -158,6 +158,8 @@ const AISessionManagerPage: React.FC = () => {
 
   const detailHeaderRef = React.useRef<HTMLDivElement | null>(null);
   const listScrollRef = React.useRef<HTMLDivElement | null>(null);
+  const listScrollTopRef = React.useRef(0);
+  const listFocusSourcePathRef = React.useRef("");
   const scrollContainerRef = React.useRef<HTMLDivElement | null>(null);
   const detailTouchStateRef = React.useRef({ startY: 0, armed: false });
   const pullStateRef = React.useRef<{ startY: number; pulling: boolean; triggered: boolean }>({
@@ -369,6 +371,25 @@ const AISessionManagerPage: React.FC = () => {
     },
     [isMobile, topBarTitle, refreshing, view, selectedSession, triggerRefresh, t]
   );
+
+  React.useLayoutEffect(() => {
+    if (!isMobile || view !== "list") {
+      return;
+    }
+    const container = listScrollRef.current;
+    if (!container) {
+      return;
+    }
+    container.scrollTop = listScrollTopRef.current;
+    const sourcePath = listFocusSourcePathRef.current;
+    if (!sourcePath) {
+      return;
+    }
+    const selectedButton = Array.from(
+      container.querySelectorAll<HTMLButtonElement>("[data-ai-session-source-path]")
+    ).find((button) => button.dataset.aiSessionSourcePath === sourcePath);
+    selectedButton?.focus({ preventScroll: true });
+  }, [filteredSessions, isMobile, view]);
 
   React.useEffect(() => {
     if (view !== "detail" || !selectedSession || longMessageIndexes.length === 0) {
@@ -677,7 +698,7 @@ const AISessionManagerPage: React.FC = () => {
                 variant="ghost"
                 size="icon-xs"
                 onClick={() => setView((current) => (current === "settings" ? "list" : "settings"))}
-                className="text-ide-mute hover:text-ide-text"
+                className={cn("size-11 md:size-6", "text-ide-mute hover:text-ide-text")}
                 aria-label={
                   view === "settings"
                     ? t("plugin.aiSessionManager.backToSessions")
@@ -702,7 +723,7 @@ const AISessionManagerPage: React.FC = () => {
                 size="icon-xs"
                 onClick={() => void triggerRefresh()}
                 disabled={refreshing}
-                className="text-ide-mute hover:text-ide-text"
+                className={cn("size-11 md:size-6", "text-ide-mute hover:text-ide-text")}
                 aria-label={t("common.refresh")}
               >
                 {refreshing ? <Spinner className="size-3.5" /> : <RefreshCw size={12} />}
@@ -713,10 +734,16 @@ const AISessionManagerPage: React.FC = () => {
         <div className="relative mt-3">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ide-mute" />
           <input
+            type="search"
+            name="ai-session-search"
+            aria-label={t("plugin.aiSessionManager.searchPlaceholder")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t("plugin.aiSessionManager.searchPlaceholder")}
-            className="h-9 w-full rounded-md border border-ide-border bg-ide-panel pl-9 pr-3 text-sm text-ide-text placeholder:text-ide-mute outline-none transition-colors focus:border-ide-accent"
+            className={cn(
+              "w-full rounded-md border border-ide-border bg-ide-panel pl-9 pr-3 text-sm text-ide-text placeholder:text-ide-mute outline-none transition-colors focus:border-ide-accent",
+              isMobile ? "h-11 text-base" : "h-9"
+            )}
           />
         </div>
         <div className="mt-3 flex items-center justify-between gap-2">
@@ -725,7 +752,8 @@ const AISessionManagerPage: React.FC = () => {
               type="button"
               onClick={() => setProviderFilter("all")}
               className={cn(
-                "shrink-0 rounded-md border px-2.5 py-1 text-xs transition-colors",
+                "shrink-0 rounded-md border px-2.5 text-xs transition-colors",
+                isMobile ? "min-h-11 min-w-11" : "py-1",
                 providerFilter === "all"
                   ? "border-ide-accent bg-ide-accent/10 text-ide-accent"
                   : "border-ide-border bg-ide-panel text-ide-mute hover:bg-ide-bg hover:text-ide-text"
@@ -739,7 +767,8 @@ const AISessionManagerPage: React.FC = () => {
                 type="button"
                 onClick={() => setProviderFilter(providerId)}
                 className={cn(
-                  "shrink-0 rounded-md border px-2.5 py-1 text-xs transition-colors",
+                  "shrink-0 rounded-md border px-2.5 text-xs transition-colors",
+                  isMobile ? "min-h-11 min-w-11" : "py-1",
                   providerFilter === providerId
                     ? "border-ide-accent bg-ide-accent/10 text-ide-accent"
                     : "border-ide-border bg-ide-panel text-ide-mute hover:bg-ide-bg hover:text-ide-text"
@@ -761,6 +790,9 @@ const AISessionManagerPage: React.FC = () => {
                   setSelectionMode(true);
                 }
               }}
+              className="size-11 md:size-6"
+              aria-label={selectionMode ? t("plugin.aiSessionManager.clearSelection") : t("common.select")}
+              aria-pressed={selectionMode}
             >
               <ListChecks size={14} />
             </Button>
@@ -774,7 +806,7 @@ const AISessionManagerPage: React.FC = () => {
               </Badge>
               <button
                 type="button"
-                className="text-ide-text hover:text-ide-accent"
+                className="inline-flex min-h-11 items-center px-2 text-left text-ide-text hover:text-ide-accent md:min-h-0 md:px-0"
                 onClick={() => {
                   setCheckedKeys((current) => {
                     const next = new Set(current);
@@ -793,14 +825,14 @@ const AISessionManagerPage: React.FC = () => {
               </button>
               <button
                 type="button"
-                className="text-ide-text hover:text-ide-accent"
+                className="inline-flex min-h-11 items-center px-2 text-left text-ide-text hover:text-ide-accent md:min-h-0 md:px-0"
                 onClick={() => setCheckedKeys(new Set())}
               >
                 {t("plugin.aiSessionManager.clearSelection")}
               </button>
               <button
                 type="button"
-                className="text-red-400 hover:text-red-300 disabled:opacity-50"
+                className="inline-flex min-h-11 items-center px-2 text-left text-red-400 hover:text-red-300 disabled:opacity-50 md:min-h-0 md:px-0"
                 disabled={selectedDeletableSessions.length === 0}
                 onClick={() => void requestDelete(selectedDeletableSessions)}
               >
@@ -810,7 +842,13 @@ const AISessionManagerPage: React.FC = () => {
           </div>
         ) : null}
       </div>
-      <div ref={listScrollRef} className="min-h-0 flex-1 overflow-y-auto">
+      <div
+        ref={listScrollRef}
+        className="min-h-0 flex-1 overflow-y-auto"
+        onScroll={(event) => {
+          listScrollTopRef.current = event.currentTarget.scrollTop;
+        }}
+      >
         {isMobile ? (
           <div
             className="overflow-hidden transition-[max-height,opacity,padding] duration-200"
@@ -859,6 +897,8 @@ const AISessionManagerPage: React.FC = () => {
                 session={session}
                 t={t}
                 onSelect={(item) => {
+                  listScrollTopRef.current = listScrollRef.current?.scrollTop || 0;
+                  listFocusSourcePathRef.current = item.sourcePath;
                   setSelectedSourcePath(item.sourcePath);
                   setView("detail");
                 }}
@@ -926,7 +966,8 @@ const AISessionManagerPage: React.FC = () => {
                       }))
                     }
                     className={cn(
-                      "relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors duration-200 focus:outline-none focus:border-ide-accent",
+                      "relative inline-flex shrink-0 rounded-full border transition-colors duration-200 focus:outline-none focus:border-ide-accent",
+                      isMobile ? "h-11 w-14" : "h-7 w-12",
                       checked
                         ? "border-ide-accent bg-ide-accent/12"
                         : "border-ide-border bg-ide-panel hover:border-ide-mute/40"
@@ -936,7 +977,7 @@ const AISessionManagerPage: React.FC = () => {
                       className={cn(
                         "absolute left-0.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full border shadow-sm transition-all duration-200",
                         checked
-                          ? "translate-x-5 border-ide-accent bg-ide-accent"
+                          ? `${isMobile ? "translate-x-7" : "translate-x-5"} border-ide-accent bg-ide-accent`
                           : "translate-x-0 border-ide-border bg-white"
                       )}
                     />
@@ -965,7 +1006,10 @@ const AISessionManagerPage: React.FC = () => {
                   return next;
                 });
               }}
-              className="rounded-md border border-ide-border bg-ide-panel px-2.5 py-1 text-[11px] text-ide-mute transition-colors hover:bg-ide-bg hover:text-ide-text"
+              className={cn(
+                "rounded-md border border-ide-border bg-ide-panel px-2.5 text-[11px] text-ide-mute transition-colors hover:bg-ide-bg hover:text-ide-text",
+                isMobile ? "min-h-11" : "py-1"
+              )}
             >
               {allEnabled ? t("plugin.aiSessionManager.disableAll") : t("plugin.aiSessionManager.enableAll")}
             </button>
@@ -982,7 +1026,10 @@ const AISessionManagerPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => toggleCollapsed(providerId)}
-                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                    className={cn(
+                      "flex w-full items-center justify-between gap-3 px-4 text-left",
+                      isMobile ? "min-h-14 py-2" : "py-3"
+                    )}
                   >
                     <div className="flex min-w-0 items-center gap-2">
                       <div className="truncate text-sm font-semibold text-ide-text">{providerLabels[providerId]}</div>
@@ -1038,7 +1085,8 @@ const AISessionManagerPage: React.FC = () => {
                               }));
                             }}
                             className={cn(
-                              "h-8 shrink-0 rounded-md border px-3 text-xs transition-colors",
+                              "shrink-0 rounded-md border px-3 text-xs transition-colors",
+                              isMobile ? "min-h-11" : "h-8",
                               providerConfig.enabled
                                 ? "border-ide-accent/50 bg-ide-accent/10 text-ide-accent"
                                 : "border-ide-border bg-ide-bg text-ide-mute hover:text-ide-text"
@@ -1055,6 +1103,9 @@ const AISessionManagerPage: React.FC = () => {
                         {(providerConfig.paths.length > 0 ? providerConfig.paths : [""]).map((path, index) => (
                           <div key={`${providerId}-${index}`} className="flex gap-2">
                             <input
+                              id={`ai-provider-path-${providerId}-${index}`}
+                              name={`ai-provider-path-${providerId}-${index}`}
+                              aria-label={`${providerLabels[providerId]} ${t("plugin.aiSessionManager.pathPlaceholder")} ${index + 1}`}
                               value={path}
                               onChange={(event) =>
                                 updateProviderConfig(providerId, (current) => ({
@@ -1068,7 +1119,10 @@ const AISessionManagerPage: React.FC = () => {
                                 }))
                               }
                               placeholder={status?.paths?.[0] || t("plugin.aiSessionManager.pathPlaceholder")}
-                              className="h-9 min-w-0 flex-1 rounded-md border border-ide-border bg-ide-bg px-3 text-sm text-ide-text placeholder:text-ide-mute outline-none transition-colors focus:border-ide-accent"
+                              className={cn(
+                                "min-w-0 flex-1 rounded-md border border-ide-border bg-ide-bg px-3 text-sm text-ide-text placeholder:text-ide-mute outline-none transition-colors focus:border-ide-accent",
+                                isMobile ? "h-11 text-base" : "h-9"
+                              )}
                             />
                             {providerConfig.paths.length > 0 ? (
                               <button
@@ -1079,7 +1133,10 @@ const AISessionManagerPage: React.FC = () => {
                                     paths: current.paths.filter((_, itemIndex) => itemIndex !== index),
                                   }))
                                 }
-                                className="h-9 shrink-0 rounded-md border border-red-500/30 bg-red-500/10 px-3 text-xs text-red-400"
+                                className={cn(
+                                  "shrink-0 rounded-md border border-red-500/30 bg-red-500/10 px-3 text-xs text-red-400",
+                                  isMobile ? "min-h-11" : "h-9"
+                                )}
                               >
                                 {t("common.delete")}
                               </button>
@@ -1094,7 +1151,10 @@ const AISessionManagerPage: React.FC = () => {
                               paths: [...current.paths, ""],
                             }))
                           }
-                          className="h-8 rounded-md border border-ide-border bg-ide-bg px-3 text-xs text-ide-text transition-colors hover:bg-ide-panel"
+                          className={cn(
+                            "rounded-md border border-ide-border bg-ide-bg px-3 text-xs text-ide-text transition-colors hover:bg-ide-panel",
+                            isMobile ? "min-h-11" : "h-8"
+                          )}
                         >
                           {t("plugin.aiSessionManager.addPath")}
                         </button>
@@ -1122,7 +1182,10 @@ const AISessionManagerPage: React.FC = () => {
               setConfigDraft(config);
               setView("list");
             }}
-            className="h-9 rounded-md border border-ide-border bg-ide-panel px-4 text-sm text-ide-text transition-colors hover:bg-ide-bg"
+            className={cn(
+              "rounded-md border border-ide-border bg-ide-panel px-4 text-sm text-ide-text transition-colors hover:bg-ide-bg",
+              isMobile ? "min-h-11" : "h-9"
+            )}
           >
             {t("common.cancel")}
           </button>
@@ -1130,7 +1193,10 @@ const AISessionManagerPage: React.FC = () => {
             type="button"
             onClick={() => void saveConfig()}
             disabled={savingConfig}
-            className="h-9 rounded-md border border-ide-accent bg-ide-accent px-4 text-sm font-medium text-ide-bg transition-colors hover:bg-ide-accent/90 disabled:opacity-60"
+            className={cn(
+              "rounded-md border border-ide-accent bg-ide-accent px-4 text-sm font-medium text-ide-bg transition-colors hover:bg-ide-accent/90 disabled:opacity-60",
+              isMobile ? "min-h-11" : "h-9"
+            )}
           >
             {savingConfig ? t("common.loading") : t("plugin.aiSessionManager.saveConfig")}
           </button>
@@ -1178,7 +1244,10 @@ const AISessionManagerPage: React.FC = () => {
               variant="outline"
               size="sm"
               onClick={() => setOutlineOpen(true)}
-              className="h-9 min-w-0 justify-start gap-1.5 rounded-lg border-ide-border bg-ide-panel px-3 text-xs text-ide-text shadow-none hover:bg-ide-bg"
+              className={cn(
+                "min-w-0 justify-start gap-1.5 rounded-lg border-ide-border bg-ide-panel px-3 text-xs text-ide-text shadow-none hover:bg-ide-bg",
+                isMobile ? "min-h-11" : "h-9"
+              )}
             >
               <ListTree size={13} />
               <span className="truncate">{t("plugin.aiSessionManager.outline")}</span>
@@ -1189,7 +1258,10 @@ const AISessionManagerPage: React.FC = () => {
               variant="outline"
               size="sm"
               onClick={() => void copyText(selectedSession.resumeCommand || "", "plugin.aiSessionManager.resumeCopied")}
-              className="h-9 min-w-0 justify-start gap-1.5 rounded-lg border-ide-border bg-ide-panel px-3 text-xs text-ide-text shadow-none hover:bg-ide-bg"
+              className={cn(
+                "min-w-0 justify-start gap-1.5 rounded-lg border-ide-border bg-ide-panel px-3 text-xs text-ide-text shadow-none hover:bg-ide-bg",
+                isMobile ? "min-h-11" : "h-9"
+              )}
             >
               <Copy size={13} />
               <span className="truncate">{t("plugin.aiSessionManager.copyResumeCommand")}</span>
@@ -1200,7 +1272,10 @@ const AISessionManagerPage: React.FC = () => {
               variant="outline"
               size="sm"
               onClick={openProjectDir}
-              className="h-9 min-w-0 justify-start gap-1.5 rounded-lg border-ide-border bg-ide-panel px-3 text-xs text-ide-text shadow-none hover:bg-ide-bg"
+              className={cn(
+                "min-w-0 justify-start gap-1.5 rounded-lg border-ide-border bg-ide-panel px-3 text-xs text-ide-text shadow-none hover:bg-ide-bg",
+                isMobile ? "min-h-11" : "h-9"
+              )}
             >
               <FolderOpen size={13} />
               <span className="truncate">{t("plugin.aiSessionManager.openProject")}</span>
@@ -1211,7 +1286,10 @@ const AISessionManagerPage: React.FC = () => {
               variant="outline"
               size="sm"
               onClick={() => void copyText(selectedSession.projectDir || "", "plugin.aiSessionManager.projectCopied")}
-              className="h-9 min-w-0 justify-start gap-1.5 rounded-lg border-ide-border bg-ide-panel px-3 text-xs text-ide-text shadow-none hover:bg-ide-bg"
+              className={cn(
+                "min-w-0 justify-start gap-1.5 rounded-lg border-ide-border bg-ide-panel px-3 text-xs text-ide-text shadow-none hover:bg-ide-bg",
+                isMobile ? "min-h-11" : "h-9"
+              )}
             >
               <Copy size={13} />
               <span className="truncate">{t("plugin.aiSessionManager.copyProjectPath")}</span>
@@ -1222,7 +1300,8 @@ const AISessionManagerPage: React.FC = () => {
             size="sm"
             onClick={() => void requestDelete([selectedSession])}
             className={cn(
-              "h-9 min-w-0 justify-start gap-1.5 rounded-lg border-red-500/30 bg-red-500/10 px-3 text-xs text-red-400 shadow-none hover:bg-red-500/15 hover:text-red-300",
+              "min-w-0 justify-start gap-1.5 rounded-lg border-red-500/30 bg-red-500/10 px-3 text-xs text-red-400 shadow-none hover:bg-red-500/15 hover:text-red-300",
+              isMobile ? "min-h-11" : "h-9",
               isMobile ? "col-span-2" : ""
             )}
           >
@@ -1238,10 +1317,16 @@ const AISessionManagerPage: React.FC = () => {
         <div className="relative mt-4">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ide-mute" />
           <input
+            type="search"
+            name="ai-session-detail-search"
+            aria-label={t("plugin.aiSessionManager.searchInSession")}
             value={detailSearch}
             onChange={(event) => setDetailSearch(event.target.value)}
             placeholder={t("plugin.aiSessionManager.searchInSession")}
-            className="h-9 w-full rounded-md border border-ide-border bg-ide-panel pl-9 pr-3 text-sm text-ide-text placeholder:text-ide-mute outline-none transition-colors focus:border-ide-accent"
+            className={cn(
+              "w-full rounded-md border border-ide-border bg-ide-panel pl-9 pr-3 text-sm text-ide-text placeholder:text-ide-mute outline-none transition-colors focus:border-ide-accent",
+              isMobile ? "h-11 text-base" : "h-9"
+            )}
           />
         </div>
         {detailSearch.trim() ? (
@@ -1268,7 +1353,7 @@ const AISessionManagerPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setDetailHeaderCollapsed(false)}
-                    className="pointer-events-auto inline-flex h-5 min-w-10 items-center justify-center rounded-b-lg border-x border-b border-ide-border bg-ide-panel/92 px-2.5 text-ide-mute shadow-[0_4px_10px_rgba(0,0,0,0.08)] backdrop-blur transition-colors hover:bg-ide-bg hover:text-ide-text"
+                    className="pointer-events-auto inline-flex min-h-11 min-w-14 items-center justify-center rounded-b-lg border-x border-b border-ide-border bg-ide-panel/92 px-2.5 text-ide-mute shadow-[0_4px_10px_rgba(0,0,0,0.08)] backdrop-blur transition-colors hover:bg-ide-bg hover:text-ide-text"
                     aria-label={t("plugin.aiSessionManager.expandHeader")}
                     title={t("plugin.aiSessionManager.expandHeader")}
                   >
@@ -1360,11 +1445,14 @@ const AISessionManagerPage: React.FC = () => {
           ) : null}
         </div>
         <Sheet open={outlineOpen} onOpenChange={setOutlineOpen}>
-          <SheetContent side="bottom" className="max-h-[75vh] rounded-t-2xl border-ide-border bg-ide-bg p-0">
+          <SheetContent
+            side="bottom"
+            className="flex max-h-[75dvh] min-h-0 flex-col rounded-t-2xl border-ide-border bg-ide-bg p-0"
+          >
             <SheetHeader className="border-b border-ide-border">
               <SheetTitle>{t("plugin.aiSessionManager.outline")}</SheetTitle>
             </SheetHeader>
-            <div className="overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
               <SessionOutline compact items={outlineItems} t={t} onSelect={scrollToMessage} />
             </div>
           </SheetContent>
@@ -1373,14 +1461,28 @@ const AISessionManagerPage: React.FC = () => {
     );
   };
 
+  const deletingDialog = (
+    <AlertDialog open={deleting} onOpenChange={() => {}}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t("plugin.aiSessionManager.deleting")}</AlertDialogTitle>
+          <AlertDialogDescription>{t("common.loading")}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled>{t("common.cancel")}</AlertDialogCancel>
+          <AlertDialogAction disabled>{t("common.loading")}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
   if (isMobile) {
-    if (view === "settings") {
-      return renderSettings();
-    }
-    if (view === "detail") {
-      return renderDetail();
-    }
-    return renderList();
+    return (
+      <>
+        {view === "settings" ? renderSettings() : view === "detail" ? renderDetail() : renderList()}
+        {deletingDialog}
+      </>
+    );
   }
 
   return (
@@ -1389,18 +1491,7 @@ const AISessionManagerPage: React.FC = () => {
         {renderList()}
         {view === "settings" ? renderSettings() : renderDetail()}
       </div>
-      <AlertDialog open={deleting} onOpenChange={() => {}}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("plugin.aiSessionManager.deleting")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("common.loading")}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled>{t("common.cancel")}</AlertDialogCancel>
-            <AlertDialogAction disabled>{t("common.loading")}</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {deletingDialog}
     </>
   );
 };

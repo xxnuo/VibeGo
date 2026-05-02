@@ -615,7 +615,7 @@ const BlockTermHistoryCenter: React.FC<BlockTermHistoryCenterProps> = ({
   return (
     <div data-blockterm-history-center className="flex h-full min-h-0 flex-col bg-ide-panel text-ide-text">
       <div className="flex flex-wrap items-center gap-2 border-b border-ide-border bg-ide-bg p-3">
-        <div className="flex min-w-0 basis-full flex-1 items-center gap-2 border border-ide-border bg-ide-panel px-2 sm:min-w-[14rem] sm:basis-auto">
+        <div className="flex min-h-11 min-w-0 basis-full flex-1 items-center gap-2 border border-ide-border bg-ide-panel px-2 sm:min-h-0 sm:min-w-[14rem] sm:basis-auto">
           <Search size={14} className="text-ide-mute" />
           <input
             value={query}
@@ -623,14 +623,14 @@ const BlockTermHistoryCenter: React.FC<BlockTermHistoryCenterProps> = ({
             disabled={purging}
             placeholder={t("plugin.blockTerm.searchHistory")}
             aria-label={t("plugin.blockTerm.searchHistory")}
-            className="h-8 min-w-0 flex-1 bg-transparent text-sm outline-none"
+            className="h-11 min-w-0 flex-1 bg-transparent text-base outline-none sm:h-8 sm:text-sm"
           />
         </div>
         <select
           value={workspaceSessionId}
           onChange={(event) => setWorkspaceSessionId(event.target.value)}
           disabled={purging}
-          className="h-8 min-w-0 max-w-full flex-1 border border-ide-border bg-ide-panel px-2 text-xs sm:max-w-[14rem] sm:flex-none"
+          className="h-11 min-w-0 max-w-full basis-full border border-ide-border bg-ide-panel px-2 text-base sm:h-8 sm:max-w-[14rem] sm:basis-auto sm:flex-none sm:text-xs"
         >
           <option value="">{t("plugin.blockTerm.allWorkspaces")}</option>
           {sessionOptions.map((id) => (
@@ -643,7 +643,7 @@ const BlockTermHistoryCenter: React.FC<BlockTermHistoryCenterProps> = ({
           value={filterGroupId}
           onChange={(event) => setFilterGroupId(event.target.value)}
           disabled={purging}
-          className="h-8 min-w-0 max-w-full flex-1 border border-ide-border bg-ide-panel px-2 text-xs sm:max-w-[12rem] sm:flex-none"
+          className="h-11 min-w-0 max-w-full basis-full border border-ide-border bg-ide-panel px-2 text-base sm:h-8 sm:max-w-[12rem] sm:basis-auto sm:flex-none sm:text-xs"
         >
           <option value="">{t("plugin.blockTerm.allGroups")}</option>
           {groupOptions.map((id) => (
@@ -656,7 +656,7 @@ const BlockTermHistoryCenter: React.FC<BlockTermHistoryCenterProps> = ({
           value={runtimeType}
           onChange={(event) => setRuntimeType(event.target.value)}
           disabled={purging}
-          className="h-8 min-w-0 max-w-full flex-1 border border-ide-border bg-ide-panel px-2 text-xs sm:max-w-[10rem] sm:flex-none"
+          className="h-11 min-w-0 max-w-full basis-full border border-ide-border bg-ide-panel px-2 text-base sm:h-8 sm:max-w-[10rem] sm:basis-auto sm:flex-none sm:text-xs"
         >
           <option value="">{t("plugin.blockTerm.allRemotes")}</option>
           {runtimeOptions.map((value) => (
@@ -671,7 +671,7 @@ const BlockTermHistoryCenter: React.FC<BlockTermHistoryCenterProps> = ({
           aria-pressed={starredOnly}
           onClick={() => setStarredOnly((current) => !current)}
           disabled={purging}
-          className={`flex h-8 items-center gap-1.5 border px-2 text-xs ${
+          className={`flex min-h-11 basis-full items-center justify-center gap-1.5 border px-3 text-xs sm:h-8 sm:min-h-0 sm:basis-auto sm:px-2 ${
             starredOnly
               ? "border-ide-accent bg-ide-accent/10 text-ide-accent"
               : "border-ide-border bg-ide-panel text-ide-mute hover:text-ide-text"
@@ -681,7 +681,7 @@ const BlockTermHistoryCenter: React.FC<BlockTermHistoryCenterProps> = ({
           {t("plugin.blockTerm.favorite")}
         </button>
       </div>
-      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-ide-border bg-ide-panel px-3">
+      <div className="flex min-h-11 shrink-0 items-center gap-2 border-b border-ide-border bg-ide-panel px-2 sm:h-10 sm:px-3">
         <button
           type="button"
           data-blockterm-history-select-all
@@ -693,7 +693,7 @@ const BlockTermHistoryCenter: React.FC<BlockTermHistoryCenterProps> = ({
           aria-label={
             allLoadedSelected ? t("plugin.blockTerm.clearHistorySelection") : t("plugin.blockTerm.selectLoadedHistory")
           }
-          className="text-ide-mute hover:text-ide-text disabled:opacity-40"
+          className="flex size-11 shrink-0 items-center justify-center text-ide-mute hover:text-ide-text disabled:opacity-40 sm:size-7"
         >
           {allLoadedSelected ? (
             <CheckSquare2 size={16} className="text-ide-accent" />
@@ -713,7 +713,7 @@ const BlockTermHistoryCenter: React.FC<BlockTermHistoryCenterProps> = ({
           onClick={() => void purgeSelectedHistory()}
           disabled={selectedIds.size === 0 || purging}
           title={t("plugin.blockTerm.historyPurgeAction")}
-          className="flex h-8 items-center gap-1.5 px-2 text-xs text-red-500 hover:bg-red-500/10 disabled:opacity-40"
+          className="flex min-h-11 items-center gap-1.5 px-2 text-xs text-red-500 hover:bg-red-500/10 disabled:opacity-40 sm:h-8 sm:min-h-0"
         >
           {purging ? <LoaderCircle size={14} className="animate-spin" /> : <Trash2 size={14} />}
           {t("plugin.blockTerm.historyPurgeAction")}
@@ -753,7 +753,7 @@ const BlockTermHistoryCenter: React.FC<BlockTermHistoryCenterProps> = ({
                 data-selected={selected || undefined}
                 className={`border-b border-ide-border px-3 py-2 ${selected ? "bg-ide-accent/5" : ""}`}
               >
-                <div className="flex items-start gap-2">
+                <div className="flex flex-wrap items-start gap-0 sm:flex-nowrap sm:gap-2">
                   <button
                     type="button"
                     data-blockterm-history-select={entry.id}
@@ -763,7 +763,7 @@ const BlockTermHistoryCenter: React.FC<BlockTermHistoryCenterProps> = ({
                     aria-label={
                       selected ? t("plugin.blockTerm.deselectHistoryEntry") : t("plugin.blockTerm.selectHistoryEntry")
                     }
-                    className="mt-0.5 shrink-0 text-ide-mute hover:text-ide-text disabled:opacity-40"
+                    className="flex size-11 shrink-0 items-center justify-center text-ide-mute hover:text-ide-text disabled:opacity-40 sm:mt-0.5 sm:size-5"
                   >
                     {selected ? <CheckSquare2 size={14} className="text-ide-accent" /> : <Square size={14} />}
                   </button>
@@ -772,7 +772,7 @@ const BlockTermHistoryCenter: React.FC<BlockTermHistoryCenterProps> = ({
                     onClick={() => toggleOutput(entry)}
                     disabled={purging}
                     aria-label={t("plugin.blockTerm.toggleOutput")}
-                    className="mt-0.5 shrink-0 text-ide-mute hover:text-ide-text"
+                    className="flex size-11 shrink-0 items-center justify-center text-ide-mute hover:text-ide-text sm:mt-0.5 sm:size-5"
                   >
                     {expandedId === entry.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                   </button>
@@ -781,7 +781,7 @@ const BlockTermHistoryCenter: React.FC<BlockTermHistoryCenterProps> = ({
                     data-blockterm-history-activate={entry.id}
                     onClick={() => void openHistoryEntry(entry)}
                     disabled={navigationPendingId !== null || purging}
-                    className="min-w-0 flex-1 overflow-hidden text-left hover:bg-ide-bg"
+                    className="min-h-11 min-w-0 flex-1 overflow-hidden py-1 text-left hover:bg-ide-bg sm:min-h-0 sm:py-0"
                   >
                     <div className="flex items-center gap-2">
                       {navigationPendingId === buildNavigationTarget(entry)?.id ? (
@@ -810,50 +810,52 @@ const BlockTermHistoryCenter: React.FC<BlockTermHistoryCenterProps> = ({
                       <span>{new Date(entry.createdAt).toLocaleString(getIntlLocale(locale))}</span>
                     </div>
                   </button>
-                  <button
-                    type="button"
-                    data-blockterm-history-star={entry.id}
-                    onClick={() => void toggleHistoryStarred(entry)}
-                    disabled={starPending || purging}
-                    aria-pressed={entry.starred}
-                    aria-label={entry.starred ? t("plugin.blockTerm.unfavorite") : t("plugin.blockTerm.favorite")}
-                    title={entry.starred ? t("plugin.blockTerm.unfavorite") : t("plugin.blockTerm.favorite")}
-                    className={`mt-0.5 shrink-0 ${
-                      entry.starred ? "text-ide-accent" : "text-ide-mute hover:text-ide-text"
-                    } disabled:opacity-50`}
-                  >
-                    {starPending ? (
-                      <LoaderCircle size={14} className="animate-spin" />
-                    ) : entry.starred ? (
-                      <StarOff size={14} />
-                    ) : (
-                      <Star size={14} />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    data-blockterm-history-copy={entry.id}
-                    onClick={() => void copyCommand(entry.command)}
-                    disabled={!entry.command || purging}
-                    title={t("common.copy")}
-                    aria-label={t("common.copy")}
-                    className="mt-0.5 shrink-0 text-ide-mute hover:text-ide-text disabled:opacity-40"
-                  >
-                    <Copy size={14} />
-                  </button>
-                  {onUseCommand && (
+                  <div className="flex w-full shrink-0 justify-end sm:w-auto">
                     <button
                       type="button"
-                      data-blockterm-history-use={entry.id}
-                      onClick={() => onUseCommand(entry.command)}
-                      disabled={!entry.command || purging}
-                      title={t("plugin.blockTerm.useHistoryCommand")}
-                      aria-label={t("plugin.blockTerm.useHistoryCommand")}
-                      className="mt-0.5 shrink-0 text-ide-mute hover:text-ide-text disabled:opacity-40"
+                      data-blockterm-history-star={entry.id}
+                      onClick={() => void toggleHistoryStarred(entry)}
+                      disabled={starPending || purging}
+                      aria-pressed={entry.starred}
+                      aria-label={entry.starred ? t("plugin.blockTerm.unfavorite") : t("plugin.blockTerm.favorite")}
+                      title={entry.starred ? t("plugin.blockTerm.unfavorite") : t("plugin.blockTerm.favorite")}
+                      className={`flex size-11 shrink-0 items-center justify-center sm:mt-0.5 sm:size-5 ${
+                        entry.starred ? "text-ide-accent" : "text-ide-mute hover:text-ide-text"
+                      } disabled:opacity-50`}
                     >
-                      <Play size={14} />
+                      {starPending ? (
+                        <LoaderCircle size={14} className="animate-spin" />
+                      ) : entry.starred ? (
+                        <StarOff size={14} />
+                      ) : (
+                        <Star size={14} />
+                      )}
                     </button>
-                  )}
+                    <button
+                      type="button"
+                      data-blockterm-history-copy={entry.id}
+                      onClick={() => void copyCommand(entry.command)}
+                      disabled={!entry.command || purging}
+                      title={t("common.copy")}
+                      aria-label={t("common.copy")}
+                      className="flex size-11 shrink-0 items-center justify-center text-ide-mute hover:text-ide-text disabled:opacity-40 sm:mt-0.5 sm:size-5"
+                    >
+                      <Copy size={14} />
+                    </button>
+                    {onUseCommand && (
+                      <button
+                        type="button"
+                        data-blockterm-history-use={entry.id}
+                        onClick={() => onUseCommand(entry.command)}
+                        disabled={!entry.command || purging}
+                        title={t("plugin.blockTerm.useHistoryCommand")}
+                        aria-label={t("plugin.blockTerm.useHistoryCommand")}
+                        className="flex size-11 shrink-0 items-center justify-center text-ide-mute hover:text-ide-text disabled:opacity-40 sm:mt-0.5 sm:size-5"
+                      >
+                        <Play size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {expandedId === entry.id && (
                   <div className="ml-6 mt-2 border-l border-ide-border pl-3">
@@ -885,7 +887,7 @@ const BlockTermHistoryCenter: React.FC<BlockTermHistoryCenterProps> = ({
             type="button"
             onClick={loadMore}
             disabled={loading}
-            className="flex h-10 w-full items-center justify-center gap-2 border-t border-ide-border text-xs text-ide-mute hover:bg-ide-bg"
+            className="flex min-h-11 w-full items-center justify-center gap-2 border-t border-ide-border text-xs text-ide-mute hover:bg-ide-bg sm:h-10 sm:min-h-0"
           >
             {loading && <LoaderCircle size={14} className="animate-spin" />}
             {t("plugin.blockTerm.loadMoreHistory")}

@@ -44,17 +44,21 @@ export const MobileRemoteControls: React.FC<MobileControlsProps> = ({
         <VirtualMouse
           scale={runtime.viewConfig.virtualMouseScale}
           mode={runtime.viewConfig.mobileInputMode}
+          t={t}
           onWheel={onWheel}
           onButton={onButton}
         />
       )}
       {panel && (
-        <div className="absolute inset-x-0 bottom-12 z-40 border-y border-ide-border bg-ide-panel p-3 text-xs text-ide-text shadow-sm">
+        <div className="absolute inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-40 max-h-[min(62dvh,28rem)] overflow-y-auto border-y border-ide-border bg-ide-panel p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-xs text-ide-text shadow-sm">
           {panel === "gesture" && <GesturePanel runtime={runtime} t={t} onConfigure={onConfigure} />}
           {panel === "keyboard" && (
             <div className="grid gap-2">
               <textarea
                 ref={inputRef}
+                id="remote-desktop-mobile-keyboard"
+                name="remote-desktop-mobile-keyboard"
+                aria-label={t("plugin.remoteDesktop.mobileKeyboardPlaceholder")}
                 className="h-20 resize-none border border-ide-border bg-ide-bg p-2 outline-none"
                 placeholder={t("plugin.remoteDesktop.mobileKeyboardPlaceholder")}
                 onChange={(event) => {
@@ -68,7 +72,7 @@ export const MobileRemoteControls: React.FC<MobileControlsProps> = ({
                   <button
                     key={key}
                     type="button"
-                    className="h-8 border border-ide-border bg-ide-bg"
+                    className="min-h-11 border border-ide-border bg-ide-bg"
                     onClick={() => onSpecialKey(key)}
                   >
                     {key}
@@ -79,30 +83,49 @@ export const MobileRemoteControls: React.FC<MobileControlsProps> = ({
           )}
           {panel === "more" && (
             <div className="grid grid-cols-2 gap-2">
-              <button type="button" className="h-9 border border-ide-border bg-ide-bg" onClick={onClipboardRead}>
+              <button
+                type="button"
+                className="min-h-11 border border-ide-border bg-ide-bg px-2"
+                onClick={onClipboardRead}
+              >
                 {t("plugin.remoteDesktop.readClipboard")}
               </button>
-              <button type="button" className="h-9 border border-ide-border bg-ide-bg" onClick={onClipboardWrite}>
+              <button
+                type="button"
+                className="min-h-11 border border-ide-border bg-ide-bg px-2"
+                onClick={onClipboardWrite}
+              >
                 {t("plugin.remoteDesktop.writeClipboard")}
               </button>
               <button
                 type="button"
-                className="h-9 border border-ide-border bg-ide-bg"
+                className="min-h-11 border border-ide-border bg-ide-bg px-2"
                 onClick={() => onSpecialKey("ctrlAltDel")}
               >
                 Ctrl Alt Del
               </button>
               <button
                 type="button"
-                className="h-9 border border-ide-border bg-ide-bg"
+                className="min-h-11 border border-ide-border bg-ide-bg px-2"
                 onClick={() => onSpecialKey("lock")}
               >
                 {t("plugin.remoteDesktop.lock")}
               </button>
-              <button type="button" className="h-9 border border-ide-border bg-ide-bg" onClick={onShowDesktopToolbar}>
+              <button
+                type="button"
+                className="min-h-11 border border-ide-border bg-ide-bg px-2"
+                onClick={() => {
+                  setPanel(null);
+                  onShowDesktopToolbar();
+                }}
+              >
                 {t("plugin.remoteDesktop.desktopToolbar")}
               </button>
-              <button type="button" className="h-9 border border-ide-border bg-ide-bg" onClick={() => setPanel(null)}>
+              <button
+                type="button"
+                className="min-h-11 border border-ide-border bg-ide-bg px-2"
+                onClick={() => setPanel(null)}
+              >
                 {t("plugin.remoteDesktop.closePanel")}
               </button>
             </div>
@@ -110,31 +133,50 @@ export const MobileRemoteControls: React.FC<MobileControlsProps> = ({
         </div>
       )}
       {barVisible ? (
-        <div className="absolute inset-x-0 bottom-0 z-50 flex h-12 items-center justify-between border-t border-ide-border bg-ide-accent text-ide-on-accent">
-          <IconButton onClick={onConnectToggle}>
+        <div className="absolute inset-x-0 bottom-0 z-50 flex h-[calc(3.5rem+env(safe-area-inset-bottom))] min-h-[calc(3.5rem+env(safe-area-inset-bottom))] items-center justify-between border-t border-ide-border bg-ide-accent pb-[env(safe-area-inset-bottom)] text-ide-on-accent">
+          <IconButton
+            label={
+              runtime.state === "idle" || runtime.state === "error"
+                ? t("plugin.remoteDesktop.connect")
+                : t("plugin.remoteDesktop.disconnect")
+            }
+            onClick={onConnectToggle}
+          >
             <Power size={18} />
           </IconButton>
-          <IconButton onClick={() => setPanel(panel === "gesture" ? null : "gesture")}>
+          <IconButton
+            label={t("plugin.remoteDesktop.input")}
+            onClick={() => setPanel(panel === "gesture" ? null : "gesture")}
+          >
             {runtime.viewConfig.mobileInputMode === "touch" ? <Hand size={18} /> : <Mouse size={18} />}
           </IconButton>
-          <IconButton onClick={() => setPanel(panel === "keyboard" ? null : "keyboard")}>
+          <IconButton
+            label={t("plugin.remoteDesktop.keyboardText")}
+            onClick={() => setPanel(panel === "keyboard" ? null : "keyboard")}
+          >
             <Keyboard size={18} />
           </IconButton>
-          <IconButton onClick={() => onConfigure({ showVirtualMouse: !runtime.viewConfig.showVirtualMouse })}>
+          <IconButton
+            label={t("plugin.remoteDesktop.showVirtualMouse")}
+            onClick={() => onConfigure({ showVirtualMouse: !runtime.viewConfig.showVirtualMouse })}
+          >
             <MousePointer2 size={18} />
           </IconButton>
-          <IconButton onClick={() => setPanel(panel === "more" ? null : "more")}>
+          <IconButton label={t("common.moreActions")} onClick={() => setPanel(panel === "more" ? null : "more")}>
             <Menu size={18} />
           </IconButton>
-          <IconButton onClick={() => setBarVisible(false)}>
+          <IconButton label={t("plugin.remoteDesktop.hideToolbar")} onClick={() => setBarVisible(false)}>
             <ChevronDown size={18} />
           </IconButton>
         </div>
       ) : (
         <button
           type="button"
-          className="absolute bottom-3 right-3 z-50 grid h-10 w-10 place-items-center border border-ide-border bg-ide-accent text-ide-on-accent shadow-sm"
+          className="absolute right-3 z-50 grid size-11 place-items-center border border-ide-border bg-ide-accent text-ide-on-accent shadow-sm"
+          style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
           onClick={() => setBarVisible(true)}
+          aria-label={t("plugin.remoteDesktop.showToolbar")}
+          title={t("plugin.remoteDesktop.showToolbar")}
         >
           <ChevronUp size={18} />
         </button>
@@ -154,14 +196,14 @@ const GesturePanel: React.FC<{
       <div className="grid grid-cols-2 gap-2">
         <button
           type="button"
-          className={`h-9 border border-ide-border ${runtime.viewConfig.mobileInputMode === "mouse" ? "bg-ide-accent text-ide-on-accent" : "bg-ide-bg"}`}
+          className={`min-h-11 border border-ide-border ${runtime.viewConfig.mobileInputMode === "mouse" ? "bg-ide-accent text-ide-on-accent" : "bg-ide-bg"}`}
           onClick={() => setMode("mouse")}
         >
           {t("plugin.remoteDesktop.mouseMode")}
         </button>
         <button
           type="button"
-          className={`h-9 border border-ide-border ${runtime.viewConfig.mobileInputMode === "touch" ? "bg-ide-accent text-ide-on-accent" : "bg-ide-bg"}`}
+          className={`min-h-11 border border-ide-border ${runtime.viewConfig.mobileInputMode === "touch" ? "bg-ide-accent text-ide-on-accent" : "bg-ide-bg"}`}
           onClick={() => setMode("touch")}
         >
           {t("plugin.remoteDesktop.touchMode")}
@@ -171,7 +213,7 @@ const GesturePanel: React.FC<{
         <span>{t("plugin.remoteDesktop.showVirtualMouse")}</span>
         <button
           type="button"
-          className={`h-8 w-16 border border-ide-border ${runtime.viewConfig.showVirtualMouse ? "bg-ide-accent text-ide-on-accent" : "bg-ide-bg"}`}
+          className={`min-h-11 min-w-16 border border-ide-border ${runtime.viewConfig.showVirtualMouse ? "bg-ide-accent text-ide-on-accent" : "bg-ide-bg"}`}
           onClick={() => onConfigure({ showVirtualMouse: !runtime.viewConfig.showVirtualMouse })}
         >
           {runtime.viewConfig.showVirtualMouse ? "ON" : "OFF"}
@@ -200,30 +242,55 @@ const GesturePanel: React.FC<{
 const VirtualMouse: React.FC<{
   scale: number;
   mode: MobileInputMode;
+  t: (key: string) => string;
   onWheel: (deltaY: number) => void;
   onButton: (button: "left" | "middle" | "right", down: boolean) => void;
-}> = ({ scale, mode, onWheel, onButton }) => {
+}> = ({ scale, mode, t, onWheel, onButton }) => {
   const factor = scale / 100;
+  const wheelWidth = Math.max(44, 48 * factor);
+  const wheelHeight = Math.max(132, 150 * factor);
+  const buttonBarWidth = Math.max(150, 150 * factor);
+  const buttonBarHeight = Math.max(46, 46 * factor);
   return (
     <>
       <div
         className="absolute right-4 top-1/2 z-30 grid -translate-y-1/2 overflow-hidden border border-white/70 bg-black/40 text-white"
-        style={{ width: 48 * factor, height: 150 * factor }}
+        style={{ width: wheelWidth, height: wheelHeight }}
       >
-        <HoldButton onHold={() => onWheel(-80)}>▲</HoldButton>
-        <HoldButton onDown={() => onButton("middle", true)} onUp={() => onButton("middle", false)}>
+        <HoldButton label={t("plugin.remoteDesktop.scrollUp")} onHold={() => onWheel(-80)}>
+          ▲
+        </HoldButton>
+        <HoldButton
+          label={t("plugin.remoteDesktop.middleButton")}
+          onDown={() => onButton("middle", true)}
+          onUp={() => onButton("middle", false)}
+        >
           •
         </HoldButton>
-        <HoldButton onHold={() => onWheel(80)}>▼</HoldButton>
+        <HoldButton label={t("plugin.remoteDesktop.scrollDown")} onHold={() => onWheel(80)}>
+          ▼
+        </HoldButton>
       </div>
       <div
-        className="absolute bottom-16 left-1/2 z-30 grid -translate-x-1/2 grid-cols-2 overflow-hidden border border-white/70 bg-black/40 text-white"
-        style={{ width: 150 * factor, height: 44 * factor }}
+        className="absolute left-1/2 z-30 grid -translate-x-1/2 grid-cols-2 overflow-hidden border border-white/70 bg-black/40 text-white"
+        style={{
+          bottom: "calc(3.5rem + env(safe-area-inset-bottom) + 0.75rem)",
+          width: buttonBarWidth,
+          height: buttonBarHeight,
+        }}
       >
-        <HoldButton onDown={() => onButton("left", true)} onUp={() => onButton("left", false)}>
+        <HoldButton
+          label={t("plugin.remoteDesktop.leftButton")}
+          onDown={() => onButton("left", true)}
+          onUp={() => onButton("left", false)}
+        >
           L
         </HoldButton>
-        <HoldButton onDown={() => onButton("right", true)} onUp={() => onButton("right", false)}>
+        <HoldButton
+          label={t("plugin.remoteDesktop.rightButton")}
+          onDown={() => onButton("right", true)}
+          onUp={() => onButton("right", false)}
+        >
           R
         </HoldButton>
       </div>
@@ -241,10 +308,11 @@ const VirtualMouse: React.FC<{
 
 const HoldButton: React.FC<{
   children: React.ReactNode;
+  label: string;
   onHold?: () => void;
   onDown?: () => void;
   onUp?: () => void;
-}> = ({ children, onHold, onDown, onUp }) => {
+}> = ({ children, label, onHold, onDown, onUp }) => {
   const timerRef = useRef<number | null>(null);
   const clear = () => {
     if (timerRef.current != null) window.clearInterval(timerRef.current);
@@ -254,6 +322,8 @@ const HoldButton: React.FC<{
   return (
     <button
       type="button"
+      aria-label={label}
+      title={label}
       className="grid place-items-center border border-white/40 active:bg-ide-accent"
       onPointerDown={() => {
         onDown?.();
@@ -269,8 +339,18 @@ const HoldButton: React.FC<{
   );
 };
 
-const IconButton: React.FC<{ children: React.ReactNode; onClick: () => void }> = ({ children, onClick }) => (
-  <button type="button" className="grid h-12 w-12 place-items-center hover:bg-black/10" onClick={onClick}>
+const IconButton: React.FC<{ children: React.ReactNode; label: string; onClick: () => void }> = ({
+  children,
+  label,
+  onClick,
+}) => (
+  <button
+    type="button"
+    className="grid h-14 min-w-11 flex-1 place-items-center hover:bg-black/10"
+    onClick={onClick}
+    title={label}
+    aria-label={label}
+  >
     {children}
   </button>
 );

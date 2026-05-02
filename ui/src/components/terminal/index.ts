@@ -1,3 +1,4 @@
+export { default as BlockTermHistoryCenter } from "@/components/terminal/blockterm-history-center";
 export { default as BlockTermPage } from "@/components/terminal/blockterm-page";
 export { default as TerminalInstance } from "@/components/terminal/terminal-instance";
 export { default as TerminalListManager } from "@/components/terminal/terminal-list-manager";

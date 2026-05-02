@@ -14,7 +14,7 @@ interface TerminalSelectionMenuProps {
 }
 
 const actionClassName =
-  "flex flex-1 items-center justify-center gap-1.5 rounded-sm px-2 py-2 text-[11px] font-medium text-ide-text transition-colors hover:bg-ide-bg/80 active:bg-ide-bg/80";
+  "flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-sm px-2 py-2 text-[11px] font-medium text-ide-text transition-colors hover:bg-ide-bg/80 active:bg-ide-bg/80";
 
 const TerminalSelectionMenu: React.FC<TerminalSelectionMenuProps> = ({
   left,
