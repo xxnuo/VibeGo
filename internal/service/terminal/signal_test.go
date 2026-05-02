@@ -18,7 +18,7 @@ type signalTestRuntime struct {
 	signalErr error
 }
 
-func (r *signalTestRuntime) Type() string                       { return RuntimeTypeSSH }
+func (r *signalTestRuntime) Type() string                       { return "test" }
 func (r *signalTestRuntime) Capabilities() TerminalCapabilities { return TerminalCapabilities{} }
 func (r *signalTestRuntime) Read([]byte) (int, error)           { return 0, io.EOF }
 func (r *signalTestRuntime) Write(data []byte) (int, error)     { return len(data), nil }

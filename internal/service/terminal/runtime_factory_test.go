@@ -16,7 +16,7 @@ type rollbackTestRuntime struct {
 	closed atomic.Bool
 }
 
-func (r *rollbackTestRuntime) Type() string                       { return RuntimeTypeSSH }
+func (r *rollbackTestRuntime) Type() string                       { return "test" }
 func (r *rollbackTestRuntime) Capabilities() TerminalCapabilities { return TerminalCapabilities{} }
 func (r *rollbackTestRuntime) Read([]byte) (int, error)           { return 0, io.EOF }
 func (r *rollbackTestRuntime) Write(data []byte) (int, error)     { return len(data), nil }
@@ -52,8 +52,7 @@ func TestManagerClosesRemoteRuntimeWhenSessionInsertFails(t *testing.T) {
 	t.Cleanup(func() { _ = db.Callback().Create().Remove(callbackName) })
 
 	_, err := manager.Create(CreateOptions{
-		RuntimeType:  RuntimeTypeSSH,
-		SSHProfileID: "profile-1",
+		RuntimeType: "test",
 	})
 	if err == nil || err.Error() != "forced terminal insert failure" {
 		t.Fatalf("Create() error = %v", err)
@@ -103,8 +102,7 @@ func TestRemoteRuntimeHandshakeDoesNotBlockWorkspaceDelete(t *testing.T) {
 	go func() {
 		_, err := manager.CreateInWorkspace(CreateOptions{
 			WorkspaceSessionID: "workspace-1",
-			RuntimeType:        RuntimeTypeSSH,
-			SSHProfileID:       "profile-1",
+			RuntimeType:        "test",
 		})
 		createDone <- err
 	}()
@@ -162,9 +160,8 @@ func TestRemoteRuntimeIsNotPersistedAfterRequestCancellation(t *testing.T) {
 	createDone := make(chan error, 1)
 	go func() {
 		_, err := manager.Create(CreateOptions{
-			RuntimeType:  RuntimeTypeSSH,
-			SSHProfileID: "profile-1",
-			Context:      ctx,
+			RuntimeType: "test",
+			Context:     ctx,
 		})
 		createDone <- err
 	}()
@@ -225,9 +222,8 @@ func TestRemoteRuntimeInsertUsesRequestContext(t *testing.T) {
 	createDone := make(chan error, 1)
 	go func() {
 		_, err := manager.Create(CreateOptions{
-			RuntimeType:  RuntimeTypeSSH,
-			SSHProfileID: "profile-1",
-			Context:      ctx,
+			RuntimeType: "test",
+			Context:     ctx,
 		})
 		createDone <- err
 	}()
@@ -280,8 +276,7 @@ func TestRemoteRuntimeValidationUsesRequestContext(t *testing.T) {
 	info, err := manager.Create(CreateOptions{
 		Name:               "remote",
 		WorkspaceSessionID: "workspace-1",
-		RuntimeType:        RuntimeTypeSSH,
-		SSHProfileID:       "profile-1",
+		RuntimeType:        "test",
 		Context:            ctx,
 	})
 	if err != nil {
@@ -323,9 +318,8 @@ func TestRemoteRuntimeDefaultNameCountUsesContextAndReturnsErrors(t *testing.T) 
 	t.Cleanup(func() { _ = db.Callback().Query().Remove(callbackName) })
 
 	_, err := manager.Create(CreateOptions{
-		RuntimeType:  RuntimeTypeSSH,
-		SSHProfileID: "profile-1",
-		Context:      ctx,
+		RuntimeType: "test",
+		Context:     ctx,
 	})
 	if !errors.Is(err, forcedErr) {
 		t.Fatalf("Create() error = %v, want %v", err, forcedErr)

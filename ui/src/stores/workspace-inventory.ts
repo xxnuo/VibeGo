@@ -1,6 +1,7 @@
-import type { ClientMutation, WorkspaceSnapshot, WorkspaceTabEntity } from "@/api/workspace-sync";
+import type { ClientMutation, WorkspaceSnapshot } from "@/api/workspace-sync";
 import { pageRegistry } from "@/pages/registry";
 import type { GroupPage, PageGroup, TabItem } from "./frame-store";
+import { splitPageTasks } from "./page-tasks";
 
 export function parseData(raw?: string): Record<string, unknown> {
   try {
@@ -15,118 +16,81 @@ function sharedTabData(data?: Record<string, unknown>) {
   const { isDirty: _dirty, line: _line, column: _column, ...shared } = data || {};
   return shared;
 }
+export function tabPayload(owner: string, pageId: string, tab: TabItem, position: number) {
+  const data = sharedTabData(tab.data);
+  return {
+    id: tab.id,
+    folder_id: owner,
+    page_id: pageId,
+    tab_type:
+      data.editorId && data.editorId !== "default"
+        ? "custom_editor"
+        : data.type === "diff"
+          ? "diff"
+          : data.type === "preview"
+            ? "preview"
+            : data.type === "custom_editor"
+              ? "custom_editor"
+              : "file",
+    title: tab.title,
+    file_path: typeof data.path === "string" ? data.path : "",
+    pinned: !!tab.pinned,
+    icon: tab.icon,
+    closable: tab.closable,
+    position: tab.position ?? position,
+    data,
+  };
+}
+
+export function groupPayload(group: PageGroup, position: number): Record<string, unknown> {
+  if (group.type === "group")
+    return {
+      id: group.id,
+      name: group.name,
+      position,
+      path: group.pages.find((page) => page.type === "files")?.path || "",
+      data: { ...group.data, pages: group.pages.map(({ tabs: _tabs, activeTabId: _active, ...page }) => page) },
+    };
+  if (group.type === "tool")
+    return { id: group.id, name: group.name, page_id: group.pageId, position, data: group.data || {} };
+  return {};
+}
+
+// Explicit import of an existing local workspace, used only when creating it.
+export function actionsFromFrame(groups: PageGroup[]): MutationAction[] {
+  const actions: MutationAction[] = [];
+  groups.forEach((group, position) => {
+    if (group.type !== "group" && group.type !== "tool") return;
+    actions.push({ type: group.type === "group" ? "folder/add" : "tool/open", payload: groupPayload(group, position) });
+    const pages = group.type === "group" ? group.pages : [{ id: "", tabs: group.tabs }];
+    for (const page of pages)
+      page.tabs.forEach((tab, index) =>
+        actions.push({ type: "tab/open", payload: tabPayload(group.id, page.id, tab, index) })
+      );
+  });
+  return actions;
+}
+
 export function inventoryFromFrame(
   groups: PageGroup[],
   workspaceId: string
 ): Pick<WorkspaceSnapshot, "folders" | "tools" | "tabs"> {
-  const folders: WorkspaceSnapshot["folders"] = [],
-    tools: WorkspaceSnapshot["tools"] = [],
-    tabs: WorkspaceSnapshot["tabs"] = [];
-  const addTabs = (owner: string, pageId: string, items: TabItem[]) => {
-    items.forEach((tab, position) => {
-      const data = sharedTabData(tab.data);
-      const kind =
-        data.editorId && data.editorId !== "default"
-          ? "custom_editor"
-          : data.type === "diff"
-            ? "diff"
-            : data.type === "preview"
-              ? "preview"
-              : "file";
-      tabs.push({
-        id: tab.id,
-        workspace_id: workspaceId,
-        folder_id: owner,
-        page_id: pageId,
-        tab_type: kind,
-        title: tab.title,
-        file_path: typeof data.path === "string" ? data.path : "",
-        pinned: !!tab.pinned,
-        icon: tab.icon,
-        closable: tab.closable,
-        position,
-        data: JSON.stringify(data),
-      });
-    });
+  const empty: WorkspaceSnapshot = {
+    workspace: { id: workspaceId, name: "", revision: 0, data: "{}" },
+    folders: [],
+    tools: [],
+    tabs: [],
+    terminals: [],
+    storage: [],
   };
-  groups.forEach((group, position) => {
-    if (group.type === "group") {
-      const pages = group.pages.map(({ tabs: _tabs, activeTabId: _active, ...page }) => page);
-      folders.push({
-        id: group.id,
-        workspace_id: workspaceId,
-        name: group.name,
-        path: group.pages.find((page) => page.type === "files")?.path || "",
-        position,
-        data: JSON.stringify({ ...group.data, pages }),
-      });
-      for (const page of group.pages) addTabs(group.id, page.id, page.tabs);
-    } else if (group.type === "tool") {
-      tools.push({
-        id: group.id,
-        workspace_id: workspaceId,
-        page_id: group.pageId,
-        name: group.name,
-        position,
-        data: JSON.stringify(group.data || {}),
-      });
-      addTabs(group.id, "", group.tabs);
-    }
-  });
+  const { folders, tools, tabs } = actionsFromFrame(groups).reduce(
+    (state, action) => reduceInventory(state, { ...action, workspace_id: workspaceId } as ClientMutation),
+    empty
+  );
   return { folders, tools, tabs };
 }
 
 export type MutationAction = { type: string; payload: Record<string, unknown> };
-const tabKey = (tab: WorkspaceTabEntity) => JSON.stringify([tab.folder_id, tab.page_id, tab.id]);
-const tabPayload = (tab: WorkspaceTabEntity) => ({ ...tab, data: parseData(tab.data) });
-export function diffInventory(
-  before: ReturnType<typeof inventoryFromFrame>,
-  after: ReturnType<typeof inventoryFromFrame>
-): MutationAction[] {
-  const actions: MutationAction[] = [];
-  for (const [previous, next, open, close, update] of [
-    [before.folders, after.folders, "folder/add", "folder/remove", "folder/update-data"],
-    [before.tools, after.tools, "tool/open", "tool/close", "tool/update-data"],
-  ] as const) {
-    const oldById = new Map(previous.map((item) => [item.id, item]));
-    const nextIds = new Set(next.map((item) => item.id));
-    for (const item of previous) if (!nextIds.has(item.id)) actions.push({ type: close, payload: { id: item.id } });
-    for (const item of next) {
-      const old = oldById.get(item.id);
-      if (!old) actions.push({ type: open, payload: { ...item, data: parseData(item.data) } });
-      else if (
-        old.data !== item.data ||
-        old.name !== item.name ||
-        ("path" in old && "path" in item && old.path !== item.path)
-      )
-        actions.push({ type: update, payload: { ...item, data: parseData(item.data) } });
-    }
-  }
-  const beforeTabs = new Map(before.tabs.map((tab) => [tabKey(tab), tab]));
-  const afterTabs = new Map(after.tabs.map((tab) => [tabKey(tab), tab]));
-  for (const [key, tab] of beforeTabs)
-    if (!afterTabs.has(key) && [...after.folders, ...after.tools].some((owner) => owner.id === tab.folder_id))
-      actions.push({ type: "tab/close", payload: { id: tab.id, folder_id: tab.folder_id, page_id: tab.page_id } });
-  for (const [key, tab] of afterTabs) {
-    const old = beforeTabs.get(key);
-    if (!old) actions.push({ type: "tab/open", payload: tabPayload(tab) });
-    else if (JSON.stringify(old) !== JSON.stringify(tab))
-      actions.push({
-        type: JSON.stringify({ ...old, pinned: tab.pinned }) === JSON.stringify(tab) ? "tab/pin" : "tab/update",
-        payload: tabPayload(tab),
-      });
-  }
-  const oldIds = before.folders
-    .map((folder) => folder.id)
-    .filter((id) => after.folders.some((folder) => folder.id === id));
-  const nextIds = after.folders
-    .map((folder) => folder.id)
-    .filter((id) => before.folders.some((folder) => folder.id === id));
-  if (oldIds.join("\0") !== nextIds.join("\0"))
-    actions.push({ type: "folder/reorder", payload: { folder_ids: after.folders.map((folder) => folder.id) } });
-  return actions;
-}
-
 // The same reducer rebases queued local mutations over a reconnect snapshot.
 export function reduceInventory(snapshot: WorkspaceSnapshot, mutation: ClientMutation): WorkspaceSnapshot {
   const p = { ...mutation.payload } as Record<string, any>;
@@ -174,11 +138,20 @@ export function reduceInventory(snapshot: WorkspaceSnapshot, mutation: ClientMut
       next.tabs = next.tabs.filter((tab) => tab.folder_id !== p.id);
       break;
     case "folder/update-data":
-      next.folders = next.folders.map((folder) => (folder.id === p.id ? { ...folder, ...entity } : folder));
+      next.folders = next.folders.map((folder) =>
+        folder.id === p.id ? { ...folder, data: entity.data, path: p.path ?? "", name: p.name ?? "" } : folder
+      );
       break;
     case "tool/update-data":
       next.tools = next.tools.map((tool) =>
-        tool.id === p.id ? { ...tool, data: entity.data, ...(p.name ? { name: p.name } : {}) } : tool
+        tool.id === p.id
+          ? {
+              ...tool,
+              data: entity.data,
+              ...(p.name ? { name: p.name } : {}),
+              ...(typeof p.position === "number" ? { position: p.position } : {}),
+            }
+          : tool
       );
       break;
     case "folder/reorder": {
@@ -249,6 +222,7 @@ export function frameFromInventory(snapshot: WorkspaceSnapshot, current: PageGro
           id: tab.id,
           title: tab.title,
           pinned: tab.pinned,
+          position: tab.position,
           ...(tab.icon ? { icon: tab.icon } : {}),
           ...(tab.closable !== undefined ? { closable: tab.closable } : {}),
           data: {
@@ -260,7 +234,7 @@ export function frameFromInventory(snapshot: WorkspaceSnapshot, current: PageGro
         return old && JSON.stringify(old) === JSON.stringify(result) ? old : result;
       });
   const activeTab = (id: string | null | undefined, tabs: TabItem[]) =>
-    tabs.some((tab) => tab.id === id) ? id! : tabs[0]?.id || null;
+    id === null ? null : tabs.some((tab) => tab.id === id) ? id! : tabs[0]?.id || null;
   const assets: PageGroup[] = [...snapshot.folders]
     .sort((a, b) => a.position - b.position)
     .map((folder) => {
@@ -269,7 +243,7 @@ export function frameFromInventory(snapshot: WorkspaceSnapshot, current: PageGro
       const savedPages = Array.isArray(data.pages) ? (data.pages as GroupPage[]) : [];
       const definitions = savedPages.length
         ? savedPages
-        : ["files", "git", "terminal"].map((type) => ({
+        : ["files"].map((type) => ({
             id: `${folder.id}-${type}`,
             type,
             label: pageRegistry.get(type)?.name || type,
@@ -292,7 +266,7 @@ export function frameFromInventory(snapshot: WorkspaceSnapshot, current: PageGro
             : pages[0]?.id || null,
       };
     });
-  for (const tool of snapshot.tools) {
+  for (const tool of [...snapshot.tools].sort((a, b) => a.position - b.position)) {
     const old = current.find((group) => group.id === tool.id);
     const tabs = tabsFor(tool.id, "", old?.type === "tool" ? old.tabs : []);
     assets.push({
@@ -305,6 +279,8 @@ export function frameFromInventory(snapshot: WorkspaceSnapshot, current: PageGro
       activeTabId: activeTab(old?.type === "tool" ? old.activeTabId : null, tabs),
     });
   }
+  const positions = new Map([...snapshot.folders, ...snapshot.tools].map((item) => [item.id, item.position]));
+  assets.sort((a, b) => (positions.get(a.id) ?? 0) - (positions.get(b.id) ?? 0));
   // Preserve local Home/Settings and focus. Shared additions never activate a group.
-  return [...current.filter((group) => group.type === "home" || group.type === "settings"), ...assets];
+  return splitPageTasks([...current.filter((group) => group.type === "home" || group.type === "settings"), ...assets]);
 }

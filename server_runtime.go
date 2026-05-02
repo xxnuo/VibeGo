@@ -27,7 +27,6 @@ import (
 	"github.com/xxnuo/vibego/internal/middleware"
 	"github.com/xxnuo/vibego/internal/model"
 	"github.com/xxnuo/vibego/internal/service/asr"
-	"github.com/xxnuo/vibego/internal/service/sshconnection"
 	"github.com/xxnuo/vibego/internal/service/terminal"
 	"github.com/xxnuo/vibego/internal/service/workspace"
 	vibegoTls "github.com/xxnuo/vibego/internal/tls"
@@ -98,7 +97,7 @@ func runServerWithOptions(ctx context.Context, options serverOptions) error {
 		ExtraSourcesJSON: cfg.AsrSources,
 	})
 
-	db := config.GetDB(
+	dbPair := config.GetDBPair(
 		&model.User{},
 		&model.UserSession{},
 		&model.AISessionIndex{},
@@ -106,22 +105,22 @@ func runServerWithOptions(ctx context.Context, options serverOptions) error {
 		&model.UserSetting{},
 		&model.TerminalSession{},
 		&model.TerminalHistory{},
-		&model.SSHConnectionProfile{},
-		&model.SSHKnownHost{},
 	)
+	db := dbPair.Writer
 	if err := config.MigrateWorkspaceSettings(db); err != nil {
 		return fmt.Errorf("migrate workspace settings: %w", err)
 	}
 	if err := config.MigrateLegacySessionsToWorkspaces(db); err != nil {
 		return fmt.Errorf("migrate workspace inventory: %w", err)
 	}
-	workspaceSync := workspace.New(db)
-	sshService := sshconnection.New(db)
-	defer sshService.Close()
+	workspaceSync := workspace.New(db, dbPair.Reader)
+	if err := workspaceSync.CompactExistingMutations(); err != nil {
+		return fmt.Errorf("compact workspace mutations: %w", err)
+	}
 	terminalManager := terminal.NewManager(db, &terminal.ManagerConfig{
 		Shell:            cfg.DefaultShell,
-		RuntimeFactory:   sshService,
 		WorkspaceChanged: workspaceSync.TerminalsChanged,
+		TerminalEvents:   workspaceSync.PublishTerminalEvent,
 	})
 	terminalManager.CleanupOnStart()
 	fileViews, err := middleware.NewFileViewAuthorizer()
@@ -148,13 +147,11 @@ func runServerWithOptions(ctx context.Context, options serverOptions) error {
 	handler.NewAISessionHandler(db).Register(api)
 	handler.NewCodexHandler().Register(api)
 	fileHandler := handler.NewFileHandler(fileViews)
-	fileHandler.SetRemoteFileProvider(sshService)
 	fileHandler.Register(api)
 	handler.NewTerminalHandler(terminalManager).Register(api)
 	taskHandler := handler.NewTaskHandler()
 	defer taskHandler.Close()
 	taskHandler.Register(api)
-	handler.NewSSHHandler(sshService).Register(api)
 	githubHandler.RegisterProtectedRoutes(api)
 	gitHandler := handler.NewGitHandler(db)
 	gitHandler.Register(api)

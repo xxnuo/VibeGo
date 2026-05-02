@@ -1,14 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Columns, Edit2, Plus, Rows, Server, Terminal, X, XCircle } from "lucide-react";
+import { Columns, Edit2, Equal, Plus, Rows, Terminal, X, XCircle } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { terminalApi } from "@/api/terminal";
 import { useDialog } from "@/components/common";
 import type { KeyEvent } from "@/components/keyboard";
 import { translateKeyEvent } from "@/components/keyboard";
-import SSHConnectionDialog, { type SSHConnectionAttempt } from "@/components/terminal/ssh-connection-dialog";
 import TerminalHistoryPage from "@/components/terminal/terminal-history-page";
 import type { TerminalInstanceHandle, TerminalInstanceStateUpdate } from "@/components/terminal/terminal-instance";
-import TerminalInstance from "@/components/terminal/terminal-instance";
 import TerminalListManager from "@/components/terminal/terminal-list-manager";
 import TerminalSplitView from "@/components/terminal/terminal-split-view";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -17,7 +15,7 @@ import { terminalKeys, useTerminalCreate, useTerminalRename } from "@/hooks/use-
 import { useTranslation } from "@/lib/i18n";
 import { cleanupSpeculativeTerminal } from "@/services/speculative-terminal-cleanup";
 import { useAppStore } from "@/stores";
-import { useFrameStore } from "@/stores/frame-store";
+import { consumeTerminalStartRequest, useFrameStore } from "@/stores/frame-store";
 import { useKeyboardStore } from "@/stores/keyboard-store";
 import {
   enqueueWorkspaceMutation,
@@ -25,7 +23,8 @@ import {
   syncTerminalWorkspaceState,
   useSessionStore,
 } from "@/stores/session-store";
-import { type LayoutNode, type SplitDirection, type TerminalSession, useTerminalStore } from "@/stores/terminal-store";
+import { getTerminalWorkspaceGroupIds } from "@/stores/session-workspace-guard";
+import { type SplitDirection, type TerminalSession, useTerminalStore } from "@/stores/terminal-store";
 
 interface TerminalPageProps {
   groupId: string;
@@ -35,11 +34,7 @@ interface TerminalPageProps {
 const EMPTY_TERMINALS: TerminalSession[] = [];
 
 function isTerminalGroupCurrent(groupId: string): boolean {
-  return useFrameStore
-    .getState()
-    .groups.some(
-      (group) => group.type === "group" && group.id === groupId && group.pages.some((page) => page.type === "terminal")
-    );
+  return getTerminalWorkspaceGroupIds(useFrameStore.getState().groups).has(groupId);
 }
 
 function isTerminalWorkspaceScopeCurrent(groupId: string, sessionId: string | null, revision: number): boolean {
@@ -52,16 +47,6 @@ function getCompactTerminalLocation(value?: string): string {
   if (!normalized) return value;
   const segments = normalized.split(/[\\/]/).filter(Boolean);
   return segments[segments.length - 1] || normalized;
-}
-
-function collectLayoutTerminalIds(layout: LayoutNode | null): string[] {
-  if (!layout) {
-    return [];
-  }
-  if (layout.type === "terminal") {
-    return [layout.terminalId];
-  }
-  return [...collectLayoutTerminalIds(layout.first), ...collectLayoutTerminalIds(layout.second)];
 }
 
 const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
@@ -84,7 +69,8 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
   const listManagerOpen = useTerminalStore((s) => s.listManagerOpenByGroup[groupId] ?? true);
   const focusedId = useTerminalStore((s) => s.focusedIdByGroup[groupId] ?? null);
   const [showHistory, setShowHistory] = useState(false);
-  const [sshDialogOpen, setSSHDialogOpen] = useState(false);
+  const [splitBusy, setSplitBusy] = useState(false);
+  const splitBusyRef = useRef(false);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const terminalRefsMap = useRef<Map<string, TerminalInstanceHandle>>(new Map());
 
@@ -98,10 +84,16 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
   const getTerminalPageIds = useTerminalStore((s) => s.getTerminalPageIds);
   const splitTerminalInStore = useTerminalStore((s) => s.splitTerminal);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
+  const balanceSplits = useTerminalStore((s) => s.balanceSplits);
   const updateSplitRatio = useTerminalStore((s) => s.updateSplitRatio);
 
   const createTerminalMutation = useTerminalCreate(groupId);
   const renameTerminalMutation = useTerminalRename(groupId);
+
+  useEffect(() => {
+    if (!sessionInitialized || sessionLoading || !currentSessionId || !isTerminalGroupCurrent(groupId)) return;
+    if (consumeTerminalStartRequest(groupId) && terminals.length === 0) createTerminalMutation.mutate({ cwd });
+  }, [groupId, cwd, currentSessionId, sessionInitialized, sessionLoading, terminals.length, createTerminalMutation]);
 
   const rootTerminals = useMemo(() => terminals.filter((t) => !t.parentId), [terminals]);
   const displayTerminals = useMemo(() => [...rootTerminals].reverse(), [rootTerminals]);
@@ -115,7 +107,6 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
     }
     return terminalLayouts[activeTerminalId] ?? null;
   }, [activeTerminalId, terminalLayouts]);
-  const activeLayoutTerminalIds = useMemo(() => collectLayoutTerminalIds(activeLayout), [activeLayout]);
   const hasSplit = activeLayout?.type === "split";
 
   const handleTerminalExited = useCallback(
@@ -128,18 +119,16 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
 
   const closeTerminalIds = useCallback(
     async (terminalIds: string[]) => {
-      const runningIds = Array.from(new Set(terminalIds)).filter(
-        (terminalId) => terminalStatusMap.get(terminalId) === "running"
-      );
-      if (runningIds.length === 0) return;
-      const results = await Promise.allSettled(runningIds.map((terminalId) => terminalApi.close(terminalId)));
+      const ids = Array.from(new Set(terminalIds));
+      if (ids.length === 0) return;
+      const results = await Promise.allSettled(ids.map((terminalId) => terminalApi.close(terminalId)));
       const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
       if (failed) {
         throw failed.reason;
       }
       await queryClient.invalidateQueries({ queryKey: terminalKeys.list() });
     },
-    [queryClient, terminalStatusMap]
+    [queryClient]
   );
 
   const confirmCloseRunningTerminals = useCallback(
@@ -194,19 +183,6 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
     createTerminalMutation.mutate({ cwd });
   }, [createTerminalMutation, cwd]);
 
-  const handleCreateSSHTerminal = useCallback(
-    async ({ profile, auth, cwd: remoteCwd }: SSHConnectionAttempt) => {
-      await createTerminalMutation.mutateAsync({
-        name: `SSH ${profile.name}`,
-        cwd: remoteCwd,
-        runtime_type: "ssh",
-        ssh_profile_id: profile.id,
-        ssh_auth: auth,
-      });
-    },
-    [createTerminalMutation]
-  );
-
   const handleToggleListManager = useCallback(() => {
     if (listManagerOpen) {
       if (rootTerminals.length === 0) return;
@@ -259,14 +235,17 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
   );
 
   const handleSplit = useCallback(
-    async (direction: SplitDirection) => {
-      const targetId = focusedId || activeTerminalId;
+    async (direction: SplitDirection, paneId?: string) => {
+      if (splitBusyRef.current) return;
+      const targetId = paneId || focusedId || activeTerminalId;
       if (!targetId) return;
       const sessionState = useSessionStore.getState();
       const requestSessionId = sessionState.currentSessionId;
       const terminalStore = useTerminalStore.getState();
       if (sessionState.loading || !isTerminalGroupCurrent(groupId)) return;
       if (!terminalStore.getTerminals(groupId).some((terminal) => terminal.id === targetId)) return;
+      splitBusyRef.current = true;
+      setSplitBusy(true);
       try {
         await enqueueWorkspaceMutation(async () => {
           if (!isTerminalWorkspaceScopeCurrent(groupId, requestSessionId, sessionState.workspaceRevision)) return;
@@ -281,8 +260,10 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
             })
             .filter((number) => number > 0);
           const nextNumber = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+          const target = currentTerminalStore.getTerminals(groupId).find((t) => t.id === targetId);
+          if (!target || target.status === "exited" || target.status === "closed") return;
           const result = await terminalApi.create({
-            cwd,
+            cwd: target.currentCwd || target.cwd || cwd,
             name: `Terminal ${nextNumber}`,
             workspace_session_id: requestSessionId || undefined,
             group_id: groupId,
@@ -293,41 +274,55 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
           if (
             !isTerminalWorkspaceScopeCurrent(groupId, requestSessionId, sessionState.workspaceRevision) ||
             !latestTerminalStore.getTerminals(groupId).some((terminal) => terminal.id === targetId) ||
-            currentRootId !== rootId
+            currentRootId !== rootId ||
+            latestTerminalStore.getTerminals(groupId).find((t) => t.id === targetId)?.status !== "running"
           ) {
             await cleanupSpeculativeTerminal(result.id, terminalApi);
             return;
           }
-          addTerminal(groupId, { id: result.id, name: result.name, parentId: rootId });
+          addTerminal(groupId, {
+            id: result.id,
+            name: result.name,
+            parentId: rootId,
+            cwd: target.currentCwd || target.cwd || cwd,
+          });
           splitTerminalInStore(rootId, targetId, result.id, direction);
           setFocusedId(groupId, result.id);
         });
-      } catch {}
+      } catch (error) {
+        await dialog.alert(error instanceof Error ? error.message : t("terminal.splitFailed"));
+      } finally {
+        splitBusyRef.current = false;
+        setSplitBusy(false);
+      }
     },
-    [focusedId, activeTerminalId, groupId, cwd, addTerminal, splitTerminalInStore, setFocusedId]
+    [focusedId, activeTerminalId, groupId, cwd, addTerminal, splitTerminalInStore, setFocusedId, dialog, t]
   );
 
-  const handleCloseSplit = useCallback(() => {
-    const targetId = focusedId;
-    if (!targetId || !hasSplit) return;
-    const sessionState = useSessionStore.getState();
-    const requestSessionId = sessionState.currentSessionId;
-    const requestRevision = sessionState.workspaceRevision;
-    const closeSplit = async () => {
-      const confirmed = await confirmCloseRunningTerminals([targetId]);
-      if (!confirmed) return;
-      try {
-        await enqueueWorkspaceMutation(async () => {
-          if (!isTerminalWorkspaceScopeCurrent(groupId, requestSessionId, requestRevision)) return;
-          await closeTerminalIds([targetId]);
-          removeTerminal(groupId, targetId);
-        });
-      } catch (e) {
-        await dialog.alert(e instanceof Error ? e.message : t("terminal.closeFailed"));
-      }
-    };
-    void closeSplit();
-  }, [closeTerminalIds, confirmCloseRunningTerminals, dialog, focusedId, groupId, hasSplit, removeTerminal, t]);
+  const handleCloseSplit = useCallback(
+    (paneId?: string) => {
+      const targetId = paneId || focusedId;
+      if (!targetId || !hasSplit) return;
+      const sessionState = useSessionStore.getState();
+      const requestSessionId = sessionState.currentSessionId;
+      const requestRevision = sessionState.workspaceRevision;
+      const closeSplit = async () => {
+        const confirmed = await confirmCloseRunningTerminals([targetId]);
+        if (!confirmed) return;
+        try {
+          await enqueueWorkspaceMutation(async () => {
+            if (!isTerminalWorkspaceScopeCurrent(groupId, requestSessionId, requestRevision)) return;
+            await closeTerminalIds([targetId]);
+            removeTerminal(groupId, targetId);
+          });
+        } catch (e) {
+          await dialog.alert(e instanceof Error ? e.message : t("terminal.closeFailed"));
+        }
+      };
+      void closeSplit();
+    },
+    [closeTerminalIds, confirmCloseRunningTerminals, dialog, focusedId, groupId, hasSplit, removeTerminal, t]
+  );
 
   const handleDeleteTerminalPage = useCallback(
     async (terminalId: string) => {
@@ -337,7 +332,10 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
       try {
         await enqueueWorkspaceMutation(async () => {
           if (!isTerminalWorkspaceScopeCurrent(groupId, requestSessionId, requestRevision)) return;
-          await terminalApi.delete(terminalId);
+          const ids = useTerminalStore.getState().getTerminalPageIds(groupId, terminalId);
+          const results = await Promise.allSettled(ids.map((id) => terminalApi.delete(id)));
+          const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+          if (failed) throw failed.reason;
           removeTerminalPage(groupId, terminalId);
         });
         await queryClient.invalidateQueries({ queryKey: terminalKeys.list() });
@@ -384,16 +382,6 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
     [groupId]
   );
 
-  const makeTerminalExitedHandler = useCallback(
-    (terminalId: string) => () => handleTerminalExited(terminalId),
-    [handleTerminalExited]
-  );
-
-  const makeTerminalStateChangeHandler = useCallback(
-    (terminalId: string) => (state: TerminalInstanceStateUpdate) => handleTerminalStateChange(terminalId, state),
-    [handleTerminalStateChange]
-  );
-
   useEffect(() => {
     if (!currentSessionId || sessionLoading || !sessionInitialized) {
       return;
@@ -430,19 +418,6 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
     focusedIdByGroup,
   ]);
 
-  useEffect(() => {
-    if (activeLayoutTerminalIds.length <= 1) {
-      return;
-    }
-    const exitedIds = activeLayoutTerminalIds.filter((terminalId) => terminalStatusMap.get(terminalId) !== "running");
-    if (exitedIds.length === 0) {
-      return;
-    }
-    exitedIds.forEach((terminalId) => {
-      removeTerminal(groupId, terminalId);
-    });
-  }, [activeLayoutTerminalIds, groupId, removeTerminal, terminalStatusMap]);
-
   const pageMenuItems = useMemo(() => {
     if (showHistory || listManagerOpen || !focusedTerminal) {
       return [];
@@ -477,6 +452,12 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
     }
     if (hasSplit) {
       items.push({
+        id: "balance-panes",
+        icon: <Equal size={18} />,
+        label: t("terminal.balancePanes"),
+        onClick: () => balanceSplits(groupId),
+      });
+      items.push({
         id: "close-split",
         icon: <XCircle size={18} />,
         label: t("terminal.closeSplit"),
@@ -488,6 +469,8 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
     return items;
   }, [
     focusedTerminal,
+    balanceSplits,
+    groupId,
     handleRenameTerminal,
     handleSplit,
     handleCloseSplit,
@@ -530,7 +513,7 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
                         : "bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text"
                   }`}
                 >
-                  {terminal.runtimeType === "ssh" ? <Server size={12} /> : <Terminal size={12} />}
+                  <Terminal size={12} />
                   <span className={`max-w-[80px] truncate font-medium ${!terminal.pinned ? "italic" : ""}`}>
                     {terminal.name}
                   </span>
@@ -563,10 +546,7 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
             })}
           </div>
         ) : null,
-      rightButtons: [
-        { icon: <Plus size={18} />, title: t("terminal.new"), onClick: handleCreateTerminal },
-        { icon: <Server size={18} />, title: t("terminal.ssh.openDialog"), onClick: () => setSSHDialogOpen(true) },
-      ],
+      rightButtons: [{ icon: <Plus size={18} />, title: t("terminal.new"), onClick: handleCreateTerminal }],
     };
   }, [
     handleToggleListManager,
@@ -683,54 +663,24 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
             embedded={true}
           />
         ) : activeLayout ? (
-          hasSplit ? (
-            <TerminalSplitView
-              layout={activeLayout}
-              groupId={groupId}
-              focusedId={focusedId}
-              terminals={terminals}
-              onFocus={handleFocusPane}
-              onExited={handleTerminalExited}
-              onStateChange={handleTerminalStateChange}
-              onRatioChange={handleRatioChange}
-              setTerminalRef={setTerminalRef}
-            />
-          ) : (
-            terminals.map((terminal) => (
-              <TerminalInstance
-                key={terminal.id}
-                ref={setTerminalRef(terminal.id)}
-                terminalId={terminal.id}
-                terminalName={terminal.name}
-                isActive={terminal.id === activeTerminalId}
-                isExited={terminal.status !== "running"}
-                initialCwd={terminal.currentCwd || cwd}
-                onExited={makeTerminalExitedHandler(terminal.id)}
-                onStateChange={makeTerminalStateChangeHandler(terminal.id)}
-              />
-            ))
-          )
-        ) : (
-          terminals.map((terminal) => (
-            <TerminalInstance
-              key={terminal.id}
-              ref={setTerminalRef(terminal.id)}
-              terminalId={terminal.id}
-              terminalName={terminal.name}
-              isActive={terminal.id === activeTerminalId}
-              isExited={terminal.status !== "running"}
-              initialCwd={terminal.currentCwd || cwd}
-              onExited={makeTerminalExitedHandler(terminal.id)}
-              onStateChange={makeTerminalStateChangeHandler(terminal.id)}
-            />
-          ))
-        )}
+          <TerminalSplitView
+            layout={activeLayout}
+            groupId={groupId}
+            focusedId={focusedId}
+            terminals={terminals}
+            onFocus={handleFocusPane}
+            onExited={handleTerminalExited}
+            onStateChange={handleTerminalStateChange}
+            onRatioChange={handleRatioChange}
+            onSplit={(direction, id) => {
+              void handleSplit(direction, id);
+            }}
+            onClose={handleCloseSplit}
+            busy={splitBusy}
+            setTerminalRef={setTerminalRef}
+          />
+        ) : null}
       </div>
-      <SSHConnectionDialog
-        open={sshDialogOpen}
-        onOpenChange={setSSHDialogOpen}
-        onCreateTerminal={handleCreateSSHTerminal}
-      />
     </div>
   );
 };

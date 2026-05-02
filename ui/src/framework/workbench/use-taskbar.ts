@@ -2,18 +2,12 @@ import { Box, FolderOpen, Home, Maximize, Minimize, Settings } from "lucide-reac
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import NavIcon from "@/components/frame/nav-icon";
 import type { TaskbarSortEntry } from "@/components/frame/taskbar-item-menu";
-import { useWorkspaceHint } from "@/components/frame/workspace-hint-bubble";
+import { getWorkspacePath, useWorkspaceHint } from "@/components/frame/workspace-hint-bubble";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useReorderableList } from "@/hooks/use-reorderable-list";
 import { useTranslation } from "@/lib/i18n";
 import { useAppStore } from "@/stores/app-store";
-import {
-  type BottomBarConfig,
-  type GenericGroup,
-  type PageGroup,
-  type PageType,
-  useFrameStore,
-} from "@/stores/frame-store";
+import { type BottomBarConfig, type PageGroup, type PageType, useFrameStore } from "@/stores/frame-store";
 import { useSessionStore } from "@/stores/session-store";
 import { pageRegistry } from "./registry";
 
@@ -36,7 +30,6 @@ export function useTaskbar({ orientation }: UseTaskbarOptions) {
   const activeGroupId = useFrameStore((s) => s.activeGroupId);
   const bottomBarConfig = useFrameStore((s) => s.bottomBarConfig);
   const setActiveGroup = useFrameStore((s) => s.setActiveGroup);
-  const setActivePage = useFrameStore((s) => s.setActivePage);
   const setCurrentActiveTab = useFrameStore((s) => s.setCurrentActiveTab);
   const taskbarOrder = useFrameStore((s) => s.taskbarOrder);
   const reorderTaskbarItems = useFrameStore((s) => s.reorderTaskbarItems);
@@ -54,7 +47,7 @@ export function useTaskbar({ orientation }: UseTaskbarOptions) {
     (group: PageGroup, target: HTMLElement) => {
       const now = Date.now();
       const lastClick = lastClickTime.current[group.id] || 0;
-      if (group.type === "group" && (vertical || activeGroupId === group.id)) {
+      if (getWorkspacePath(group) && (vertical || activeGroupId === group.id)) {
         showWorkspaceHint(group, target);
       }
       if (activeGroupId === group.id && (vertical || now - lastClick < 300)) {
@@ -64,17 +57,6 @@ export function useTaskbar({ orientation }: UseTaskbarOptions) {
       setActiveGroup(group.id);
     },
     [activeGroupId, vertical, setActiveGroup, setCurrentActiveTab, showWorkspaceHint]
-  );
-
-  const handlePageClick = useCallback(
-    (group: GenericGroup, pageId: string, target: HTMLElement) => {
-      if (vertical || (activeGroupId === group.id && group.activePageId === pageId)) {
-        showWorkspaceHint(group, target);
-      }
-      setActiveGroup(group.id);
-      setActivePage(group.id, pageId);
-    },
-    [activeGroupId, vertical, setActiveGroup, setActivePage, showWorkspaceHint]
   );
 
   const handleToggleFullscreen = useCallback(() => {
@@ -117,28 +99,25 @@ export function useTaskbar({ orientation }: UseTaskbarOptions) {
     (group: PageGroup) => {
       if (group.type === "home") return t("common.home");
       if (group.type === "settings") return t("common.settings");
-      if (group.type === "tool") {
-        const page = pageRegistry.get(group.pageId);
-        if (page?.nameKey) {
-          const translated = t(page.nameKey);
-          if (translated !== page.nameKey) return translated;
-        }
-        return page?.name || group.name;
-      }
-      return group.name;
+      const pageId = group.type === "tool" ? group.pageId : group.pages[0]?.type || "files";
+      const title = getPageTitle(pageId);
+      const path = getWorkspacePath(group);
+      return path ? `${title} - ${path}` : title;
     },
-    [t]
+    [t, getPageTitle]
   );
   const getGroupIcon = useCallback(
     (group: PageGroup) =>
-      group.type === "tool"
-        ? createElement(NavIcon, { icon: pageRegistry.get(group.pageId)?.icon, size: iconSize })
+      group.type === "tool" || group.type === "group"
+        ? createElement(NavIcon, {
+            icon: pageRegistry.get(group.type === "tool" ? group.pageId : group.pages[0]?.type || "files")?.icon,
+            size: iconSize,
+          })
         : createElement(GROUP_ICONS[group.type], { size: iconSize }),
     [iconSize]
   );
 
   const useCustomItems = Boolean(bottomBarConfig.customItems?.length);
-  const hasMultipleGroups = groups.length > 1;
   const isOnlyHome = groups.length === 1 && groups[0].type === "home";
   const visibleItems = useMemo<TaskbarItem[]>(() => {
     if (useCustomItems) {
@@ -203,7 +182,6 @@ export function useTaskbar({ orientation }: UseTaskbarOptions) {
     orderedItems,
     visibleIds,
     useCustomItems,
-    hasMultipleGroups,
     isOnlyHome,
     rightButtons,
     isFullscreen,
@@ -216,7 +194,6 @@ export function useTaskbar({ orientation }: UseTaskbarOptions) {
     taskbarReorder,
     workspaceHint,
     handleGroupClick,
-    handlePageClick,
     handleToggleFullscreen,
     getGroupTitle,
     getGroupIcon,
@@ -225,5 +202,11 @@ export function useTaskbar({ orientation }: UseTaskbarOptions) {
     closeGroup,
     closeAllGroups,
     openSort,
+    openContextPage: (group: PageGroup, page: "terminal" | "git") => {
+      const path = getWorkspacePath(group);
+      const frame = useFrameStore.getState();
+      if (page === "terminal") frame.addTerminalGroup(path, undefined, group.id);
+      else frame.addGitGroup(path, undefined, group.id);
+    },
   };
 }

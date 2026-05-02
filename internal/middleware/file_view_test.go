@@ -447,23 +447,3 @@ func replaceQuery(t *testing.T, rawURL, key, value string) string {
 func queryPart(rawURL string) string {
 	return rawURL[strings.IndexByte(rawURL, '?')+1:]
 }
-
-func TestFileViewPathDescriptorRoundTripAndTamperRejection(t *testing.T) {
-	a, _ := newTestFileViewAuthorizer(&fileViewTestClock{now: time.Unix(100, 0)}, time.Minute, time.Hour, 120)
-	payload := []byte(`{"terminal_id":"terminal-1","path":"/remote/report.pdf"}`)
-
-	sealed, err := a.SealPathDescriptor("ssh-sftp", payload)
-	require.NoError(t, err)
-	assert.NotContains(t, sealed, "/remote/report.pdf")
-	opened, err := a.OpenPathDescriptor("ssh-sftp", sealed)
-	require.NoError(t, err)
-	assert.Equal(t, payload, opened)
-
-	parts := strings.Split(sealed, ".")
-	require.Len(t, parts, 3)
-	parts[1] = parts[1][:len(parts[1])-1] + "A"
-	_, err = a.OpenPathDescriptor("ssh-sftp", strings.Join(parts, "."))
-	require.Error(t, err)
-	_, err = a.OpenPathDescriptor("other-kind", sealed)
-	require.Error(t, err)
-}

@@ -2,8 +2,12 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
 
 	"github.com/glebarez/sqlite"
 	"github.com/xxnuo/vibego/internal/model"
@@ -11,42 +15,81 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-var GlobalDB *gorm.DB = nil
+type DBPair struct {
+	Writer *gorm.DB
+	Reader *gorm.DB
+}
 
-func GetDB(models ...any) *gorm.DB {
-	if GlobalDB != nil {
-		return GlobalDB
-	}
+var GlobalDB *gorm.DB
+var GlobalDBPair *DBPair
+var dbMu sync.Mutex
 
-	cfg := GetConfig()
-	dbPath := filepath.Join(cfg.ConfigDir, "vibego.sqlite")
-	if err := os.MkdirAll(cfg.ConfigDir, 0755); err != nil {
-		panic(err)
-	}
-
-	var err error
-	GlobalDB, err = gorm.Open(sqlite.Open(dbPath+"?_journal_mode=WAL&_busy_timeout=5000"), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
+// OpenDBPair configures every connection, including connections opened later by
+// database/sql. This driver uses _pragma, not mattn/go-sqlite3 DSN options.
+func OpenDBPair(path string) (*DBPair, error) {
+	absolute, err := filepath.Abs(path)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-
-	sqlDB, err := GlobalDB.DB()
+	uri := databaseFileURI(filepath.ToSlash(absolute))
+	options := "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)"
+	open := func(extra string, maxOpen, maxIdle int) (*gorm.DB, error) {
+		db, err := gorm.Open(sqlite.Open(uri+options+extra), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+		if err != nil {
+			return nil, err
+		}
+		pool, err := db.DB()
+		if err != nil {
+			return nil, err
+		}
+		pool.SetMaxOpenConns(maxOpen)
+		pool.SetMaxIdleConns(maxIdle)
+		return db, nil
+	}
+	writer, err := open("&_txlock=immediate", 1, 1)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	sqlDB.SetMaxOpenConns(1)
-	sqlDB.SetMaxIdleConns(1)
+	reader, err := open("&_pragma=query_only(1)", max(4, runtime.NumCPU()*2), max(2, runtime.NumCPU()))
+	if err != nil {
+		pool, _ := writer.DB()
+		_ = pool.Close()
+		return nil, err
+	}
+	return &DBPair{Writer: writer, Reader: reader}, nil
+}
 
+func databaseFileURI(absolute string) string {
+	// Windows drive paths need a leading slash to produce file:///C:/... .
+	if !strings.HasPrefix(absolute, "/") {
+		absolute = "/" + absolute
+	}
+	return (&url.URL{Scheme: "file", Path: absolute}).String()
+}
+
+func GetDBPair(models ...any) *DBPair {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+	if GlobalDBPair == nil {
+		cfg := GetConfig()
+		if err := os.MkdirAll(cfg.ConfigDir, 0755); err != nil {
+			panic(err)
+		}
+		pair, err := OpenDBPair(filepath.Join(cfg.ConfigDir, "vibego.sqlite"))
+		if err != nil {
+			panic(err)
+		}
+		GlobalDBPair, GlobalDB = pair, pair.Writer
+	}
 	if len(models) > 0 {
-		if err := GlobalDB.AutoMigrate(models...); err != nil {
+		if err := GlobalDBPair.Writer.AutoMigrate(models...); err != nil {
 			panic(err)
 		}
 	}
-
-	return GlobalDB
+	return GlobalDBPair
 }
+
+func GetDB(models ...any) *gorm.DB { return GetDBPair(models...).Writer }
 
 func ensureWorkspaceSettingsColumns(tx *gorm.DB) error {
 	if tx.Migrator().HasTable(&model.UserSession{}) && !tx.Migrator().HasColumn(&model.UserSession{}, "position") {
@@ -65,6 +108,11 @@ func ensureWorkspaceSettingsColumns(tx *gorm.DB) error {
 	if !tx.Migrator().HasColumn(&model.TerminalSession{}, "tab_icon") {
 		if err := tx.Migrator().AddColumn(&model.TerminalSession{}, "TabIcon"); err != nil {
 			return fmt.Errorf("add terminal_sessions.tab_icon: %w", err)
+		}
+	}
+	if !tx.Migrator().HasColumn(&model.TerminalSession{}, "split_group_id") {
+		if err := tx.Migrator().AddColumn(&model.TerminalSession{}, "SplitGroupID"); err != nil {
+			return fmt.Errorf("add terminal_sessions.split_group_id: %w", err)
 		}
 	}
 	return nil
@@ -135,6 +183,6 @@ func MigrateLegacySessionsToWorkspaces(db *gorm.DB) error {
 				return fmt.Errorf("migrate workspace %s: %w", session.ID, err)
 			}
 		}
-		return nil
+		return migratePageTasks(tx)
 	})
 }

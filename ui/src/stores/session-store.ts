@@ -1,10 +1,9 @@
 import { create } from "zustand";
 import { fileApi } from "@/api/file";
 import { type SessionInfo, sessionApi, type WorkspaceState } from "@/api/session";
-import { workspaceApi, type WorkspaceSnapshot } from "@/api/workspace-sync";
-import { useWorkspaceSyncStore, subscribeWorkspaceMutation } from "@/stores/workspace-sync-store";
-import { saveWorkspaceViewport, workspaceSnapshotState } from "@/stores/workspace-viewport";
+import { settingsApi } from "@/api/settings";
 import { terminalApi } from "@/api/terminal";
+import { type WorkspaceSnapshot, workspaceApi } from "@/api/workspace-sync";
 import { detachAllTerminals } from "@/services/terminal-cleanup-service";
 import {
   type FileManagerState,
@@ -27,13 +26,17 @@ import {
 } from "@/stores/session-workspace-guard";
 import { preservePendingTerminalReorder, type TerminalSession, useTerminalStore } from "@/stores/terminal-store";
 import { enqueueWorkspaceMutation } from "@/stores/workspace-mutation-queue";
+import { subscribeWorkspaceMutation, useWorkspaceSyncStore } from "@/stores/workspace-sync-store";
+import { saveWorkspaceViewport, workspaceSnapshotState } from "@/stores/workspace-viewport";
+import { legacyPageTaskId, splitPageTasks } from "./page-tasks";
 
 export { enqueueWorkspaceMutation } from "@/stores/workspace-mutation-queue";
 
 const CURRENT_SESSION_SETTING_KEY = "workspaceCurrentSessionId";
+const LAST_ACTIVE_SESSION_SETTING_KEY = "workspaceLastActiveSessionId";
 
 let autoSaveUnsub: (() => void) | null = null;
-let storedSessionWriteChain: Promise<void> = Promise.resolve();
+let lastActiveSessionWriteChain: Promise<void> = Promise.resolve();
 let workspaceContentMutationRevision = 0;
 let pendingWorkspaceTransitionSave: WorkspaceSaveLatch | null = null;
 let sessionListRequestSequence = 0;
@@ -135,8 +138,15 @@ export function isCurrentWorkspaceTransition(
   return !requireIdle || !state.loading;
 }
 
-async function getStoredSessionId(): Promise<string | null> {
-  return window.sessionStorage.getItem(CURRENT_SESSION_SETTING_KEY);
+async function getStoredSessionId(sessions: SessionInfo[]): Promise<string | null> {
+  const localId = window.sessionStorage.getItem(CURRENT_SESSION_SETTING_KEY);
+  if (sessions.some((session) => session.id === localId)) return localId;
+  if (sessions.length === 0) return null;
+  try {
+    const { value } = await settingsApi.get(LAST_ACTIVE_SESSION_SETTING_KEY);
+    if (sessions.some((session) => session.id === value)) return value;
+  } catch {}
+  return sessions.reduce((latest, session) => (session.updated_at > latest.updated_at ? session : latest)).id;
 }
 
 function isWorkspaceOperationCurrent(guard?: WorkspaceOperationGuard): boolean {
@@ -159,15 +169,23 @@ function clearPendingWorkspaceTransitionSave(latch: WorkspaceSaveLatch | null): 
 }
 
 async function setStoredSessionId(id: string | null, guard?: WorkspaceOperationGuard): Promise<void> {
-  const write = storedSessionWriteChain
+  if (!isWorkspaceOperationCurrent(guard)) return;
+  if (!id) {
+    window.sessionStorage.removeItem(CURRENT_SESSION_SETTING_KEY);
+    return;
+  }
+  window.sessionStorage.setItem(CURRENT_SESSION_SETTING_KEY, id);
+  // Publish startup history in order without holding up this device's navigation.
+  lastActiveSessionWriteChain = lastActiveSessionWriteChain
     .catch(() => {})
-    .then(() => {
+    .then(async () => {
       if (!isWorkspaceOperationCurrent(guard)) return;
-      if (id) window.sessionStorage.setItem(CURRENT_SESSION_SETTING_KEY, id);
-      else window.sessionStorage.removeItem(CURRENT_SESSION_SETTING_KEY);
+      try {
+        await settingsApi.set(LAST_ACTIVE_SESSION_SETTING_KEY, id);
+      } catch (error) {
+        console.error("Failed to remember the last active workspace", error);
+      }
     });
-  storedSessionWriteChain = write;
-  await write;
 }
 
 function createEmptySessionState(): SessionState {
@@ -207,7 +225,7 @@ function normalizeWorkspaceRecord<T>(value: unknown): Record<string, T> {
 }
 
 export function normalizeSessionWorkspaceState(state: SessionState): SessionState {
-  return {
+  const normalized: SessionState = {
     workspaceNameOverride: normalizeWorkspaceNameOverride(state?.workspaceNameOverride),
     openGroups: Array.isArray(state?.openGroups) ? state.openGroups : [],
     openTools: Array.isArray(state?.openTools) ? state.openTools : [],
@@ -221,6 +239,41 @@ export function normalizeSessionWorkspaceState(state: SessionState): SessionStat
     activeGroupId: typeof state?.activeGroupId === "string" ? state.activeGroupId : null,
     fileManagerByGroup: normalizeWorkspaceRecord<SessionState["fileManagerByGroup"][string]>(state?.fileManagerByGroup),
   };
+  const original = normalized.openGroups;
+  const groups = splitPageTasks(original.map((group) => ({ ...group, type: "group" })));
+  normalized.openGroups = groups.filter((group) => group.type === "group");
+  normalized.openTools = [...groups.filter((group) => group.type === "tool"), ...normalized.openTools];
+  for (const group of original) {
+    const derived = groups.filter(
+      (task) => task.id === group.id || (task.type === "tool" && task.data?.sourceGroupId === group.id)
+    );
+    if (normalized.activeGroupId === group.id) {
+      const active = group.pages.find((page) => page.id === group.activePageId);
+      if (active && active.type !== "files")
+        normalized.activeGroupId =
+          derived.find((task) => task.type === "tool" && task.pageId === active.type)?.id || group.id;
+    }
+    normalized.taskbarOrder = normalized.taskbarOrder.flatMap((id) =>
+      id === `group:${group.id}` ? derived.map((task) => `group:${task.id}`) : [id]
+    );
+    const terminalPage = group.pages.find((page) => page.type === "terminal");
+    if (!terminalPage || group.pages.length === 1) continue;
+    const owner = legacyPageTaskId(group.id, terminalPage.id);
+    for (const key of [
+      "terminalsByGroup",
+      "activeTerminalByGroup",
+      "listManagerOpenByGroup",
+      "focusedIdByGroup",
+    ] as const) {
+      const record = { ...normalized[key] } as Record<string, any>;
+      if (group.id in record) {
+        record[owner] = record[group.id];
+        delete record[group.id];
+      }
+      Object.assign(normalized, { [key]: record });
+    }
+  }
+  return normalized;
 }
 
 function getFilesPagePath(group: { pages: GroupPage[] }): string {
@@ -228,7 +281,7 @@ function getFilesPagePath(group: { pages: GroupPage[] }): string {
 }
 
 function isFolderWorkspaceGroup(group: GenericGroup): boolean {
-  return group.pages.some((page) => Boolean(page.path));
+  return group.pages.some((page) => page.type === "files" && Boolean(page.path));
 }
 
 function getFolderName(path: string): string {
@@ -448,7 +501,6 @@ function reconcileRemoteTerminals(
           tabIcon: remote.tab_icon ?? terminal.tabIcon,
           readonly: remote.readonly ?? terminal.readonly,
           runtimeType: remote.runtime_type || terminal.runtimeType,
-          sshProfileId: remote.ssh_profile_id || terminal.sshProfileId,
           shellIntegration: remote.shell_integration ?? terminal.shellIntegration,
           shellState: remote.shell_state || terminal.shellState,
           shellType: remote.shell_type || terminal.shellType,
@@ -456,6 +508,7 @@ function reconcileRemoteTerminals(
           lastCommandExitCode: remote.last_command_exit_code ?? terminal.lastCommandExitCode,
           status: remote.status || terminal.status,
           parentId: remote.parent_id || undefined,
+          splitGroupId: remote.split_group_id || undefined,
         };
       }
       if (
@@ -494,7 +547,6 @@ function reconcileRemoteTerminals(
       tabIcon: remote.tab_icon ?? "",
       readonly: remote.readonly,
       runtimeType: remote.runtime_type,
-      sshProfileId: remote.ssh_profile_id,
       shellIntegration: remote.shell_integration,
       shellState: remote.shell_state,
       shellType: remote.shell_type,
@@ -502,6 +554,7 @@ function reconcileRemoteTerminals(
       lastCommandExitCode: remote.last_command_exit_code ?? null,
       status: remote.status,
       parentId: remote.parent_id || undefined,
+      splitGroupId: remote.split_group_id || undefined,
     });
   }
 
@@ -622,6 +675,12 @@ function restoreSessionState(state: SessionState): void {
   }
 
   useTerminalStore.setState({
+    retiredTerminalIds: [
+      ...new Set([
+        ...useTerminalStore.getState().retiredTerminalIds,
+        ...(sanitizedTerminalState.retiredTerminalIds || []),
+      ]),
+    ],
     terminalsByGroup: sanitizedTerminalState.terminalsByGroup,
     activeIdByGroup: sanitizedTerminalState.activeTerminalByGroup,
     listManagerOpenByGroup: sanitizedTerminalState.listManagerOpenByGroup,
@@ -783,7 +842,9 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     set({ loading: true, sessionInitialized: false, error: null });
     get().initAutoSave();
     try {
-      const [, storedSessionId] = await Promise.all([get().loadSessions(), getStoredSessionId()]);
+      await get().loadSessions();
+      if (!isCurrentWorkspaceTransition(requestRevision)) return false;
+      const storedSessionId = await getStoredSessionId(get().sessions);
       if (!isCurrentWorkspaceTransition(requestRevision)) {
         return false;
       }
@@ -793,13 +854,11 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         const state = get();
         return state.currentSessionId === storedSessionId && state.sessionInitialized && !state.loading;
       }
-      if (storedSessionId) {
-        await setStoredSessionId(null, {
-          revision: requestRevision,
-          expectedSessionId: get().currentSessionId,
-          allowLoading: true,
-        });
-      }
+      await setStoredSessionId(null, {
+        revision: requestRevision,
+        expectedSessionId: get().currentSessionId,
+        allowLoading: true,
+      });
       if (!isCurrentWorkspaceTransition(requestRevision)) {
         return false;
       }
@@ -860,6 +919,13 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       const folder = await fileApi.list(folderPath);
       const resolvedPath = folder.path || folderPath;
       const folderName = getFolderName(resolvedPath);
+      try {
+        const previous = JSON.parse(localStorage.getItem("vibego:recent-folders") || "[]");
+        const recent = Array.isArray(previous)
+          ? previous.filter((path) => typeof path === "string" && path !== resolvedPath)
+          : [];
+        localStorage.setItem("vibego:recent-folders", JSON.stringify([resolvedPath, ...recent].slice(0, 12)));
+      } catch {}
       const sessionId = await enqueueWorkspaceMutation(async () => {
         if (!isCurrentWorkspaceTransition(requestRevision, undefined, true)) return "";
         const frameStore = useFrameStore.getState();
@@ -1046,9 +1112,11 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     if (deletedWorkspaceSessionIds.has(id)) return;
     if (!initialState.loading && previousSessionId === id) {
       await useWorkspaceSyncStore.getState().refresh();
+      if (!isCurrentWorkspaceTransition(initialState.workspaceRevision, id, true)) return;
       const frame = useFrameStore.getState();
       const target = frame.groups.find((group) => group.type === "group" || group.type === "tool");
       if (target) frame.setActiveGroup(target.id);
+      await setStoredSessionId(id, { revision: initialState.workspaceRevision, expectedSessionId: id });
       return;
     }
 
@@ -1210,6 +1278,9 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           );
 
           useTerminalStore.setState({
+            retiredTerminalIds: [
+              ...new Set([...useTerminalStore.getState().retiredTerminalIds, ...(sanitized.retiredTerminalIds || [])]),
+            ],
             terminalsByGroup: sanitized.terminalsByGroup,
             activeIdByGroup: sanitized.activeTerminalByGroup,
             listManagerOpenByGroup: sanitized.listManagerOpenByGroup,
@@ -1296,6 +1367,9 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       );
 
       useTerminalStore.setState({
+        retiredTerminalIds: [
+          ...new Set([...useTerminalStore.getState().retiredTerminalIds, ...(sanitized.retiredTerminalIds || [])]),
+        ],
         terminalsByGroup: sanitized.terminalsByGroup,
         activeIdByGroup: sanitized.activeTerminalByGroup,
         listManagerOpenByGroup: sanitized.listManagerOpenByGroup,

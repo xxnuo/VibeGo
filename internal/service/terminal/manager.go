@@ -26,6 +26,7 @@ type terminalConnection struct {
 	Cancel    context.CancelFunc
 	sendCh    chan terminalOutboundMessage
 	AckCursor atomic.Uint64
+	flow      *terminalFlow
 }
 
 type terminalOutboundMessage struct {
@@ -34,29 +35,32 @@ type terminalOutboundMessage struct {
 }
 
 type activeTerminal struct {
-	ID            string
-	Runtime       TerminalRuntime
-	Session       *model.TerminalSession
-	Connections   sync.Map
-	Done          chan struct{}
-	readDone      chan struct{}
-	flushDone     chan struct{}
-	flushStop     chan struct{}
-	flushStopOnce sync.Once
-	closeOnce     sync.Once
-	closeErr      error
-	deliveryMu    sync.Mutex
-	inputMu       sync.Mutex
-	runtimeMu     sync.RWMutex
-	stateMu       sync.Mutex
-	sessionMu     sync.RWMutex
-	historyBuffer *historyBuffer
-	historyMu     sync.RWMutex
-	status        atomic.Value
-	flushTicker   *time.Ticker
-	bufferSize    int
-	encoder       *base64.Encoding
-	capabilities  TerminalCapabilities
+	ID                string
+	Runtime           TerminalRuntime
+	Session           *model.TerminalSession
+	Connections       sync.Map
+	Done              chan struct{}
+	readDone          chan struct{}
+	flushDone         chan struct{}
+	flushStop         chan struct{}
+	flushStopOnce     sync.Once
+	closeOnce         sync.Once
+	closeErr          error
+	deliveryMu        sync.Mutex
+	inputMu           sync.Mutex
+	runtimeMu         sync.RWMutex
+	stateMu           sync.Mutex
+	sessionMu         sync.RWMutex
+	historyBuffer     *historyBuffer
+	historyMu         sync.RWMutex
+	lastFlushedCursor uint64
+	snapshotSaved     bool
+	doneOnce          sync.Once
+	status            atomic.Value
+	flushTicker       *time.Ticker
+	bufferSize        int
+	encoder           *base64.Encoding
+	capabilities      TerminalCapabilities
 }
 
 type terminalLifecycleLock struct {
@@ -85,6 +89,7 @@ type Manager struct {
 	snapshotStore          TerminalSnapshotStore
 	runtimeFactory         RuntimeFactory
 	workspaceChanged       func(string, string, string)
+	terminalEvents         func(string, json.RawMessage)
 }
 
 type replaySnapshot struct {
@@ -129,6 +134,7 @@ func NewManager(db *gorm.DB, cfg *ManagerConfig) *Manager {
 		snapshotStore:        NewDBTerminalSnapshotStore(db),
 		runtimeFactory:       cfg.RuntimeFactory,
 		workspaceChanged:     cfg.WorkspaceChanged,
+		terminalEvents:       cfg.TerminalEvents,
 	}
 }
 
@@ -311,13 +317,11 @@ func (m *Manager) prepareRuntime(opts CreateOptions) (*preparedTerminalRuntime, 
 			ctx = context.Background()
 		}
 		runtime, err = m.runtimeFactory.CreateRuntime(ctx, RuntimeCreateRequest{
-			Type:      runtimeType,
-			ProfileID: opts.SSHProfileID,
-			Cwd:       cwd,
-			Command:   opts.Command,
-			Cols:      cols,
-			Rows:      rows,
-			SSHAuth:   opts.SSHAuth,
+			Type:    runtimeType,
+			Cwd:     cwd,
+			Command: opts.Command,
+			Cols:    cols,
+			Rows:    rows,
 		})
 	}
 	if err != nil {
@@ -361,11 +365,6 @@ func (m *Manager) persistRuntime(opts CreateOptions, prepared *preparedTerminalR
 		}
 		name = fmt.Sprintf("Terminal %d", count+1)
 	}
-	sshProfileID := ""
-	if prepared.runtimeType == RuntimeTypeSSH {
-		sshProfileID = opts.SSHProfileID
-	}
-
 	now := time.Now().Unix()
 	session := &model.TerminalSession{
 		ID:                 uuid.New().String(),
@@ -380,7 +379,6 @@ func (m *Manager) persistRuntime(opts CreateOptions, prepared *preparedTerminalR
 		Cols:               prepared.cols,
 		Rows:               prepared.rows,
 		RuntimeType:        prepared.runtimeType,
-		SSHProfileID:       sshProfileID,
 		Readonly:           false,
 		Status:             model.StatusRunning,
 		ShellIntegration:   prepared.capabilities.ShellIntegration,
@@ -388,7 +386,18 @@ func (m *Manager) persistRuntime(opts CreateOptions, prepared *preparedTerminalR
 		UpdatedAt:          now,
 	}
 
+	var ancestors []string
 	if err := db.Transaction(func(tx *gorm.DB) error {
+		if opts.ParentID != "" {
+			family, ids, err := terminalSplitFamily(tx, opts.ParentID)
+			if err != nil {
+				return err
+			}
+			session.SplitGroupID, ancestors = family, ids
+			if err := tx.Model(&model.TerminalSession{}).Where("id IN ?", ids).Update("split_group_id", family).Error; err != nil {
+				return err
+			}
+		}
 		if err := tx.Create(session).Error; err != nil {
 			return err
 		}
@@ -397,6 +406,7 @@ func (m *Manager) persistRuntime(opts CreateOptions, prepared *preparedTerminalR
 		return nil, err
 	}
 
+	m.updateActiveSplitFamily(ancestors, session.SplitGroupID)
 	return m.activatePreparedRuntime(session, prepared, nil), nil
 }
 
@@ -493,9 +503,7 @@ func (m *Manager) Get(id string) (*TerminalInfo, bool) {
 }
 
 // Complete queries the live runtime's own completion environment. The
-// capability is optional; notably, an SSH runtime must use a separate remote
-// exec channel rather than writing completion commands into its interactive
-// PTY.
+// capability is optional.
 func (m *Manager) Complete(ctx context.Context, id string, request CompletionRequest) (CompletionResult, error) {
 	at, ok := m.getActive(id)
 	if !ok {
@@ -534,36 +542,6 @@ func (m *Manager) Complete(ctx context.Context, id string, request CompletionReq
 	at.stateMu.Unlock()
 	if status != model.StatusRunning {
 		return CompletionResult{}, ErrTerminalNotFound
-	}
-	return result, nil
-}
-
-// CompleteProfile delegates a completion query to the configured runtime
-// factory for a trusted, profile-specific connection. It is intentionally
-// separate from Complete: the latter is fenced to an active parent terminal,
-// while a future connection may select another SSH profile.
-func (m *Manager) CompleteProfile(ctx context.Context, profileID string, request CompletionRequest) (CompletionResult, error) {
-	if m == nil || m.runtimeFactory == nil {
-		return CompletionResult{}, ErrCompletionUnsupported
-	}
-	provider, ok := m.runtimeFactory.(ProfileCompletionProvider)
-	if !ok {
-		return CompletionResult{}, ErrCompletionUnsupported
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	profileID = strings.TrimSpace(profileID)
-	if profileID == "" {
-		return CompletionResult{}, ErrCompletionUnsupported
-	}
-	result, err := provider.CompleteProfile(ctx, profileID, request)
-	if err != nil {
-		return CompletionResult{}, err
-	}
-	if request.Limit > 0 && len(result.Candidates) > request.Limit {
-		result.Candidates = result.Candidates[:request.Limit]
-		result.HasMore = true
 	}
 	return result, nil
 }
@@ -866,7 +844,15 @@ func (m *Manager) Close(id string) (resultErr error) {
 	defer m.workspaceLifecycleMu.RUnlock()
 	unlock := m.lockTerminalLifecycle(id)
 	defer unlock()
-	return m.close(id)
+	if err := m.close(id); err != nil {
+		return err
+	}
+	// Exited runtimes may already be retired; closing their page still needs a durable marker.
+	return m.db.Model(&model.TerminalSession{}).Where("id = ?", id).Updates(map[string]any{
+		"status":     model.StatusClosed,
+		"readonly":   true,
+		"updated_at": time.Now().Unix(),
+	}).Error
 }
 
 // Reset replaces a live local runtime while preserving the terminal identity
@@ -1032,7 +1018,7 @@ func (m *Manager) closeActive(id string, at *activeTerminal) error {
 	// scheduled after shutdown starts. A tick already queued is drained by the
 	// flush goroutine; wait for that goroutine before the final snapshot below.
 	at.stopHistoryFlush()
-	close(at.Done)
+	at.doneOnce.Do(func() { close(at.Done) })
 	at.stateMu.Unlock()
 
 	// Cancel writers before waiting on deliveryMu. Network writes run outside
@@ -1155,7 +1141,12 @@ func (m *Manager) collectDeleteIDs(id string) ([]string, error) {
 	return ids, nil
 }
 
-func (m *Manager) Delete(id string) (resultErr error) {
+func (m *Manager) Delete(id string) error { return m.deleteTerminal(id, false) }
+
+// DeleteHistory removes one historical PTY without stopping its surviving split panes.
+func (m *Manager) DeleteHistory(id string) error { return m.deleteTerminal(id, true) }
+
+func (m *Manager) deleteTerminal(id string, historyOnly bool) (resultErr error) {
 	notify := m.workspaceNotifierForTerminal(id, "terminal/close")
 	defer func() {
 		if resultErr == nil {
@@ -1173,6 +1164,27 @@ func (m *Manager) Delete(id string) (resultErr error) {
 	}
 	if len(ids) == 0 {
 		return nil
+	}
+	if historyOnly {
+		var session model.TerminalSession
+		if err := m.db.First(&session, "id = ?", id).Error; err != nil {
+			return err
+		}
+		if session.Status == model.StatusRunning {
+			return fmt.Errorf("%w: terminal is still running", ErrInvalidWorkspaceState)
+		}
+		// Preserve ancestry before deleting an old anchor, including pre-migration rows.
+		family, _, err := terminalSplitFamily(m.db, id)
+		if err != nil {
+			return err
+		}
+		if len(ids) > 1 || session.ParentID != "" || session.SplitGroupID != "" {
+			if err := m.db.Model(&model.TerminalSession{}).Where("id IN ?", ids).Update("split_group_id", family).Error; err != nil {
+				return err
+			}
+			m.updateActiveSplitFamily(ids, family)
+		}
+		ids = []string{id}
 	}
 
 	for _, terminalID := range ids {
@@ -1197,6 +1209,7 @@ func (m *Manager) Delete(id string) (resultErr error) {
 }
 
 func (m *Manager) ptyReadLoop(at *activeTerminal) {
+	var osc oscParser
 	if at.readDone != nil {
 		defer close(at.readDone)
 	}
@@ -1225,6 +1238,9 @@ func (m *Manager) ptyReadLoop(at *activeTerminal) {
 				m.broadcastLocked(at, msg)
 			}
 			at.deliveryMu.Unlock()
+			if m.terminalEvents != nil {
+				osc.feed(buf[:n], func(raw string) { m.consumeOSC(at, raw) })
+			}
 		}
 
 		if err != nil {
@@ -1240,6 +1256,72 @@ func (m *Manager) ptyReadLoop(at *activeTerminal) {
 func (m *Manager) monitorRuntimeAsync(at *activeTerminal) {
 	if err := m.monitorRuntime(at); err != nil {
 		log.Printf("terminal runtime monitor failed for terminal %s: %v", at.ID, err)
+	}
+	// Do not hold a lifecycle lock while Wait/Close is running. Deletion and
+	// reset must be able to interrupt the runtime and join its reader.
+	for {
+		unlock := m.lockTerminalLifecycle(at.ID)
+		current, ok := m.getActive(at.ID)
+		if !ok || current != at || at.status.Load().(string) != model.StatusExited {
+			unlock()
+			return
+		}
+		at.historyMu.Lock()
+		err := m.flushHistoryToDB(at)
+		at.historyMu.Unlock()
+		if err == nil {
+			m.terminals.CompareAndDelete(at.ID, at)
+			unlock()
+			m.retireExited(at)
+			return
+		}
+		unlock()
+		log.Printf("terminal final snapshot retry failed for %s: %v", at.ID, err)
+		timer := time.NewTimer(5 * time.Second)
+		select {
+		case <-at.Done:
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+	}
+}
+
+func (m *Manager) retireExited(at *activeTerminal) {
+	// Give the bounded writer time to finish its exit notification. Slow peers
+	// recover the final snapshot from the database on their next attach.
+	deadline := time.NewTimer(terminalCriticalWriteTimeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		count := 0
+		at.Connections.Range(func(_, _ any) bool { count++; return true })
+		if count == 0 {
+			break
+		}
+		select {
+		case <-deadline.C:
+			goto finished
+		case <-at.Done:
+			goto finished
+		case <-ticker.C:
+		}
+	}
+finished:
+	at.doneOnce.Do(func() { close(at.Done) })
+	at.Connections.Range(func(_, value any) bool {
+		conn := value.(*terminalConnection)
+		if conn.Cancel != nil {
+			conn.Cancel()
+		}
+		if conn.Master != nil {
+			_ = conn.Master.Close()
+		}
+		return true
+	})
+	if at.Runtime != nil {
+		_ = at.Runtime.Close()
 	}
 }
 
@@ -1582,6 +1664,9 @@ func (m *Manager) reserveConnectionSlot() bool {
 }
 
 func (m *Manager) AttachWithOptions(id string, conn *websocket.Conn, opts AttachOptions) (*Connection, error) {
+	if opts.Flow == "ack-v1" {
+		return m.attachFlow(id, conn, opts)
+	}
 	if !m.reserveConnectionSlot() {
 		return nil, ErrMaxConnectionsReached
 	}
@@ -2039,6 +2124,10 @@ func (m *Manager) broadcastLocked(at *activeTerminal, msg WSMessage) {
 
 	at.Connections.Range(func(key, value any) bool {
 		conn := value.(*terminalConnection)
+		if conn.flow != nil && msg.Type == MsgTypeOutput {
+			conn.flow.signal()
+			return true
+		}
 		_ = m.sendConnectionData(conn, msgData)
 		return true
 	})
@@ -2154,6 +2243,10 @@ func (m *Manager) readClientLoop(at *activeTerminal, conn *terminalConnection) e
 				return stateErr
 			}
 		case MsgTypeAck:
+			if conn.flow != nil {
+				conn.flow.acknowledge(msg.StreamID, msg.Cursor)
+				continue
+			}
 			if msg.Cursor > conn.AckCursor.Load() {
 				conn.AckCursor.Store(msg.Cursor)
 			}

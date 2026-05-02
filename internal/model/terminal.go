@@ -1,11 +1,12 @@
 package model
 
 type TerminalSession struct {
-	ID                  string `gorm:"column:id;primaryKey" json:"id"`
+	ID                  string `gorm:"column:id;primaryKey;index:idx_terminal_history_page,priority:2,sort:desc" json:"id"`
 	UserID              string `gorm:"column:user_id;index:idx_user_status;constraint:OnDelete:CASCADE" json:"user_id"`
 	WorkspaceSessionID  string `gorm:"column:workspace_session_id;index" json:"workspace_session_id"`
 	GroupID             string `gorm:"column:group_id;index" json:"group_id"`
 	ParentID            string `gorm:"column:parent_id;index" json:"parent_id"`
+	SplitGroupID        string `gorm:"column:split_group_id;index" json:"split_group_id"`
 	Name                string `gorm:"column:name" json:"name"`
 	TabColor            string `gorm:"column:tab_color" json:"tab_color"`
 	TabIcon             string `gorm:"column:tab_icon" json:"tab_icon"`
@@ -15,7 +16,6 @@ type TerminalSession struct {
 	Cols                int    `gorm:"column:cols" json:"cols"`
 	Rows                int    `gorm:"column:rows" json:"rows"`
 	RuntimeType         string `gorm:"column:runtime_type" json:"runtime_type"`
-	SSHProfileID        string `gorm:"column:ssh_profile_id;index" json:"ssh_profile_id,omitempty"`
 	Readonly            bool   `gorm:"column:readonly" json:"readonly"`
 	Status              string `gorm:"column:status;index:idx_user_status" json:"status"`
 	ExitCode            int    `gorm:"column:exit_code" json:"exit_code"`
@@ -25,7 +25,7 @@ type TerminalSession struct {
 	ShellIntegration    bool   `gorm:"column:shell_integration" json:"shell_integration"`
 	LastCommand         string `gorm:"column:last_command;type:text" json:"last_command"`
 	LastCommandExitCode *int   `gorm:"column:last_command_exit_code" json:"last_command_exit_code"`
-	CreatedAt           int64  `gorm:"column:created_at" json:"created_at"`
+	CreatedAt           int64  `gorm:"column:created_at;index:idx_terminal_history_page,priority:1,sort:desc" json:"created_at"`
 	UpdatedAt           int64  `gorm:"column:updated_at" json:"updated_at"`
 }
 

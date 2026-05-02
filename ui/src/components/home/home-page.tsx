@@ -1,4 +1,7 @@
-import { FolderOpen, Terminal } from "lucide-react";
+import { pageRegistry, useWorkbenchRegistry } from "@/framework/workbench/registry";
+import NavIcon from "@/components/frame/nav-icon";
+import { getWorkspacePath } from "@/components/frame/workspace-hint-bubble";
+import { GitGraph, FolderOpen, Terminal } from "lucide-react";
 import React, { useCallback, useState } from "react";
 import DirectoryPicker from "@/components/common/directory-picker";
 import RecentSessionList from "@/components/home/recent-session-list";
@@ -11,6 +14,14 @@ interface HomePageProps {
 }
 
 const HomePage: React.FC<HomePageProps> = ({ onOpenFolder, locale }) => {
+  useWorkbenchRegistry();
+  const groups = useFrameStore((s) => s.groups);
+  let recentFolders: string[] = [];
+  try {
+    const saved = JSON.parse(localStorage.getItem("vibego:recent-folders") || "[]");
+    if (Array.isArray(saved)) recentFolders = saved.filter((path) => typeof path === "string");
+  } catch {}
+  const tasks = groups.filter((group) => group.type === "group" || group.type === "tool");
   const t = useTranslation(locale);
   const [isPickerOpen, setPickerOpen] = useState(false);
   const [pathInput, setPathInput] = useState("");
@@ -41,19 +52,27 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenFolder, locale }) => {
     <div className="h-full flex flex-col bg-ide-bg overflow-hidden">
       <div className="flex-1 overflow-y-auto">
         <div className="w-full max-w-2xl mx-auto px-4 py-6 space-y-6">
-          <div className="hidden sm:flex items-center justify-center p-3 sm:p-4 bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 rounded-lg text-sm text-center">
-            {t("home.mobileOnlyWarning")}
+          <div className="flex items-center justify-between border-b border-ide-border pb-3">
+            <h1 className="text-sm font-semibold text-ide-text">VibeGo</h1>
+            <span className="text-xs text-ide-mute">{t("home.quickActions")}</span>
           </div>
-
-          <div className="text-center py-6 sm:py-8">
-            <div className="inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 bg-ide-panel border border-ide-border rounded-2xl mb-3 sm:mb-4">
-              <Terminal size={28} className="text-ide-accent sm:hidden" />
-              <Terminal size={32} className="text-ide-accent hidden sm:block" />
-            </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-ide-text mb-2">VibeGo</h1>
-            <p className="text-sm sm:text-base text-ide-mute">{t("home.welcome")}</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {[
+              { label: t("sidebar.files"), icon: FolderOpen, run: () => setPickerOpen(true) },
+              { label: t("sidebar.terminal"), icon: Terminal, run: () => useFrameStore.getState().addTerminalGroup() },
+              { label: t("sidebar.git"), icon: GitGraph, run: () => useFrameStore.getState().addGitGroup() },
+            ].map(({ label, icon: Icon, run }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={run}
+                className="flex min-h-11 items-center gap-2 px-3 py-2 rounded border border-ide-border bg-ide-panel text-sm text-ide-text hover:border-ide-accent"
+              >
+                <Icon size={18} className="shrink-0 text-ide-mute" />
+                <span className="truncate">{label}</span>
+              </button>
+            ))}
           </div>
-
           <div className="space-y-3">
             <div className="text-xs text-ide-mute uppercase font-bold">{t("home.openDirectory")}</div>
             <div className="flex flex-col sm:flex-row gap-2">
@@ -86,8 +105,52 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenFolder, locale }) => {
             </div>
           </div>
 
+          {recentFolders.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-xs text-ide-mute">{t("home.recentFolders")}</div>
+              <div className="divide-y divide-ide-border border-y border-ide-border">
+                {recentFolders.map((path) => (
+                  <button
+                    key={path}
+                    type="button"
+                    onClick={() => void onOpenFolder(path)}
+                    className="flex w-full min-h-11 items-center gap-3 px-2 py-2 text-left hover:bg-ide-panel"
+                  >
+                    <FolderOpen size={18} className="shrink-0 text-ide-mute" />
+                    <span className="min-w-0 truncate font-mono text-xs text-ide-text">{path}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {tasks.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-xs text-ide-mute">{t("home.activeTasks")}</div>
+              <div className="divide-y divide-ide-border border-y border-ide-border">
+                {tasks.map((task) => {
+                  const page = pageRegistry.get(task.type === "tool" ? task.pageId : task.pages[0]?.type || "files");
+                  return (
+                    <button
+                      key={task.id}
+                      type="button"
+                      onClick={() => useFrameStore.getState().setActiveGroup(task.id)}
+                      className="flex w-full min-h-11 items-center gap-3 px-2 py-2 text-left hover:bg-ide-panel"
+                    >
+                      <NavIcon icon={page?.icon} size={18} />
+                      <span className="min-w-0 flex-1 truncate text-sm text-ide-text">
+                        {page?.nameKey ? t(page.nameKey) : task.name}
+                      </span>
+                      <span className="max-w-[55%] truncate text-xs font-mono text-ide-mute">
+                        {getWorkspacePath(task)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="space-y-3">
-            <div className="bg-ide-panel border border-ide-border rounded-xl p-3 sm:p-4">
+            <div className="bg-ide-panel border border-ide-border rounded p-3 sm:p-4">
               <RecentSessionList onSwitchSession={handleSwitchSession} locale={locale} />
             </div>
           </div>

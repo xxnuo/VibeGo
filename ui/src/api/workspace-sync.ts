@@ -1,5 +1,6 @@
 import { request } from "@/api/request";
 import type { TerminalInfo } from "@/api/terminal";
+import type { TerminalRuntimeEvent } from "@/services/terminal-runtime-events";
 
 export interface WorkspaceFolderEntity {
   id: string;
@@ -56,7 +57,9 @@ export interface ClientMutation<T = Record<string, unknown>> {
   base_revision: number;
 }
 export interface MutationBroadcastEvent {
-  type: "mutation:committed" | "workspace:snapshot";
+  type: "mutation:committed" | "workspace:snapshot" | "terminal:event";
+  terminal_events?: boolean;
+  terminal_event?: TerminalRuntimeEvent;
   revision: number;
   client_id?: string;
   mutation?: ClientMutation;

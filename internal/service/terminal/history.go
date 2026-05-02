@@ -33,6 +33,8 @@ func (m *Manager) flushHistoryToDB(at *activeTerminal) error {
 	}
 
 	at.sessionMu.Lock()
+	at.lastFlushedCursor = cursor
+	at.snapshotSaved = true
 	at.Session.HistorySize = int64(len(data))
 	at.sessionMu.Unlock()
 
@@ -80,6 +82,11 @@ func (m *Manager) flushHistory(at *activeTerminal) {
 		select {
 		case <-at.flushTicker.C:
 			at.historyMu.Lock()
+			_, cursor := at.historyBuffer.CursorRange()
+			if at.snapshotSaved && cursor == at.lastFlushedCursor {
+				at.historyMu.Unlock()
+				continue
+			}
 			if err := m.flushHistoryToDB(at); err != nil {
 				log.Printf("terminal history periodic flush failed for terminal %s: %v", at.ID, err)
 			}

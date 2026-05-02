@@ -1,5 +1,5 @@
 import { request } from "@/api/request";
-import type { SSHAuthSecrets } from "@/api/ssh";
+import { deleteTerminalSessionCache } from "@/services/terminal-session-cache";
 
 export type TerminalStatus = "running" | "exited" | "closed";
 
@@ -22,13 +22,13 @@ export interface TerminalInfo {
   cols: number;
   rows: number;
   runtime_type: string;
-  ssh_profile_id?: string;
   readonly: boolean;
   capabilities: TerminalCapabilities;
   status: TerminalStatus;
   workspace_session_id: string;
   group_id: string;
   parent_id: string;
+  split_group_id?: string;
   exit_code: number;
   history_size: number;
   shell_type: string;
@@ -52,7 +52,10 @@ export interface TerminalProcessIdentity {
 }
 
 export const terminalApi = {
-  list: (opts?: { workspace_session_id?: string; group_id?: string }, options?: { signal?: AbortSignal }) => {
+  list: (
+    opts?: { workspace_session_id?: string; group_id?: string; status?: "history"; limit?: number; before?: string },
+    options?: { signal?: AbortSignal }
+  ) => {
     const params = new URLSearchParams();
     if (opts?.workspace_session_id) {
       params.set("workspace_session_id", opts.workspace_session_id);
@@ -60,8 +63,11 @@ export const terminalApi = {
     if (opts?.group_id) {
       params.set("group_id", opts.group_id);
     }
+    if (opts?.status) params.set("status", opts.status);
+    if (opts?.limit) params.set("limit", String(opts.limit));
+    if (opts?.before) params.set("before", opts.before);
     const qs = params.toString();
-    return request<{ terminals: TerminalInfo[] }>(`/terminal${qs ? `?${qs}` : ""}`, {
+    return request<{ terminals: TerminalInfo[]; next_cursor?: string }>(`/terminal${qs ? `?${qs}` : ""}`, {
       signal: options?.signal,
     });
   },
@@ -74,9 +80,6 @@ export const terminalApi = {
     workspace_session_id?: string;
     group_id?: string;
     parent_id?: string;
-    runtime_type?: "local" | "ssh";
-    ssh_profile_id?: string;
-    ssh_auth?: SSHAuthSecrets;
   }) =>
     request<{ ok: boolean; id: string; name: string }>("/terminal", {
       method: "POST",
@@ -169,22 +172,30 @@ export const terminalApi = {
       body: JSON.stringify({ id }),
     }),
 
-  delete: (id: string) =>
-    request<{ ok: boolean }>("/terminal/delete", {
+  delete: async (id: string) => {
+    const result = await request<{ ok: boolean }>("/terminal/delete", {
       method: "POST",
       body: JSON.stringify({ id }),
-    }),
+    });
+    await deleteTerminalSessionCache(id);
+    return result;
+  },
 
-  deleteBatch: (ids: string[]) =>
-    request<{ ok: boolean; deleted: number }>("/terminal/delete-batch", {
+  deleteBatch: async (ids: string[]) => {
+    const result = await request<{ ok: boolean; deleted: number; deleted_ids?: string[] }>("/terminal/delete-batch", {
       method: "POST",
       body: JSON.stringify({ ids }),
-    }),
+    });
+    await Promise.all(
+      (result.deleted_ids || (result.deleted === ids.length ? ids : [])).map(deleteTerminalSessionCache)
+    );
+    return result;
+  },
 
   wsUrl: (id: string, cursor?: number) => {
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
     const key = localStorage.getItem("vibego_auth_key");
-    const params = new URLSearchParams();
+    const params = new URLSearchParams({ flow: "ack-v1" });
     if (cursor !== undefined && cursor > 0) params.set("cursor", String(cursor));
     if (key) params.set("key", key);
     const qs = params.toString();

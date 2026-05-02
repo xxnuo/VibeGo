@@ -24,7 +24,8 @@ interface TerminalHistoryPageProps {
 const TerminalHistoryPage: React.FC<TerminalHistoryPageProps> = ({ onBack }) => {
   const locale = useAppStore((s) => s.locale);
   const t = useTranslation(locale);
-  const { data, isLoading, refetch } = useTerminalList();
+  const [pages, setPages] = useState<Array<string | undefined>>([undefined]);
+  const { data, isLoading, refetch } = useTerminalList(pages[pages.length - 1]);
   const deleteBatchMutation = useTerminalDeleteBatch();
 
   const [selectionMode, setSelectionMode] = useState(false);
@@ -150,7 +151,7 @@ const TerminalHistoryPage: React.FC<TerminalHistoryPageProps> = ({ onBack }) => 
             : []),
           {
             icon: <CheckSquare size={18} />,
-            title: t("git.selectAll"),
+            title: t("terminal.selectPage"),
             onClick: selectAll,
           },
           {
@@ -302,6 +303,31 @@ const TerminalHistoryPage: React.FC<TerminalHistoryPageProps> = ({ onBack }) => 
         )}
       </div>
 
+      <div className="flex shrink-0 items-center justify-end gap-3 border-t border-ide-border px-3 py-2 text-sm">
+        <button
+          type="button"
+          disabled={pages.length <= 1 || isLoading}
+          className="text-ide-text disabled:opacity-40"
+          onClick={() => {
+            setSelectedIds(new Set());
+            setPages((current) => current.slice(0, -1));
+          }}
+        >
+          {t("terminal.previousPage")}
+        </button>
+        <span className="text-ide-mute">{pages.length}</span>
+        <button
+          type="button"
+          disabled={!data?.next_cursor || isLoading}
+          className="text-ide-text disabled:opacity-40"
+          onClick={() => {
+            setSelectedIds(new Set());
+            setPages((current) => [...current, data?.next_cursor]);
+          }}
+        >
+          {t("terminal.nextPage")}
+        </button>
+      </div>
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>

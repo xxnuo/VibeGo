@@ -31,6 +31,7 @@ func TestMigrateWorkspaceSettingsAddsColumnsAndBackfillsPositions(t *testing.T) 
 	require.True(t, db.Migrator().HasColumn(&model.UserSession{}, "position"))
 	require.True(t, db.Migrator().HasColumn(&model.TerminalSession{}, "tab_color"))
 	require.True(t, db.Migrator().HasColumn(&model.TerminalSession{}, "tab_icon"))
+	require.True(t, db.Migrator().HasColumn(&model.TerminalSession{}, "split_group_id"))
 
 	var sessions []model.UserSession
 	require.NoError(t, db.Order("position ASC").Find(&sessions).Error)

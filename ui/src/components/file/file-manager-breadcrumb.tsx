@@ -1,14 +1,34 @@
-import { Check, ChevronLeft, ChevronRight, ChevronUp, ChevronRight as Forward, Home, X } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
+import { useAppStore } from "@/stores/app-store";
+import {
+  GitGraph,
+  Terminal,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  ChevronRight as Forward,
+  Home,
+  X,
+} from "lucide-react";
 import React, { useEffect, useId, useRef, useState } from "react";
 import { useStore } from "zustand";
 import { type FileManagerStoreApi, fileManagerStore } from "@/stores/file-manager-store";
 
 interface FileManagerBreadcrumbProps {
+  onOpenTerminal?: () => void;
+  onOpenGit?: () => void;
   className?: string;
   store?: FileManagerStoreApi;
 }
 
-const FileManagerBreadcrumb: React.FC<FileManagerBreadcrumbProps> = ({ className = "", store }) => {
+const FileManagerBreadcrumb: React.FC<FileManagerBreadcrumbProps> = ({
+  className = "",
+  store,
+  onOpenTerminal,
+  onOpenGit,
+}) => {
+  const t = useTranslation(useAppStore((s) => s.locale));
   const storeApi = store ?? fileManagerStore;
   const { currentPath, rootPath, historyIndex, pathHistory, goToPath, goBack, goForward, goParent } =
     useStore(storeApi);
@@ -168,7 +188,7 @@ const FileManagerBreadcrumb: React.FC<FileManagerBreadcrumbProps> = ({ className
       ) : (
         <div
           ref={scrollRef}
-          className="flex-1 flex items-center gap-0.5 overflow-x-auto custom-scrollbar touch-pan-x"
+          className="min-w-0 flex-1 flex items-center gap-0.5 overflow-x-auto custom-scrollbar touch-pan-x"
           onTouchStart={handleLongPressStart}
           onTouchEnd={handleLongPressEnd}
           onTouchMove={handleLongPressEnd}
@@ -196,6 +216,24 @@ const FileManagerBreadcrumb: React.FC<FileManagerBreadcrumbProps> = ({ className
             </React.Fragment>
           ))}
         </div>
+      )}
+      {[
+        { action: onOpenTerminal, icon: Terminal, label: t("fileManager.openTerminalHere") },
+        { action: onOpenGit, icon: GitGraph, label: t("fileManager.openGitHere") },
+      ].map(
+        ({ action, icon: Icon, label }) =>
+          action && (
+            <button
+              key={label}
+              type="button"
+              onClick={action}
+              title={label}
+              aria-label={label}
+              className="hidden shrink-0 items-center justify-center rounded-md p-1.5 text-ide-mute hover:bg-ide-bg hover:text-ide-text md:flex"
+            >
+              <Icon size={18} />
+            </button>
+          )
       )}
     </div>
   );

@@ -1,272 +1,324 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Columns, Maximize2, Minimize2, Rows, X } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { TerminalInstanceHandle, TerminalInstanceStateUpdate } from "@/components/terminal/terminal-instance";
 import TerminalInstance from "@/components/terminal/terminal-instance";
 import { useIsMobile } from "@/hooks/use-mobile";
-import type { LayoutNode } from "@/stores/terminal-store";
+import { useTranslation } from "@/lib/i18n";
+import { useAppStore } from "@/stores/app-store";
+import {
+  clampSplitRatio,
+  MAX_SPLIT_RATIO,
+  MIN_SPLIT_RATIO,
+  type TerminalDividerRect,
+  terminalLayoutRects,
+} from "@/stores/terminal-layout";
+import type { LayoutNode, SplitDirection, TerminalSession } from "@/stores/terminal-store";
 
 interface TerminalSplitViewProps {
   layout: LayoutNode;
   groupId: string;
   focusedId: string | null;
-  terminals: Array<{ id: string; name: string; status?: string; currentCwd?: string }>;
+  terminals: TerminalSession[];
   onFocus: (terminalId: string) => void;
   onExited: (terminalId: string) => void;
   onStateChange: (terminalId: string, state: TerminalInstanceStateUpdate) => void;
   onRatioChange: (path: number[], ratio: number) => void;
+  onSplit: (direction: SplitDirection, terminalId: string) => void;
+  onClose: (terminalId: string) => void;
+  busy?: boolean;
   setTerminalRef?: (id: string) => (ref: TerminalInstanceHandle | null) => void;
-  path?: number[];
 }
 
-const DIVIDER_SIZE = 4;
-const DIVIDER_HIT_SIZE = 24;
-const MIN_PANE_RATIO = 0.1;
-const MAX_PANE_RATIO = 0.9;
-
+// Keep each PTY view under the same keyed parent while the layout tree changes.
 const TerminalSplitView: React.FC<TerminalSplitViewProps> = ({
   layout,
-  groupId,
   focusedId,
   terminals,
   onFocus,
   onExited,
   onStateChange,
   onRatioChange,
+  onSplit,
+  onClose,
+  busy,
   setTerminalRef,
-  path = [],
 }) => {
-  if (layout.type === "terminal") {
-    const terminal = terminals.find((t) => t.id === layout.terminalId);
-    const isFocused = focusedId === layout.terminalId;
-    const handleExited = () => onExited(layout.terminalId);
-    const handleStateChange = (state: TerminalInstanceStateUpdate) => onStateChange(layout.terminalId, state);
-    return (
-      <div
-        className={`relative h-full w-full ${isFocused ? "ring-1 ring-ide-accent ring-inset" : ""}`}
-        onClick={() => onFocus(layout.terminalId)}
-      >
-        <TerminalInstance
-          ref={setTerminalRef?.(layout.terminalId)}
-          terminalId={layout.terminalId}
-          terminalName={terminal?.name || "Terminal"}
-          isActive={true}
-          isFocused={isFocused}
-          isExited={terminal?.status !== "running"}
-          initialCwd={terminal?.currentCwd}
-          onExited={handleExited}
-          onStateChange={handleStateChange}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <SplitContainer
-      direction={layout.direction}
-      ratio={layout.ratio}
-      onRatioChange={(ratio) => onRatioChange(path, ratio)}
-    >
-      <TerminalSplitView
-        layout={layout.first}
-        groupId={groupId}
-        focusedId={focusedId}
-        terminals={terminals}
-        onFocus={onFocus}
-        onExited={onExited}
-        onStateChange={onStateChange}
-        onRatioChange={onRatioChange}
-        setTerminalRef={setTerminalRef}
-        path={[...path, 0]}
-      />
-      <TerminalSplitView
-        layout={layout.second}
-        groupId={groupId}
-        focusedId={focusedId}
-        terminals={terminals}
-        onFocus={onFocus}
-        onExited={onExited}
-        onStateChange={onStateChange}
-        onRatioChange={onRatioChange}
-        setTerminalRef={setTerminalRef}
-        path={[...path, 1]}
-      />
-    </SplitContainer>
-  );
-};
-
-interface SplitContainerProps {
-  direction: "horizontal" | "vertical";
-  ratio: number;
-  onRatioChange: (ratio: number) => void;
-  children: [React.ReactNode, React.ReactNode];
-}
-
-const SplitContainer: React.FC<SplitContainerProps> = ({ direction, ratio, onRatioChange, children }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState(false);
   const isMobile = useIsMobile();
-  const ratioRef = useRef(ratio);
-  ratioRef.current = ratio;
-
-  const isVertical = direction === "vertical" || isMobile;
-
-  const adjustRatio = useCallback(
-    (delta: number) => {
-      onRatioChange(Math.max(MIN_PANE_RATIO, Math.min(MAX_PANE_RATIO, ratioRef.current + delta)));
-    },
-    [onRatioChange]
-  );
-
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      setDragging(true);
-
-      const container = containerRef.current;
-      if (!container) return;
-
-      const rect = container.getBoundingClientRect();
-      const totalSize = isVertical ? rect.height : rect.width;
-      const startPos = isVertical ? rect.top : rect.left;
-
-      const onMouseMove = (ev: MouseEvent) => {
-        const currentPos = isVertical ? ev.clientY : ev.clientX;
-        let newRatio = (currentPos - startPos) / totalSize;
-        newRatio = Math.max(MIN_PANE_RATIO, Math.min(MAX_PANE_RATIO, newRatio));
-        onRatioChange(newRatio);
-      };
-
-      const onMouseUp = () => {
-        setDragging(false);
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("mouseup", onMouseUp);
-      };
-
-      document.addEventListener("mousemove", onMouseMove);
-      document.addEventListener("mouseup", onMouseUp);
-    },
-    [isVertical, onRatioChange]
-  );
-
-  const handleTouchStart = useCallback(
-    (e: React.TouchEvent) => {
-      e.preventDefault();
-      setDragging(true);
-
-      const container = containerRef.current;
-      if (!container) return;
-
-      const rect = container.getBoundingClientRect();
-      const totalSize = isVertical ? rect.height : rect.width;
-      const startPos = isVertical ? rect.top : rect.left;
-
-      const onTouchMove = (ev: TouchEvent) => {
-        const touch = ev.touches[0];
-        if (!touch) return;
-        const currentPos = isVertical ? touch.clientY : touch.clientX;
-        let newRatio = (currentPos - startPos) / totalSize;
-        newRatio = Math.max(MIN_PANE_RATIO, Math.min(MAX_PANE_RATIO, newRatio));
-        onRatioChange(newRatio);
-      };
-
-      const onTouchEnd = () => {
-        setDragging(false);
-        document.removeEventListener("touchmove", onTouchMove);
-        document.removeEventListener("touchend", onTouchEnd);
-      };
-
-      document.addEventListener("touchmove", onTouchMove, { passive: false });
-      document.addEventListener("touchend", onTouchEnd);
-    },
-    [isVertical, onRatioChange]
-  );
-
+  const locale = useAppStore((s) => s.locale);
+  const t = useTranslation(locale);
+  const { panes, dividers } = useMemo(() => terminalLayoutRects(layout, isMobile), [layout, isMobile]);
+  const [maximizedId, setMaximizedId] = useState<string | null>(null);
+  const maximized = panes.some((pane) => pane.terminalId === maximizedId) ? maximizedId : null;
   useEffect(() => {
-    if (dragging) {
-      document.body.style.userSelect = "none";
-      document.body.style.cursor = isVertical ? "row-resize" : "col-resize";
-    } else {
-      document.body.style.userSelect = "";
-      document.body.style.cursor = "";
-    }
-    return () => {
-      document.body.style.userSelect = "";
-      document.body.style.cursor = "";
-    };
-  }, [dragging, isVertical]);
-
-  const pctFirst = `${ratio * 100}%`;
-  const pctSecond = `${(1 - ratio) * 100}%`;
-
+    if (!panes.some((pane) => pane.terminalId === maximizedId)) setMaximizedId(null);
+  }, [panes, maximizedId]);
+  const hasSplit = panes.length > 1;
   return (
     <div
       ref={containerRef}
-      className="relative h-full w-full"
-      style={{
-        display: "flex",
-        flexDirection: isVertical ? "column" : "row",
+      className="relative h-full w-full overflow-hidden"
+      data-terminal-layout="true"
+      onKeyDownCapture={(event) => {
+        if (event.key === "Escape" && maximized) {
+          event.preventDefault();
+          event.stopPropagation();
+          setMaximizedId(null);
+          return;
+        }
+        if (
+          !event.altKey ||
+          !event.shiftKey ||
+          !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
+        )
+          return;
+        const current = panes.find((pane) => pane.terminalId === focusedId);
+        if (!current) return;
+        const horizontal = event.key === "ArrowLeft" || event.key === "ArrowRight";
+        const sign = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+        const center = (pane: typeof current) => (horizontal ? pane.x + pane.width / 2 : pane.y + pane.height / 2);
+        const perpendicular = (pane: typeof current) =>
+          horizontal ? pane.y + pane.height / 2 : pane.x + pane.width / 2;
+        const next = panes
+          .filter((pane) => pane !== current && (center(pane) - center(current)) * sign > 0.001)
+          .sort(
+            (a, b) =>
+              Math.abs(center(a) - center(current)) +
+              2 * Math.abs(perpendicular(a) - perpendicular(current)) -
+              Math.abs(center(b) - center(current)) -
+              2 * Math.abs(perpendicular(b) - perpendicular(current))
+          )[0];
+        if (next) {
+          event.preventDefault();
+          event.stopPropagation();
+          setMaximizedId(null);
+          onFocus(next.terminalId);
+        }
       }}
     >
-      <div
-        style={{
-          [isVertical ? "height" : "width"]: `calc(${pctFirst} - ${DIVIDER_HIT_SIZE / 2}px)`,
-          overflow: "hidden",
-          position: "relative",
-        }}
-      >
-        {children[0]}
-      </div>
-      <div
-        onMouseDown={handleMouseDown}
-        onTouchStart={handleTouchStart}
-        role="separator"
-        tabIndex={0}
-        aria-orientation={isVertical ? "horizontal" : "vertical"}
-        aria-valuemin={MIN_PANE_RATIO * 100}
-        aria-valuemax={MAX_PANE_RATIO * 100}
-        aria-valuenow={Math.round(ratio * 100)}
-        aria-label="Resize terminal panes"
-        onKeyDown={(event) => {
-          if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-            event.preventDefault();
-            adjustRatio(-0.02);
-          } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-            event.preventDefault();
-            adjustRatio(0.02);
-          } else if (event.key === "Home") {
-            event.preventDefault();
-            onRatioChange(MIN_PANE_RATIO);
-          } else if (event.key === "End") {
-            event.preventDefault();
-            onRatioChange(MAX_PANE_RATIO);
-          }
-        }}
-        className={`relative z-10 shrink-0 touch-none transition-colors ${dragging ? "bg-ide-accent/30" : "hover:bg-ide-accent/20"}`}
-        style={{
-          [isVertical ? "height" : "width"]: `${DIVIDER_HIT_SIZE}px`,
-          cursor: isVertical ? "row-resize" : "col-resize",
-        }}
-      >
-        <span
-          aria-hidden="true"
-          className={`absolute bg-ide-border transition-colors ${dragging ? "bg-ide-accent" : ""}`}
-          style={
-            isVertical
-              ? { left: 0, right: 0, top: `${(DIVIDER_HIT_SIZE - DIVIDER_SIZE) / 2}px`, height: `${DIVIDER_SIZE}px` }
-              : { top: 0, bottom: 0, left: `${(DIVIDER_HIT_SIZE - DIVIDER_SIZE) / 2}px`, width: `${DIVIDER_SIZE}px` }
-          }
-        />
-      </div>
-      <div
-        style={{
-          [isVertical ? "height" : "width"]: `calc(${pctSecond} - ${DIVIDER_HIT_SIZE / 2}px)`,
-          overflow: "hidden",
-          position: "relative",
-        }}
-      >
-        {children[1]}
-      </div>
+      {panes.map((pane) => {
+        const terminal = terminals.find((item) => item.id === pane.terminalId);
+        if (!terminal) return null;
+        const focused = pane.terminalId === focusedId;
+        const rect = maximized === pane.terminalId ? { x: 0, y: 0, width: 1, height: 1 } : pane;
+        const hidden = !!maximized && maximized !== pane.terminalId;
+        const buttonClass =
+          "flex h-11 w-11 shrink-0 md:h-7 md:w-7 items-center justify-center rounded-sm text-ide-mute hover:bg-ide-bg hover:text-ide-text disabled:opacity-40";
+        return (
+          <div
+            key={pane.terminalId}
+            data-pane-id={pane.terminalId}
+            data-focused={focused}
+            hidden={hidden}
+            className={`absolute flex min-h-0 min-w-0 flex-col overflow-hidden ${hasSplit && focused ? "ring-1 ring-inset ring-ide-accent" : ""}`}
+            style={{
+              left: `${rect.x * 100}%`,
+              top: `${rect.y * 100}%`,
+              width: `${rect.width * 100}%`,
+              height: `${rect.height * 100}%`,
+              padding: hasSplit && !maximized ? 2 : 0,
+            }}
+            onPointerDownCapture={(event) => {
+              if (!(event.target instanceof HTMLElement) || !event.target.closest("[data-pane-toolbar]"))
+                onFocus(pane.terminalId);
+            }}
+            onFocusCapture={(event) => {
+              if (!(event.target instanceof HTMLElement) || !event.target.closest("[data-pane-toolbar]"))
+                onFocus(pane.terminalId);
+            }}
+          >
+            {hasSplit && (
+              <div
+                className="flex h-11 shrink-0 items-center md:h-8 gap-1 border-b border-ide-border bg-ide-panel px-1"
+                data-pane-toolbar={pane.terminalId}
+              >
+                <span
+                  className={`min-w-0 flex-1 truncate px-1 text-xs ${focused ? "text-ide-text" : "text-ide-mute"}`}
+                  title={terminal.currentCwd || terminal.cwd}
+                >
+                  {terminal.name}
+                </span>
+                {!isMobile && (
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    title={t("terminal.splitRight")}
+                    aria-label={t("terminal.splitRight")}
+                    disabled={busy || terminal.status === "exited"}
+                    onClick={() => onSplit("horizontal", pane.terminalId)}
+                  >
+                    <Columns size={13} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={buttonClass}
+                  title={t("terminal.splitDown")}
+                  aria-label={t("terminal.splitDown")}
+                  disabled={busy || terminal.status === "exited"}
+                  onClick={() => onSplit("vertical", pane.terminalId)}
+                >
+                  <Rows size={13} />
+                </button>
+                <button
+                  type="button"
+                  className={buttonClass}
+                  title={t(maximized ? "terminal.restorePane" : "terminal.maximizePane")}
+                  aria-label={t(maximized ? "terminal.restorePane" : "terminal.maximizePane")}
+                  onClick={() => {
+                    onFocus(pane.terminalId);
+                    setMaximizedId(maximized ? null : pane.terminalId);
+                  }}
+                >
+                  {maximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+                </button>
+                <button
+                  type="button"
+                  className={`${buttonClass} hover:text-red-500`}
+                  title={t("terminal.closeSplit")}
+                  aria-label={t("terminal.closeSplit")}
+                  disabled={busy}
+                  onClick={() => onClose(pane.terminalId)}
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            )}
+            <div className="relative min-h-0 flex-1">
+              <TerminalInstance
+                ref={setTerminalRef?.(pane.terminalId)}
+                terminalId={pane.terminalId}
+                terminalName={terminal.name}
+                isActive={!hidden}
+                isFocused={focused && !hidden}
+                isExited={terminal.status !== "running"}
+                initialCwd={terminal.currentCwd || terminal.cwd}
+                onExited={() => onExited(pane.terminalId)}
+                onStateChange={(state) => onStateChange(pane.terminalId, state)}
+              />
+            </div>
+          </div>
+        );
+      })}
+      {!maximized &&
+        dividers.map((divider) => (
+          <TerminalDivider
+            key={divider.path.join(".")}
+            divider={divider}
+            containerRef={containerRef}
+            label={t("terminal.resizePanes")}
+            onRatioChange={(ratio) => onRatioChange(divider.path, ratio)}
+          />
+        ))}
     </div>
   );
 };
+
+function TerminalDivider({
+  divider,
+  containerRef,
+  label,
+  onRatioChange,
+}: {
+  divider: TerminalDividerRect;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  label: string;
+  onRatioChange: (ratio: number) => void;
+}) {
+  const [dragging, setDragging] = useState(false);
+  const drag = useRef<{ pointerId: number; start: number; size: number } | null>(null);
+  const { vertical, ratio, x, y, width, height } = divider;
+  return (
+    <div
+      role="separator"
+      tabIndex={0}
+      aria-label={label}
+      aria-orientation={vertical ? "horizontal" : "vertical"}
+      aria-valuemin={MIN_SPLIT_RATIO * 100}
+      aria-valuemax={MAX_SPLIT_RATIO * 100}
+      aria-valuenow={Math.round(ratio * 100)}
+      className={`absolute z-10 touch-none select-none ${dragging ? "bg-ide-accent/30" : "hover:bg-ide-accent/20"}`}
+      style={
+        vertical
+          ? {
+              left: `${x * 100}%`,
+              top: `${(y + height * ratio) * 100}%`,
+              width: `${width * 100}%`,
+              height: 16,
+              transform: "translateY(-50%)",
+              cursor: "row-resize",
+              zIndex: 20 - divider.path.length,
+            }
+          : {
+              left: `${(x + width * ratio) * 100}%`,
+              top: `${y * 100}%`,
+              width: 16,
+              height: `${height * 100}%`,
+              transform: "translateX(-50%)",
+              cursor: "col-resize",
+              zIndex: 20 - divider.path.length,
+            }
+      }
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        const bounds = containerRef.current?.getBoundingClientRect();
+        if (!bounds) return;
+        const size = vertical ? bounds.height * height : bounds.width * width;
+        if (size <= 0) return;
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        drag.current = {
+          pointerId: event.pointerId,
+          start: vertical ? bounds.top + bounds.height * y : bounds.left + bounds.width * x,
+          size,
+        };
+        setDragging(true);
+      }}
+      onPointerMove={(event) => {
+        if (drag.current?.pointerId !== event.pointerId) return;
+        onRatioChange(
+          clampSplitRatio(((vertical ? event.clientY : event.clientX) - drag.current.start) / drag.current.size)
+        );
+      }}
+      onPointerUp={(event) => {
+        if (drag.current?.pointerId === event.pointerId) {
+          drag.current = null;
+          setDragging(false);
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+      }}
+      onPointerCancel={() => {
+        drag.current = null;
+        setDragging(false);
+      }}
+      onLostPointerCapture={() => {
+        drag.current = null;
+        setDragging(false);
+      }}
+      onDoubleClick={() => onRatioChange(0.5)}
+      onKeyDown={(event) => {
+        const negative = vertical ? "ArrowUp" : "ArrowLeft";
+        const positive = vertical ? "ArrowDown" : "ArrowRight";
+        if (![negative, positive, "Home", "End", "Enter"].includes(event.key)) return;
+        event.preventDefault();
+        const next =
+          event.key === "Home"
+            ? MIN_SPLIT_RATIO
+            : event.key === "End"
+              ? MAX_SPLIT_RATIO
+              : event.key === "Enter"
+                ? 0.5
+                : ratio + (event.key === negative ? -0.02 : 0.02);
+        onRatioChange(clampSplitRatio(next));
+      }}
+    >
+      <span
+        aria-hidden="true"
+        className={`pointer-events-none absolute bg-ide-border ${dragging ? "bg-ide-accent" : ""}`}
+        style={vertical ? { left: 0, right: 0, top: 6, height: 4 } : { top: 0, bottom: 0, left: 6, width: 4 }}
+      />
+    </div>
+  );
+}
 
 export default TerminalSplitView;

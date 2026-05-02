@@ -19,7 +19,7 @@ type ProcessIdentity struct {
 
 // ProcessIdentityProvider is implemented by runtimes that can report the
 // process identity of their live local session. It is deliberately optional so
-// SSH runtimes and test doubles do not have to claim a PID they cannot verify.
+// test doubles do not have to claim a PID they cannot verify.
 type ProcessIdentityProvider interface {
 	ProcessIdentity() (ProcessIdentity, error)
 }

@@ -700,7 +700,10 @@ const createGitState =
 
       checkRepo: async () => {
         const { currentPath } = get();
-        if (!currentPath) return false;
+        if (!currentPath) {
+          set({ isRepo: false });
+          return false;
+        }
         try {
           const res = await gitApi.check(currentPath);
           set({ isRepo: res.isRepo });

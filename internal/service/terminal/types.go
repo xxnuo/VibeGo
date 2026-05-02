@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"time"
 
@@ -19,13 +20,13 @@ type TerminalInfo struct {
 	Cols                int                  `json:"cols"`
 	Rows                int                  `json:"rows"`
 	RuntimeType         string               `json:"runtime_type"`
-	SSHProfileID        string               `json:"ssh_profile_id,omitempty"`
 	Readonly            bool                 `json:"readonly"`
 	Capabilities        TerminalCapabilities `json:"capabilities"`
 	Status              string               `json:"status"`
 	WorkspaceSessionID  string               `json:"workspace_session_id"`
 	GroupID             string               `json:"group_id"`
 	ParentID            string               `json:"parent_id"`
+	SplitGroupID        string               `json:"split_group_id"`
 	ShellType           string               `json:"shell_type"`
 	ShellState          string               `json:"shell_state"`
 	ShellIntegration    bool                 `json:"shell_integration"`
@@ -50,8 +51,6 @@ type CreateOptions struct {
 	GroupID            string
 	ParentID           string
 	RuntimeType        string
-	SSHProfileID       string
-	SSHAuth            SSHAuthSecrets
 	Context            context.Context
 }
 
@@ -76,10 +75,12 @@ type Connection struct {
 }
 
 type AttachOptions struct {
+	Flow   string
 	Cursor uint64
 }
 
 type ManagerConfig struct {
+	TerminalEvents       func(string, json.RawMessage)
 	Shell                string
 	BufferSize           int
 	MaxConnections       int
@@ -145,13 +146,13 @@ func sessionToInfo(s *model.TerminalSession) *TerminalInfo {
 		Cols:                s.Cols,
 		Rows:                s.Rows,
 		RuntimeType:         s.RuntimeType,
-		SSHProfileID:        s.SSHProfileID,
 		Readonly:            s.Readonly,
 		Capabilities:        capabilities,
 		Status:              s.Status,
 		WorkspaceSessionID:  s.WorkspaceSessionID,
 		GroupID:             s.GroupID,
 		ParentID:            s.ParentID,
+		SplitGroupID:        s.SplitGroupID,
 		ShellType:           s.ShellType,
 		ShellState:          s.ShellState,
 		ShellIntegration:    s.ShellIntegration,

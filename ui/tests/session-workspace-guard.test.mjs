@@ -45,6 +45,35 @@ test("removes terminal state owned by an invalid local frame group", () => {
   assert.deepEqual(Object.keys(sanitized.terminalLayouts), ["terminal-1"]);
 });
 
+test("closed terminal pages stay removed with their split layout and focus after restoration", () => {
+  const sanitized = sanitizeTerminalWorkspaceState({
+    terminalsByGroup: {
+      group: [
+        { id: "closed", name: "Closed", status: "closed" },
+        { id: "child", name: "Child", status: "closed", parentId: "closed" },
+        { id: "exited", name: "Exited", status: "exited" },
+        { id: "running", name: "Running", status: "running" },
+      ],
+    },
+    activeTerminalByGroup: { group: "closed" },
+    focusedIdByGroup: { group: "child" },
+    listManagerOpenByGroup: { group: false },
+    terminalLayouts: {
+      closed: {
+        type: "split", direction: "horizontal", ratio: 0.5,
+        first: { type: "terminal", terminalId: "closed" },
+        second: { type: "terminal", terminalId: "child" },
+      },
+      exited: { type: "terminal", terminalId: "exited" },
+      running: { type: "terminal", terminalId: "running" },
+    },
+  });
+  assert.deepEqual(sanitized.terminalsByGroup.group.map(terminal => terminal.id), ["exited", "running"]);
+  assert.deepEqual(Object.keys(sanitized.terminalLayouts), ["exited", "running"]);
+  assert.equal(sanitized.activeTerminalByGroup.group, "exited");
+  assert.equal(sanitized.focusedIdByGroup.group, "exited");
+});
+
 test("resaves when workspace state changes while the first save is in flight", async () => {
   let revision = 0;
   let value = "initial";

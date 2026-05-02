@@ -16,10 +16,11 @@ type ClientMutation struct {
 }
 
 type MutationEvent struct {
-	Type     string          `json:"type"`
-	Revision int64           `json:"revision"`
-	ClientID string          `json:"client_id"`
-	Mutation *ClientMutation `json:"mutation,omitempty"`
+	TerminalEvent json.RawMessage `json:"terminal_event,omitempty"`
+	Type          string          `json:"type"`
+	Revision      int64           `json:"revision"`
+	ClientID      string          `json:"client_id"`
+	Mutation      *ClientMutation `json:"mutation,omitempty"`
 }
 
 type subscriber struct {
@@ -53,6 +54,23 @@ func (s *Service) broadcast(event MutationEvent) {
 		}
 		select {
 		case c.events <- event:
+		default:
+			delete(s.clients, c)
+			close(c.done)
+		}
+	}
+}
+
+// PublishTerminalEvent fans out ephemeral PTY events without persisting revisions.
+func (s *Service) PublishTerminalEvent(id string, payload json.RawMessage) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for c := range s.clients {
+		if c.workspaceID != id {
+			continue
+		}
+		select {
+		case c.events <- MutationEvent{Type: "terminal:event", TerminalEvent: payload}:
 		default:
 			delete(s.clients, c)
 			close(c.done)

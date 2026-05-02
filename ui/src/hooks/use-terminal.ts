@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { SSHAuthSecrets } from "@/api/ssh";
+import { toast } from "sonner";
 import { terminalApi } from "@/api/terminal";
 import { cleanupSpeculativeTerminal } from "@/services/speculative-terminal-cleanup";
 import { useFrameStore, useTerminalStore } from "@/stores";
 import { enqueueWorkspaceMutation, isCurrentWorkspaceTransition, useSessionStore } from "@/stores/session-store";
+import { getTerminalWorkspaceGroupIds } from "@/stores/session-workspace-guard";
+import { useWorkspaceSyncStore } from "@/stores/workspace-sync-store";
 
 export const terminalKeys = {
   all: ["terminals"] as const,
@@ -26,12 +28,7 @@ function captureTerminalCreateScope(groupId: string): TerminalCreateScope {
 }
 
 function isTerminalScopeCurrent(scope: TerminalCreateScope): boolean {
-  const groupExists = useFrameStore
-    .getState()
-    .groups.some(
-      (group) =>
-        group.type === "group" && group.id === scope.groupId && group.pages.some((page) => page.type === "terminal")
-    );
+  const groupExists = getTerminalWorkspaceGroupIds(useFrameStore.getState().groups).has(scope.groupId);
   return (
     groupExists &&
     useSessionStore.getState().sessionInitialized &&
@@ -39,10 +36,11 @@ function isTerminalScopeCurrent(scope: TerminalCreateScope): boolean {
   );
 }
 
-export function useTerminalList() {
+export function useTerminalList(before?: string) {
   return useQuery({
-    queryKey: terminalKeys.list(),
-    queryFn: () => terminalApi.list(),
+    queryKey: [...terminalKeys.list(), "history", before ?? ""],
+    queryFn: ({ signal }) => terminalApi.list({ status: "history", limit: 50, before }, { signal }),
+    gcTime: 0,
   });
 }
 
@@ -52,19 +50,13 @@ export function useTerminalCreate(groupId: string) {
   const getTerminals = useTerminalStore((s) => s.getTerminals);
 
   return useMutation({
-    mutationFn: (opts?: {
-      name?: string;
-      cwd?: string;
-      cols?: number;
-      rows?: number;
-      runtime_type?: "local" | "ssh";
-      ssh_profile_id?: string;
-      ssh_auth?: SSHAuthSecrets;
-    }) => {
+    mutationFn: (opts?: { name?: string; cwd?: string; cols?: number; rows?: number }) => {
       const scope = captureTerminalCreateScope(groupId);
       return enqueueWorkspaceMutation(async () => {
         if (!isTerminalScopeCurrent(scope)) return null;
 
+        await useWorkspaceSyncStore.getState().flush();
+        if (!isTerminalScopeCurrent(scope)) return null;
         const terminals = getTerminals(scope.groupId);
         const existingNumbers = terminals
           .map((terminal) => {
@@ -87,12 +79,11 @@ export function useTerminalCreate(groupId: string) {
           id: result.id,
           name: result.name,
           cwd: opts?.cwd,
-          runtimeType: opts?.runtime_type,
-          sshProfileId: opts?.ssh_profile_id,
         });
         return result;
       });
     },
+    onError: (error) => toast.error(error.message),
     onSuccess: (result) => {
       if (result) void queryClient.invalidateQueries({ queryKey: terminalKeys.list() });
     },
@@ -167,7 +158,7 @@ export function useTerminalDeleteBatch() {
       enqueueWorkspaceMutation(async () => {
         const result = await terminalApi.deleteBatch(ids);
         const terminalStore = useTerminalStore.getState();
-        const deletedIds = new Set(ids);
+        const deletedIds = new Set(result.deleted_ids || (result.deleted === ids.length ? ids : []));
         for (const [groupId, terminals] of Object.entries(terminalStore.terminalsByGroup)) {
           for (const terminal of terminals) {
             if (deletedIds.has(terminal.id)) terminalStore.removeTerminal(groupId, terminal.id);

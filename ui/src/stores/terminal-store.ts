@@ -1,6 +1,13 @@
 import { create } from "zustand";
 import type { TerminalCapabilities } from "@/api/terminal";
 import { enqueueWorkspaceMutation } from "@/stores/workspace-mutation-queue";
+import {
+  balanceTerminalLayout,
+  clampSplitRatio,
+  layoutTerminalIds,
+  normalizeTerminalWorkspace,
+  pruneTerminalLayout,
+} from "./terminal-layout";
 
 export type TerminalStatus = "running" | "exited" | "closed";
 
@@ -12,8 +19,8 @@ export interface TerminalSession {
   pinned?: boolean;
   status?: TerminalStatus;
   parentId?: string;
+  splitGroupId?: string;
   runtimeType?: string;
-  sshProfileId?: string;
   readonly?: boolean;
   capabilities?: TerminalCapabilities;
   cwd?: string;
@@ -172,23 +179,7 @@ export function preservePendingTerminalReorder(
   return result;
 }
 
-function findTerminalIds(node: LayoutNode): string[] {
-  if (node.type === "terminal") return [node.terminalId];
-  return [...findTerminalIds(node.first), ...findTerminalIds(node.second)];
-}
-
-function removeTerminalFromLayout(node: LayoutNode, terminalId: string): LayoutNode | null {
-  if (node.type === "terminal") {
-    return node.terminalId === terminalId ? null : node;
-  }
-  if (node.first.type === "terminal" && node.first.terminalId === terminalId) return node.second;
-  if (node.second.type === "terminal" && node.second.terminalId === terminalId) return node.first;
-  const newFirst = removeTerminalFromLayout(node.first, terminalId);
-  if (newFirst !== node.first) return newFirst ? { ...node, first: newFirst } : node.second;
-  const newSecond = removeTerminalFromLayout(node.second, terminalId);
-  if (newSecond !== node.second) return newSecond ? { ...node, second: newSecond } : node.first;
-  return node;
-}
+const findTerminalIds = layoutTerminalIds;
 
 function splitTerminalInLayout(
   node: LayoutNode,
@@ -216,7 +207,7 @@ function splitTerminalInLayout(
 }
 
 function updateRatioAtPath(node: LayoutNode, path: number[], ratio: number): LayoutNode {
-  if (path.length === 0 && node.type === "split") return { ...node, ratio };
+  if (path.length === 0 && node.type === "split") return { ...node, ratio: clampSplitRatio(ratio) };
   if (node.type !== "split" || path.length === 0) return node;
   const [head, ...rest] = path;
   if (head === 0) return { ...node, first: updateRatioAtPath(node.first, rest, ratio) };
@@ -229,6 +220,7 @@ function containsTerminal(node: LayoutNode, terminalId: string): boolean {
 }
 
 interface TerminalState {
+  retiredTerminalIds: string[];
   terminalsByGroup: Record<string, TerminalSession[]>;
   activeIdByGroup: Record<string, string | null>;
   listManagerOpenByGroup: Record<string, boolean>;
@@ -265,6 +257,7 @@ interface TerminalState {
   splitTerminal: (rootId: string, targetPaneId: string, newTerminalId: string, direction: SplitDirection) => void;
   closeFromLayout: (groupId: string, terminalId: string) => void;
   removeTerminalPage: (groupId: string, terminalId: string) => void;
+  balanceSplits: (groupId: string) => void;
   updateSplitRatio: (groupId: string, path: number[], ratio: number) => void;
   isSplit: (groupId: string) => boolean;
   getActiveLayoutTerminalIds: (groupId: string) => string[];
@@ -273,7 +266,30 @@ interface TerminalState {
   reset: () => void;
 }
 
+function normalizeStore(
+  s: Pick<
+    TerminalState,
+    | "retiredTerminalIds"
+    | "terminalsByGroup"
+    | "activeIdByGroup"
+    | "focusedIdByGroup"
+    | "listManagerOpenByGroup"
+    | "terminalLayouts"
+  >
+) {
+  const next = normalizeTerminalWorkspace({ ...s, activeTerminalByGroup: s.activeIdByGroup });
+  return {
+    retiredTerminalIds: next.retiredTerminalIds || [],
+    terminalsByGroup: next.terminalsByGroup,
+    activeIdByGroup: next.activeTerminalByGroup,
+    focusedIdByGroup: next.focusedIdByGroup,
+    listManagerOpenByGroup: next.listManagerOpenByGroup,
+    terminalLayouts: next.terminalLayouts,
+  };
+}
+
 export const useTerminalStore = create<TerminalState>((set, get) => ({
+  retiredTerminalIds: [],
   terminalsByGroup: {},
   activeIdByGroup: {},
   listManagerOpenByGroup: {},
@@ -286,8 +302,12 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
 
   addTerminal: (groupId, terminal) =>
     set((s) => {
-      const newTerminal = { ...terminal, status: "running" as TerminalStatus };
-      const newTerminals = [...(s.terminalsByGroup[groupId] || []), newTerminal];
+      if (s.retiredTerminalIds.includes(terminal.id)) return s;
+      const terminals = s.terminalsByGroup[groupId] || [];
+      // The workspace broadcast can arrive before the create response.
+      const newTerminals = terminals.some((item) => item.id === terminal.id)
+        ? terminals
+        : [...terminals, { ...terminal, status: terminal.status || ("running" as TerminalStatus) }];
 
       if (terminal.parentId) {
         return { terminalsByGroup: { ...s.terminalsByGroup, [groupId]: newTerminals } };
@@ -297,83 +317,15 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
         terminalsByGroup: { ...s.terminalsByGroup, [groupId]: newTerminals },
         activeIdByGroup: { ...s.activeIdByGroup, [groupId]: terminal.id },
         listManagerOpenByGroup: { ...s.listManagerOpenByGroup, [groupId]: false },
-        terminalLayouts: { ...s.terminalLayouts, [terminal.id]: { type: "terminal", terminalId: terminal.id } },
+        terminalLayouts: {
+          ...s.terminalLayouts,
+          [terminal.id]: s.terminalLayouts[terminal.id] || { type: "terminal", terminalId: terminal.id },
+        },
         focusedIdByGroup: { ...s.focusedIdByGroup, [groupId]: terminal.id },
       };
     }),
 
-  removeTerminal: (groupId, terminalId) =>
-    set((s) => {
-      const terminals = s.terminalsByGroup[groupId] || [];
-      const terminal = terminals.find((t) => t.id === terminalId);
-      if (!terminal) return s;
-
-      const isRoot = !terminal.parentId;
-      let newTerminals = terminals.filter((t) => t.id !== terminalId);
-      const newLayouts = { ...s.terminalLayouts };
-      let activeId = s.activeIdByGroup[groupId];
-      let focusedId = s.focusedIdByGroup[groupId];
-
-      if (isRoot) {
-        const layout = newLayouts[terminalId];
-        if (layout && layout.type === "split") {
-          const remaining = removeTerminalFromLayout(layout, terminalId);
-          delete newLayouts[terminalId];
-          if (remaining) {
-            const ids = findTerminalIds(remaining);
-            const newRootId = ids[0];
-            newLayouts[newRootId] = remaining;
-            newTerminals = newTerminals.map((t) => {
-              if (t.id === newRootId) return { ...t, parentId: undefined };
-              if (t.parentId === terminalId) return { ...t, parentId: newRootId };
-              return t;
-            });
-            if (activeId === terminalId) activeId = newRootId;
-            if (focusedId === terminalId) focusedId = ids[0];
-          } else {
-            const roots = newTerminals.filter((t) => !t.parentId);
-            if (activeId === terminalId) activeId = roots.length > 0 ? roots[roots.length - 1].id : null;
-            if (focusedId === terminalId) focusedId = activeId;
-          }
-        } else {
-          delete newLayouts[terminalId];
-          const childIds = new Set(newTerminals.filter((t) => t.parentId === terminalId).map((t) => t.id));
-          if (childIds.size > 0) {
-            newTerminals = newTerminals.filter((t) => !childIds.has(t.id));
-            for (const cid of childIds) delete newLayouts[cid];
-          }
-          const roots = newTerminals.filter((t) => !t.parentId);
-          if (activeId === terminalId) {
-            activeId = roots.length > 0 ? roots[roots.length - 1].id : null;
-          }
-          if (focusedId === terminalId) focusedId = activeId;
-        }
-      } else {
-        const rootId = terminal.parentId!;
-        const rootLayout = newLayouts[rootId];
-        if (rootLayout) {
-          const updated = removeTerminalFromLayout(rootLayout, terminalId);
-          if (updated) newLayouts[rootId] = updated;
-          else delete newLayouts[rootId];
-        }
-        if (focusedId === terminalId) {
-          const updatedLayout = newLayouts[rootId];
-          if (updatedLayout) {
-            const ids = findTerminalIds(updatedLayout);
-            focusedId = ids[0] || rootId;
-          } else {
-            focusedId = rootId;
-          }
-        }
-      }
-
-      return {
-        terminalsByGroup: { ...s.terminalsByGroup, [groupId]: newTerminals },
-        activeIdByGroup: { ...s.activeIdByGroup, [groupId]: activeId },
-        terminalLayouts: newLayouts,
-        focusedIdByGroup: { ...s.focusedIdByGroup, [groupId]: focusedId },
-      };
-    }),
+  removeTerminal: (groupId, terminalId) => get().updateTerminal(groupId, terminalId, { status: "closed" }),
 
   clearAllTerminals: (groupId) =>
     set((s) => {
@@ -416,12 +368,23 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     })),
 
   updateTerminal: (groupId, id, updates) =>
-    set((s) => ({
-      terminalsByGroup: {
+    set((s) => {
+      const current = s.terminalsByGroup[groupId] || [];
+      const terminal = current.find((t) => t.id === id);
+      if (!terminal) return s;
+      const terminalsByGroup = {
         ...s.terminalsByGroup,
-        [groupId]: (s.terminalsByGroup[groupId] || []).map((t) => (t.id === id ? { ...t, ...updates } : t)),
-      },
-    })),
+        [groupId]: current.map((t) => (t.id === id ? { ...t, ...updates } : t)),
+      };
+      if (
+        (updates.status && updates.status !== terminal.status) ||
+        "parentId" in updates ||
+        "splitGroupId" in updates
+      ) {
+        return normalizeStore({ ...s, terminalsByGroup });
+      }
+      return { terminalsByGroup };
+    }),
 
   renameTerminal: (groupId, id, name) =>
     set((s) => ({
@@ -439,13 +402,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
       },
     })),
 
-  setTerminalStatus: (groupId, id, status) =>
-    set((s) => ({
-      terminalsByGroup: {
-        ...s.terminalsByGroup,
-        [groupId]: (s.terminalsByGroup[groupId] || []).map((t) => (t.id === id ? { ...t, status } : t)),
-      },
-    })),
+  setTerminalStatus: (groupId, id, status) => get().updateTerminal(groupId, id, { status }),
 
   isListManagerOpen: (groupId) => {
     const state = get().listManagerOpenByGroup[groupId];
@@ -474,7 +431,11 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
   getFocusedId: (groupId) => get().focusedIdByGroup[groupId] || null,
 
   setFocusedId: (groupId, terminalId) =>
-    set((s) => ({ focusedIdByGroup: { ...s.focusedIdByGroup, [groupId]: terminalId } })),
+    set((s) =>
+      s.focusedIdByGroup[groupId] === terminalId
+        ? s
+        : { focusedIdByGroup: { ...s.focusedIdByGroup, [groupId]: terminalId } }
+    ),
 
   getTerminalPageIds: (groupId, terminalId) => {
     const terminals = get().terminalsByGroup[groupId] || [];
@@ -568,76 +529,66 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
 
   splitTerminal: (rootId, targetPaneId, newTerminalId, direction) =>
     set((s) => {
-      const layout = s.terminalLayouts[rootId];
-      if (!layout) return s;
-      return {
+      const groupId = Object.keys(s.terminalsByGroup).find((id) =>
+        s.terminalsByGroup[id].some((t) => t.id === targetPaneId)
+      );
+      if (!groupId) return s;
+      const members = s.terminalsByGroup[groupId];
+      if (!members.some((t) => t.id === newTerminalId)) return s;
+      const layout = s.terminalLayouts[rootId] || { type: "terminal" as const, terminalId: targetPaneId };
+      const withoutNew = pruneTerminalLayout(
+        layout,
+        new Set(findTerminalIds(layout).filter((id) => id !== newTerminalId))
+      );
+      if (!withoutNew || !containsTerminal(withoutNew, targetPaneId)) return s;
+      const family = members.find((t) => t.id === targetPaneId)?.splitGroupId || rootId;
+      return normalizeStore({
+        ...s,
+        terminalsByGroup: {
+          ...s.terminalsByGroup,
+          [groupId]: members.map((t) =>
+            t.id === newTerminalId || findTerminalIds(layout).includes(t.id)
+              ? { ...t, splitGroupId: family, parentId: t.id === rootId ? undefined : rootId }
+              : t
+          ),
+        },
         terminalLayouts: {
           ...s.terminalLayouts,
-          [rootId]: splitTerminalInLayout(layout, targetPaneId, newTerminalId, direction),
+          [rootId]: splitTerminalInLayout(withoutNew, targetPaneId, newTerminalId, direction),
         },
-      };
+        focusedIdByGroup: { ...s.focusedIdByGroup, [groupId]: newTerminalId },
+      });
     }),
 
-  closeFromLayout: (groupId, terminalId) =>
-    set((s) => {
-      const newLayouts = { ...s.terminalLayouts };
-      let focusedId = s.focusedIdByGroup[groupId];
-      for (const [key, layout] of Object.entries(newLayouts)) {
-        if (containsTerminal(layout, terminalId)) {
-          const updated = removeTerminalFromLayout(layout, terminalId);
-          if (updated) newLayouts[key] = updated;
-          else delete newLayouts[key];
-          break;
-        }
-      }
-      if (focusedId === terminalId) {
-        const activeId = s.activeIdByGroup[groupId];
-        if (activeId && newLayouts[activeId]) {
-          const ids = findTerminalIds(newLayouts[activeId]);
-          focusedId = ids[0] || null;
-        } else {
-          focusedId = activeId;
-        }
-      }
-      return { terminalLayouts: newLayouts, focusedIdByGroup: { ...s.focusedIdByGroup, [groupId]: focusedId } };
-    }),
+  closeFromLayout: (groupId, terminalId) => get().removeTerminal(groupId, terminalId),
 
   removeTerminalPage: (groupId, terminalId) =>
     set((s) => {
-      const terminals = s.terminalsByGroup[groupId] || [];
-      const terminal = terminals.find((item) => item.id === terminalId);
-      if (!terminal) return s;
-
-      const rootId = terminal.parentId || terminal.id;
-      const layout = s.terminalLayouts[rootId];
-      const terminalIds = layout ? findTerminalIds(layout) : [rootId];
-      const idsToRemove = new Set(terminalIds);
-      const newTerminals = terminals.filter((item) => !idsToRemove.has(item.id));
-      const newLayouts = { ...s.terminalLayouts };
-      delete newLayouts[rootId];
-
-      const roots = newTerminals.filter((item) => !item.parentId);
-      let activeId = s.activeIdByGroup[groupId];
-      if (!activeId || idsToRemove.has(activeId)) {
-        activeId = roots.length > 0 ? roots[roots.length - 1].id : null;
-      }
-
-      let focusedId = s.focusedIdByGroup[groupId];
-      if (!focusedId || idsToRemove.has(focusedId)) {
-        if (activeId) {
-          const activeLayout = newLayouts[activeId];
-          focusedId = activeLayout ? findTerminalIds(activeLayout)[0] || activeId : activeId;
-        } else {
-          focusedId = null;
+      const ids = new Set(get().getTerminalPageIds(groupId, terminalId));
+      const next = normalizeStore({
+        ...s,
+        terminalsByGroup: {
+          ...s.terminalsByGroup,
+          [groupId]: (s.terminalsByGroup[groupId] || []).map((t) =>
+            ids.has(t.id) ? { ...t, status: "closed" as const } : t
+          ),
+        },
+      });
+      if (!next.activeIdByGroup[groupId]) {
+        const root = next.terminalsByGroup[groupId]?.find((t) => !t.parentId);
+        if (root) {
+          next.activeIdByGroup[groupId] = root.id;
+          next.focusedIdByGroup[groupId] = root.id;
         }
       }
+      return next;
+    }),
 
-      return {
-        terminalsByGroup: { ...s.terminalsByGroup, [groupId]: newTerminals },
-        activeIdByGroup: { ...s.activeIdByGroup, [groupId]: activeId },
-        terminalLayouts: newLayouts,
-        focusedIdByGroup: { ...s.focusedIdByGroup, [groupId]: focusedId },
-      };
+  balanceSplits: (groupId) =>
+    set((s) => {
+      const root = s.activeIdByGroup[groupId];
+      if (!root || !s.terminalLayouts[root]) return s;
+      return { terminalLayouts: { ...s.terminalLayouts, [root]: balanceTerminalLayout(s.terminalLayouts[root]) } };
     }),
 
   updateSplitRatio: (groupId, path, ratio) =>
@@ -671,6 +622,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     terminalReorderMutationVersions.clear();
     terminalReorderStates.clear();
     set({
+      retiredTerminalIds: [],
       terminalsByGroup: {},
       activeIdByGroup: {},
       listManagerOpenByGroup: {},

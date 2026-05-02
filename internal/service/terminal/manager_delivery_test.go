@@ -395,7 +395,7 @@ func TestSendHistoryOnlyHandshakeOmitsLiveCompletionCapability(t *testing.T) {
 	master := &failingDeliveryMaster{}
 	err := (&Manager{}).sendHistoryOnlyHandshake(master, model.TerminalSession{
 		Status:      model.StatusExited,
-		RuntimeType: RuntimeTypeSSH,
+		RuntimeType: "test",
 	}, nil)
 	if err != nil {
 		t.Fatalf("history handshake failed: %v", err)
@@ -412,6 +412,6 @@ func TestSendHistoryOnlyHandshakeOmitsLiveCompletionCapability(t *testing.T) {
 		t.Fatalf("decode history state: %v", err)
 	}
 	if state.Capabilities.Completion {
-		t.Fatal("history state advertised unavailable SSH completion capability")
+		t.Fatal("history state advertised unavailable completion capability")
 	}
 }

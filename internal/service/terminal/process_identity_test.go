@@ -11,7 +11,7 @@ import (
 
 type processIdentityRuntime struct{}
 
-func (*processIdentityRuntime) Type() string                       { return RuntimeTypeSSH }
+func (*processIdentityRuntime) Type() string                       { return "test" }
 func (*processIdentityRuntime) Capabilities() TerminalCapabilities { return TerminalCapabilities{} }
 func (*processIdentityRuntime) Read([]byte) (int, error)           { return 0, nil }
 func (*processIdentityRuntime) Write(data []byte) (int, error)     { return len(data), nil }

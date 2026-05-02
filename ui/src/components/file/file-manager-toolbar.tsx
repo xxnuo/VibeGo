@@ -1,4 +1,6 @@
 import {
+  GitGraph,
+  Terminal,
   ArrowUpDown,
   CheckSquare,
   Eye,
@@ -23,6 +25,8 @@ import { useAppStore } from "@/stores";
 import { type FileManagerStoreApi, fileManagerStore, type SortField } from "@/stores/file-manager-store";
 
 interface FileManagerToolbarProps {
+  onOpenTerminal?: () => void;
+  onOpenGit?: () => void;
   onRefresh: () => void;
   onNewFile: () => void;
   onNewFolder: () => void;
@@ -33,6 +37,8 @@ interface FileManagerToolbarProps {
 }
 
 const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
+  onOpenTerminal,
+  onOpenGit,
   onRefresh,
   onNewFile,
   onNewFolder,
@@ -355,6 +361,22 @@ const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
         onClose={() => setShowMobileActions(false)}
         title={t("common.moreActions")}
         items={[
+          ...(mode === "default"
+            ? [
+                ...(onOpenTerminal
+                  ? [
+                      {
+                        icon: <Terminal size={18} />,
+                        label: t("fileManager.openTerminalHere"),
+                        onClick: onOpenTerminal,
+                      },
+                    ]
+                  : []),
+                ...(onOpenGit
+                  ? [{ icon: <GitGraph size={18} />, label: t("fileManager.openGitHere"), onClick: onOpenGit }]
+                  : []),
+              ]
+            : []),
           {
             icon: showHidden ? <EyeOff size={18} /> : <Eye size={18} />,
             label: showHidden ? t("fileManager.hideHidden") : t("fileManager.showHidden"),

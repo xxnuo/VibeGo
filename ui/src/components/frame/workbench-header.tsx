@@ -99,7 +99,7 @@ const WorkbenchHeader: React.FC<WorkbenchHeaderProps> = ({ onRefresh, onBackToLi
     activeGroup?.type === "group" && currentView ? (
       VIEW_ICONS[currentView] || React.createElement(registry.get(currentView)?.icon || Box, { size: 18 })
     ) : activeGroup?.type === "tool" ? (
-      <Box size={18} />
+      React.createElement(registry.get(activeGroup.pageId)?.icon || Box, { size: 18 })
     ) : (
       <FolderOpen size={18} />
     );

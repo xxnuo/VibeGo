@@ -16,7 +16,7 @@ type historyBuffer struct {
 
 func newHistoryBuffer(capacity int) *historyBuffer {
 	return &historyBuffer{
-		buf:      make([]byte, capacity),
+		buf:      make([]byte, min(capacity, 64*1024)),
 		capacity: capacity,
 		start:    0,
 		length:   0,
@@ -31,6 +31,7 @@ func (hb *historyBuffer) Write(data []byte) (int, error) {
 	hb.mu.Lock()
 	defer hb.mu.Unlock()
 
+	hb.growLocked(min(hb.capacity, hb.length+len(data)))
 	n := len(data)
 	if n >= hb.capacity {
 		copy(hb.buf, data[n-hb.capacity:])
@@ -42,12 +43,12 @@ func (hb *historyBuffer) Write(data []byte) (int, error) {
 	}
 
 	for i := 0; i < n; i++ {
-		pos := (hb.start + hb.length) % hb.capacity
+		pos := (hb.start + hb.length) % len(hb.buf)
 		hb.buf[pos] = data[i]
 		if hb.length < hb.capacity {
 			hb.length++
 		} else {
-			hb.start = (hb.start + 1) % hb.capacity
+			hb.start = (hb.start + 1) % len(hb.buf)
 			hb.startCursor++
 		}
 		hb.endCursor++
@@ -75,19 +76,7 @@ func (hb *historyBuffer) ReadFrom(cursor uint64) ([]byte, bool, uint64) {
 		return nil, true, hb.endCursor
 	}
 
-	all := hb.readLocked()
-	if len(all) == 0 {
-		return nil, true, hb.endCursor
-	}
-
-	offset := int(cursor - hb.startCursor)
-	if offset < 0 || offset > len(all) {
-		return nil, false, hb.endCursor
-	}
-
-	data := make([]byte, len(all)-offset)
-	copy(data, all[offset:])
-	return data, true, hb.endCursor
+	return hb.readRangeLocked(int(cursor-hb.startCursor), int(hb.endCursor-cursor)), true, hb.endCursor
 }
 
 func (hb *historyBuffer) CursorRange() (uint64, uint64) {
@@ -101,16 +90,39 @@ func (hb *historyBuffer) readLocked() []byte {
 		return nil
 	}
 
-	result := make([]byte, hb.length)
-	if hb.start+hb.length <= hb.capacity {
-		copy(result, hb.buf[hb.start:hb.start+hb.length])
-	} else {
-		firstPart := hb.capacity - hb.start
-		copy(result, hb.buf[hb.start:])
-		copy(result[firstPart:], hb.buf[:hb.length-firstPart])
-	}
+	return hb.readRangeLocked(0, hb.length)
+}
 
+func (hb *historyBuffer) readRangeLocked(offset, size int) []byte {
+	result := make([]byte, size)
+	if size == 0 {
+		return result
+	}
+	start := (hb.start + offset) % len(hb.buf)
+	first := min(size, len(hb.buf)-start)
+	copy(result, hb.buf[start:start+first])
+	copy(result[first:], hb.buf[:size-first])
 	return result
+}
+
+func (hb *historyBuffer) growLocked(size int) {
+	if size <= len(hb.buf) {
+		return
+	}
+	buf := make([]byte, min(hb.capacity, max(size, len(hb.buf)*2)))
+	copy(buf, hb.readRangeLocked(0, hb.length))
+	hb.buf, hb.start = buf, 0
+}
+
+// ReadChunk copies only the requested range, never the entire retained history.
+func (hb *historyBuffer) ReadChunk(cursor uint64, limit int) ([]byte, bool, uint64) {
+	hb.mu.RLock()
+	defer hb.mu.RUnlock()
+	if cursor < hb.startCursor || cursor > hb.endCursor {
+		return nil, false, hb.endCursor
+	}
+	size := min(limit, int(hb.endCursor-cursor))
+	return hb.readRangeLocked(int(cursor-hb.startCursor), size), true, cursor + uint64(size)
 }
 
 func (hb *historyBuffer) Reset() {
@@ -134,6 +146,7 @@ func (hb *historyBuffer) Restore(data []byte, cursor uint64) {
 		data = data[len(data)-hb.capacity:]
 	}
 
+	hb.growLocked(len(data))
 	hb.start = 0
 	hb.length = len(data)
 	copy(hb.buf, data)

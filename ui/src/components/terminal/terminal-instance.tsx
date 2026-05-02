@@ -12,6 +12,10 @@ import { type ITheme, Terminal } from "@xterm/xterm";
 import { Check, ChevronDown, ChevronUp, Copy, X } from "lucide-react";
 import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { toast } from "sonner";
+import { focusedTerminalViews, useTerminalEventSupport } from "@/services/terminal-runtime-events";
+import { useTerminalViewBudget } from "@/services/terminal-view-budget";
+import { useFrameStore } from "@/stores/frame-store";
+import { useTerminalStore } from "@/stores/terminal-store";
 import "@xterm/xterm/css/xterm.css";
 import { fileApi } from "@/api/file";
 import { type TerminalCapabilities, terminalApi } from "@/api/terminal";
@@ -26,6 +30,7 @@ import {
 import { bindTerminalMousePaste } from "@/services/terminal-mouse-paste";
 import { notifyTerminal } from "@/services/terminal-notification-service";
 import {
+  acquireTerminalCacheOwner,
   readTerminalSessionCache,
   type TerminalLifecycleState,
   writeTerminalSessionCache,
@@ -507,7 +512,7 @@ const joinPath = (base: string, path: string): string => {
   return `${trimmedBase.replace(/[\\/]+$/, "")}/${path}`;
 };
 
-const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstanceProps>(
+const MountedTerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstanceProps>(
   (
     { terminalId, terminalName, isActive, isFocused = isActive, isExited = false, initialCwd, onExited, onStateChange },
     ref
@@ -520,6 +525,9 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
     const serializeAddonRef = useRef<SerializeAddon | null>(null);
     const oscHandlersRef = useRef<TerminalDisposable[]>([]);
     const wsRef = useRef<WebSocket | null>(null);
+    const pendingBytesRef = useRef(0);
+    const connectionEpochRef = useRef(0);
+    const cacheOwnerRef = useRef<ReturnType<typeof acquireTerminalCacheOwner> | null>(null);
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const reconnectAttemptsRef = useRef(0);
     const wasOpenRef = useRef(false);
@@ -533,6 +541,8 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
     const lifecycleRef = useRef<TerminalLifecycleState>(isExited ? "exited" : "hydrating");
     const cacheHydratedRef = useRef(false);
     const cacheSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const cacheSaveInFlightRef = useRef(false);
+    const cacheSaveRequestedRef = useRef(false);
     const lastSavedCursorRef = useRef(0);
     const readonlyRef = useRef(isExited);
     const capabilitiesRef = useRef<TerminalCapabilities>(DEFAULT_TERMINAL_CAPABILITIES);
@@ -554,7 +564,16 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
     const [searchTerm, setSearchTerm] = useState("");
     const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
     const [searchRegex, setSearchRegex] = useState(false);
-    const [selectionMenu, setSelectionMenu] = useState<SelectionMenuState | null>(null);
+    const [selectionMenu, setSelectionMenuState] = useState<SelectionMenuState | null>(null);
+    const selectionMenuRef = useRef<SelectionMenuState | null>(null);
+    const setSelectionMenu = useCallback((next: SelectionMenuState | null) => {
+      const previous = selectionMenuRef.current;
+      // Scroll fires for every output line. Avoid enqueueing React updates
+      // for an already hidden/unchanged menu, even when React skips rendering.
+      if (previous === next || (previous && next && previous.left === next.left && previous.top === next.top)) return;
+      selectionMenuRef.current = next;
+      setSelectionMenuState(next);
+    }, []);
     const searchInputRef = useRef<HTMLInputElement | null>(null);
     const searchVisibleRef = useRef(false);
     const openSearchRef = useRef<() => void>(() => {});
@@ -579,7 +598,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
 
     useEffect(() => {
       initialCwdRef.current = initialCwd || "";
-      if (!currentCwdRef.current && initialCwd) {
+      if (initialCwd && (useTerminalEventSupport.getState().supported || !currentCwdRef.current)) {
         currentCwdRef.current = initialCwd;
       }
     }, [initialCwd]);
@@ -616,28 +635,46 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
     }, []);
 
     const persistTerminalCache = useCallback(async () => {
+      if (cacheSaveInFlightRef.current) {
+        cacheSaveRequestedRef.current = true;
+        return;
+      }
       const terminal = terminalRef.current;
       const serializeAddon = serializeAddonRef.current;
-      if (!terminal || !serializeAddon || !cacheHydratedRef.current) {
+      if (!terminal || !serializeAddon || !cacheHydratedRef.current || pendingBytesRef.current > 0) {
         return;
       }
       if (capabilitiesRef.current.snapshot === false) {
         return;
       }
-      const serialized = serializeAddon.serialize();
-      if (!serialized) {
-        return;
+      cacheSaveInFlightRef.current = true;
+      try {
+        const cursor = lastCursorRef.current;
+        const serialized = serializeAddon.serialize();
+        if (!serialized) {
+          return;
+        }
+        await writeTerminalSessionCache(
+          {
+            terminalId,
+            serialized,
+            cursor,
+            viewportY: terminal.buffer.active.viewportY,
+            cols: terminal.cols,
+            rows: terminal.rows,
+            status: callbacksRef.current.isExited ? "exited" : "running",
+            updatedAt: Date.now(),
+          },
+          cacheOwnerRef.current?.token
+        );
+        lastSavedCursorRef.current = cursor;
+      } finally {
+        cacheSaveInFlightRef.current = false;
+        if (cacheSaveRequestedRef.current) {
+          cacheSaveRequestedRef.current = false;
+          if (!isUnmountingRef.current && terminalRef.current === terminal) void persistTerminalCache();
+        }
       }
-      await writeTerminalSessionCache({
-        terminalId,
-        serialized,
-        cursor: lastCursorRef.current,
-        cols: terminal.cols,
-        rows: terminal.rows,
-        status: callbacksRef.current.isExited ? "exited" : "running",
-        updatedAt: Date.now(),
-      });
-      lastSavedCursorRef.current = lastCursorRef.current;
     }, [terminalId]);
 
     const scheduleCacheSave = useCallback(
@@ -665,7 +702,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
 
     const handleOscNotification = useCallback(
       (data: string, parser: (value: string) => ParsedTerminalNotification | null) => {
-        if (!inputReadyRef.current) {
+        if (useTerminalEventSupport.getState().supported || !inputReadyRef.current) {
           return true;
         }
 
@@ -834,6 +871,14 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
     const connectWebSocket = useCallback(
       (terminal: Terminal) => {
         clearReconnectTimer();
+        if (pendingBytesRef.current > 0) {
+          reconnectTimerRef.current = setTimeout(() => {
+            if (!isUnmountingRef.current) connectWebSocket(terminal);
+          }, 25);
+          return;
+        }
+        const connectionEpoch = ++connectionEpochRef.current;
+        let streamId: string | undefined;
         setLifecycle(cacheHydratedRef.current ? "replaying" : "hydrating");
 
         if (wsRef.current) {
@@ -866,7 +911,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
           lastAckCursorRef.current = cursorValue;
           if (wsRef.current === ws && ws.readyState === WebSocket.OPEN) {
             try {
-              ws.send(JSON.stringify({ type: "ack", cursor: cursorValue }));
+              ws.send(JSON.stringify({ type: "ack", cursor: cursorValue, stream_id: streamId }));
             } catch {}
           }
         };
@@ -902,26 +947,50 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
           try {
             const msg = JSON.parse(event.data);
             if (msg.type === "replay" || msg.type === "output") {
+              if (typeof msg.stream_id === "string") streamId = msg.stream_id;
+              const writeStream = streamId;
               const hasCursor = typeof msg.cursor === "number" && Number.isFinite(msg.cursor);
               const cursorValue = hasCursor ? msg.cursor : undefined;
-              if (cursorValue !== undefined && !msg.reset && cursorValue <= lastCursorRef.current) {
+              if (cursorValue !== undefined && !msg.reset && !msg.flow && cursorValue <= lastCursorRef.current) {
                 return;
               }
               if (msg.reset) {
                 terminal.reset();
+                lastCursorRef.current = cursorValue ?? 0;
+                lastAckCursorRef.current = cursorValue ?? 0;
+                replayServerDoneRef.current = false;
+                inputReadyRef.current = false;
+                if (msg.reason === "history_expired")
+                  toast.info(callbacksRef.current.t("terminal.historyExpired"), {
+                    id: `terminal-history-${terminalId}`,
+                  });
                 pendingReplayWritesRef.current = 0;
                 lastSavedCursorRef.current = 0;
               }
 
               let hasOutput = false;
+              let queuedBytes = 0;
               try {
                 if (typeof msg.data === "string" && msg.data.length > 0) {
                   const bytes = decodeBase64Bytes(msg.data);
+                  if (pendingBytesRef.current + bytes.length > 1024 * 1024 && !msg.reset) {
+                    ws.close();
+                    return;
+                  }
                   hasOutput = bytes.length > 0;
                   if (hasOutput && msg.type === "replay") {
                     pendingReplayWritesRef.current += 1;
                   }
+                  queuedBytes = bytes.length;
+                  pendingBytesRef.current += bytes.length;
                   terminal.write(bytes, () => {
+                    pendingBytesRef.current = Math.max(0, pendingBytesRef.current - bytes.length);
+                    if (
+                      connectionEpochRef.current !== connectionEpoch ||
+                      writeStream !== streamId ||
+                      terminalRef.current !== terminal
+                    )
+                      return;
                     if (cursorValue !== undefined) {
                       lastCursorRef.current = cursorValue;
                       sendAck(cursorValue);
@@ -934,7 +1003,11 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
                   });
                 }
               } catch (e) {
-                console.warn("Failed to decode base64:", e);
+                pendingBytesRef.current = Math.max(0, pendingBytesRef.current - queuedBytes);
+                console.warn("Failed to write terminal output:", e);
+                // Do not acknowledge a frame that xterm did not accept.
+                ws.close();
+                return;
               }
               if (!hasOutput && cursorValue !== undefined) {
                 lastCursorRef.current = cursorValue;
@@ -947,14 +1020,19 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
               tryEnableInput();
               scheduleCacheSave(true);
             } else if (msg.type === "state") {
-              if (typeof msg.cursor === "number" && Number.isFinite(msg.cursor) && msg.cursor > lastCursorRef.current) {
-                lastCursorRef.current = msg.cursor;
-              }
               if (typeof msg.current_cwd === "string") {
                 currentCwdRef.current = msg.current_cwd;
               }
               readonlyRef.current = !!msg.readonly || msg.status !== "running";
               capabilitiesRef.current = (msg.capabilities || capabilitiesRef.current) as TerminalCapabilities;
+              if (typeof msg.status === "string" && msg.status !== "running") {
+                terminal.options.cursorBlink = false;
+                terminal.options.disableStdin = true;
+                callbacksRef.current.isExited = true;
+                inputReadyRef.current = false;
+                setLifecycle("exited");
+                scheduleCacheSave(true);
+              }
               emitStateChange({
                 capabilities: capabilitiesRef.current,
                 currentCwd: typeof msg.current_cwd === "string" ? msg.current_cwd : undefined,
@@ -967,14 +1045,6 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
                 shellType: typeof msg.shell_type === "string" ? msg.shell_type : undefined,
                 status: typeof msg.status === "string" ? msg.status : undefined,
               });
-              if (typeof msg.status === "string" && msg.status !== "running") {
-                terminal.options.cursorBlink = false;
-                terminal.options.disableStdin = true;
-                callbacksRef.current.isExited = true;
-                inputReadyRef.current = false;
-                setLifecycle("exited");
-                scheduleCacheSave(true);
-              }
             } else if (msg.type === "pty_exited") {
               const { t: translate, onExited: exitCallback } = callbacksRef.current;
               terminal.write(`\r\n[${translate("terminal.processExited")}]\r\n`);
@@ -1303,17 +1373,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
       if (isExited) {
         inputReadyRef.current = false;
         clearReconnectTimer();
-        if (wsRef.current) {
-          const ws = wsRef.current;
-          wsRef.current = null;
-          ws.onopen = null;
-          ws.onmessage = null;
-          ws.onclose = null;
-          ws.onerror = null;
-          try {
-            ws.close();
-          } catch {}
-        }
+        // Exited terminals still need the socket to finish replaying their history.
       }
     }, [isActive, isFocused, isExited, onExited, setLifecycle, t, terminalName]);
 
@@ -1328,7 +1388,10 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
       const fitAddon = fitAddonRef.current;
       if (!terminal) return;
       terminal.options.fontFamily = getResolvedTerminalFontFamily(terminalFontFamily, terminalFontFallbackFamily);
-      requestAnimationFrame(() => fitAddon?.fit());
+      const frame = requestAnimationFrame(() => {
+        if (terminalRef.current === terminal) fitAddon?.fit();
+      });
+      return () => cancelAnimationFrame(frame);
     }, [terminalFontFamily, terminalFontFallbackFamily]);
 
     useEffect(() => {
@@ -1338,6 +1401,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
 
     useEffect(() => {
       if (!containerRef.current || initializedRef.current) return;
+      let disposed = false;
 
       initializedRef.current = true;
       isUnmountingRef.current = false;
@@ -1348,10 +1412,12 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
       inputReadyRef.current = false;
       lastSavedCursorRef.current = 0;
       cacheHydratedRef.current = false;
-      readonlyRef.current = isExited;
+      const initiallyExited = callbacksRef.current.isExited;
+      readonlyRef.current = initiallyExited;
       capabilitiesRef.current = DEFAULT_TERMINAL_CAPABILITIES;
-      setLifecycle(isExited ? "exited" : "hydrating");
+      setLifecycle(initiallyExited ? "exited" : "hydrating");
 
+      cacheOwnerRef.current = acquireTerminalCacheOwner(terminalId);
       const terminal = new Terminal({
         cursorBlink: true,
         fontSize: 14,
@@ -1367,7 +1433,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
       const unicode11Addon = new Unicode11Addon();
       const webLinksAddon = new WebLinksAddon();
       const clipboardAddon = new ClipboardAddon();
-      const imageAddon = new ImageAddon();
+      const imageAddon = new ImageAddon({ storageLimit: 16 });
       const progressAddon = new ProgressAddon();
 
       terminal.loadAddon(unicode11Addon);
@@ -1395,15 +1461,16 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
       terminal.textarea?.setAttribute("name", `terminal-input-${terminalId}`);
       terminal.unicode.activeVersion = "11";
 
+      let ligaturesAddon: LigaturesAddon | null = null;
+      let webglAddon: WebglAddon | null = null;
       if (shouldEnableTerminalWebgl()) {
         try {
-          const webglAddon = new WebglAddon();
-          webglAddon.onContextLoss(() => {
-            webglAddon.dispose();
-          });
-          terminal.loadAddon(webglAddon);
+          const addon = new WebglAddon();
+          webglAddon = addon;
+          addon.onContextLoss(() => addon.dispose());
+          terminal.loadAddon(addon);
           try {
-            const ligaturesAddon = new LigaturesAddon();
+            ligaturesAddon = new LigaturesAddon();
             terminal.loadAddon(ligaturesAddon);
           } catch {}
         } catch {}
@@ -1418,15 +1485,17 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
       progressAddonRef.current = progressAddon;
 
       void readTerminalSessionCache(terminalId).then((cache) => {
-        if (isUnmountingRef.current) {
-          return;
-        }
+        if (disposed || terminalRef.current !== terminal) return;
         if (!cache?.serialized) {
           cacheHydratedRef.current = true;
           connectWebSocket(terminal);
           return;
         }
+        if (Number.isInteger(cache.cols) && cache.cols > 0 && Number.isInteger(cache.rows) && cache.rows > 0)
+          terminal.resize(cache.cols, cache.rows);
         terminal.write(cache.serialized, () => {
+          if (disposed || terminalRef.current !== terminal) return;
+          if (cache.viewportY !== undefined) terminal.scrollToLine(cache.viewportY);
           lastCursorRef.current = cache.cursor;
           lastAckCursorRef.current = cache.cursor;
           lastSavedCursorRef.current = cache.cursor;
@@ -1438,6 +1507,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
 
       oscHandlersRef.current = [
         terminal.parser.registerOscHandler(7, (data) => {
+          if (useTerminalEventSupport.getState().supported || !inputReadyRef.current) return true;
           const cwd = parseOsc7Path(data);
           if (cwd) {
             updateRuntimeInfo({ current_cwd: cwd });
@@ -1446,7 +1516,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
           return true;
         }),
         terminal.parser.registerOscHandler(52, (data) => {
-          if (!document.hasFocus()) {
+          if (!callbacksRef.current.isFocused || !inputReadyRef.current || !document.hasFocus()) {
             return true;
           }
           const separatorIndex = data.indexOf(";");
@@ -1467,6 +1537,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
           return true;
         }),
         terminal.parser.registerOscHandler(16162, (data) => {
+          if (useTerminalEventSupport.getState().supported || !inputReadyRef.current) return true;
           const [command = "", ...rest] = data.split(";");
           let payload: Record<string, unknown> = {};
           if (rest.length > 0) {
@@ -1590,12 +1661,15 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
       });
 
       return () => {
+        disposed = true;
         isUnmountingRef.current = true;
         inputReadyRef.current = false;
         cancelSelectionMenuFrame();
         clearReconnectTimer();
         clearCacheSaveTimer();
         void persistTerminalCache();
+        cacheOwnerRef.current?.release();
+        connectionEpochRef.current++;
         if (wsRef.current) {
           const ws = wsRef.current;
           wsRef.current = null;
@@ -1609,6 +1683,9 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
         }
         disposeOscHandlers();
         unbindMousePaste();
+        // Renderer addons can schedule a refresh while disposing; retire them before the core.
+        ligaturesAddon?.dispose();
+        webglAddon?.dispose();
         terminal.dispose();
         terminalRef.current = null;
         fitAddonRef.current = null;
@@ -1628,12 +1705,11 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
       queueSelectionMenuUpdate,
       setLifecycle,
       terminalId,
-      isExited,
     ]);
 
     useEffect(() => {
       if (isActive && fitAddonRef.current && terminalRef.current) {
-        setTimeout(() => {
+        const timer = setTimeout(() => {
           fitAddonRef.current?.fit();
 
           if (wsRef.current?.readyState === WebSocket.OPEN && terminalRef.current) {
@@ -1641,6 +1717,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
             wsRef.current.send(JSON.stringify({ type: "resize", cols, rows }));
           }
         }, 50);
+        return () => clearTimeout(timer);
       }
     }, [isActive]);
 
@@ -1742,6 +1819,8 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
     return (
       <div
         ref={wrapperRef}
+        data-terminal-id={terminalId}
+        data-lifecycle={lifecycleState}
         className="absolute inset-0"
         style={{
           display: isActive ? "block" : "none",
@@ -1924,6 +2003,33 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
   }
 );
 
-TerminalInstance.displayName = "TerminalInstance";
+MountedTerminalInstance.displayName = "MountedTerminalInstance";
 
+const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstanceProps>((props, ref) => {
+  const supported = useTerminalEventSupport((state) => state.supported);
+  const activeGroup = useFrameStore((state) => state.activeGroupId);
+  const group = useTerminalStore(
+    (state) =>
+      Object.entries(state.terminalsByGroup).find(([, terminals]) =>
+        terminals.some((terminal) => terminal.id === props.terminalId)
+      )?.[0]
+  );
+  const visible = props.isActive && (!group || group === activeGroup);
+  const retained = useTerminalViewBudget(visible, supported);
+  useEffect(() => {
+    if (!visible || !(props.isFocused ?? props.isActive)) return;
+    focusedTerminalViews.add(props.terminalId);
+    return () => {
+      focusedTerminalViews.delete(props.terminalId);
+    };
+  }, [visible, props.isFocused, props.isActive, props.terminalId]);
+  return retained ? (
+    <MountedTerminalInstance
+      {...props}
+      isActive={visible}
+      isFocused={visible && (props.isFocused ?? props.isActive)}
+      ref={ref}
+    />
+  ) : null;
+});
 export default TerminalInstance;

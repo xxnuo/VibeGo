@@ -25,13 +25,15 @@ const (
 )
 
 type WSMessage struct {
+	StreamID            string               `json:"stream_id,omitempty"`
+	Flow                string               `json:"flow,omitempty"`
 	Type                string               `json:"type"`
 	Data                string               `json:"data,omitempty"`
 	Reason              InputRejectedReason  `json:"reason,omitempty"`
 	Cols                int                  `json:"cols,omitempty"`
 	Rows                int                  `json:"rows,omitempty"`
 	Signal              string               `json:"signal,omitempty"`
-	Cursor              uint64               `json:"cursor,omitempty"`
+	Cursor              uint64               `json:"cursor"`
 	Reset               bool                 `json:"reset,omitempty"`
 	Status              string               `json:"status,omitempty"`
 	ExitCode            *int                 `json:"exit_code,omitempty"`

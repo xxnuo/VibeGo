@@ -8,6 +8,46 @@ import (
 	"gorm.io/gorm"
 )
 
+func terminalSplitFamily(db *gorm.DB, id string) (string, []string, error) {
+	var ids []string
+	var workspaceID, groupID string
+	seen := map[string]bool{}
+	for !seen[id] {
+		seen[id] = true
+		var session model.TerminalSession
+		if err := db.First(&session, "id = ?", id).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) && len(ids) > 0 {
+				return id, ids, nil
+			}
+			return "", nil, err
+		}
+		if len(ids) == 0 {
+			workspaceID, groupID = session.WorkspaceSessionID, session.GroupID
+		} else if session.WorkspaceSessionID != workspaceID || session.GroupID != groupID {
+			return "", nil, ErrTerminalScopeMismatch
+		}
+		ids = append(ids, id)
+		if session.SplitGroupID != "" {
+			return session.SplitGroupID, ids, nil
+		}
+		if session.ParentID == "" {
+			return id, ids, nil
+		}
+		id = session.ParentID
+	}
+	return "", nil, fmt.Errorf("%w: cyclic split ancestry", ErrInvalidWorkspaceState)
+}
+
+func (m *Manager) updateActiveSplitFamily(ids []string, family string) {
+	for _, id := range ids {
+		if active, ok := m.getActive(id); ok {
+			active.sessionMu.Lock()
+			active.Session.SplitGroupID = family
+			active.sessionMu.Unlock()
+		}
+	}
+}
+
 func (m *Manager) notifyWorkspace(id, terminalID, action string) {
 	if m.workspaceChanged != nil && id != "" {
 		m.workspaceChanged(id, terminalID, action)

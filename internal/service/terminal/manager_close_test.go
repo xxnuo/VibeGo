@@ -203,6 +203,41 @@ func TestManagerCloseFlushesReaderTail(t *testing.T) {
 	}
 }
 
+func TestManagerClosePersistsInactivePageClosureAndKeepsHistory(t *testing.T) {
+	db := setupTestDB(t)
+	manager := NewManager(db, &ManagerConfig{Shell: "/bin/sh"})
+	session := model.TerminalSession{
+		ID: "closed-page", WorkspaceSessionID: "workspace", GroupID: "group",
+		ParentID: "parent", Status: model.StatusExited, ExitCode: 23,
+	}
+	if err := db.Create(&session).Error; err != nil {
+		t.Fatal(err)
+	}
+	history := model.TerminalHistory{SessionID: session.ID, Data: []byte("saved output"), Cursor: 12}
+	if err := db.Create(&history).Error; err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := manager.Close(session.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.First(&session, "id = ?", session.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if session.Status != model.StatusClosed || !session.Readonly || session.ExitCode != 23 {
+		t.Fatalf("page closure was not persisted: %+v", session)
+	}
+	page, err := manager.ListHistory("workspace", "group", "", 50)
+	if err != nil || len(page.Terminals) != 1 || page.Terminals[0].ParentID != "parent" {
+		t.Fatalf("closed page lost its history scope: %+v, %v", page, err)
+	}
+	snapshot, err := manager.loadSnapshot(session.ID)
+	if err != nil || snapshot == nil || string(snapshot.Data) != "saved output" {
+		t.Fatalf("closed page lost its output: %+v, %v", snapshot, err)
+	}
+}
+
 func TestManagerCloseReturnsRuntimeCloseError(t *testing.T) {
 	db := setupTestDB(t)
 	manager := NewManager(db, &ManagerConfig{Shell: "/bin/sh"})

@@ -61,6 +61,68 @@ test("workspace mutation engine preserves inventory, viewport and durable intent
     remote("tab/close",{id:"peer-tab",folder_id:"folder",page_id:"folder-files"});remote("folder/remove",{id:"peer-folder"});
     assert.equal(frame.getState().activeGroupId,"folder");assert.equal(frame.getState().getCurrentActiveTabId(),"file-a");
   });
+  await t.test("terminal creation stays unique regardless of broadcast and response order", async () => {
+    for (const broadcastFirst of [true, false]) {
+      await reset();
+      const existing = { id: "existing", name: "Terminal 1", group_id: "folder", status: "running" };
+      remote("terminal/open", { terminals: [existing] });
+      terminals.getState().setActiveId("folder", existing.id);
+
+      const root = {
+        id: "created", name: "Terminal 2", group_id: "folder", status: "running",
+        cwd: "/repo", current_cwd: "/repo/subdir", readonly: true, runtime_type: "local",
+      };
+      const complete = terminal => terminals.getState().addTerminal("folder", {
+        id: terminal.id, name: terminal.name, cwd: "/repo", parentId: terminal.parent_id,
+      });
+      if (!broadcastFirst) complete(root);
+      remote("terminal/open", { terminals: [existing, root] });
+      if (broadcastFirst) {
+        assert.equal(terminals.getState().activeIdByGroup.folder, existing.id);
+        complete(root);
+      }
+      const state = terminals.getState();
+      assert.deepEqual(state.getTerminals("folder").map(terminal => terminal.id), [existing.id, root.id]);
+      assert.equal(state.activeIdByGroup.folder, root.id);
+      assert.equal(state.focusedIdByGroup.folder, root.id);
+      assert.equal(state.listManagerOpenByGroup.folder, false);
+      assert.deepEqual(state.terminalLayouts[root.id], { type: "terminal", terminalId: root.id });
+      assert.equal(state.getTerminals("folder")[1].currentCwd, root.current_cwd);
+      assert.equal(state.getTerminals("folder")[1].readonly, true);
+
+      const child = { id: "child", name: "Terminal 3", group_id: "folder", parent_id: root.id, status: "running" };
+      if (!broadcastFirst) complete(child);
+      remote("terminal/open", { terminals: [existing, root, child] });
+      if (broadcastFirst) complete(child);
+      terminals.getState().splitTerminal(root.id, root.id, child.id, "horizontal");
+      assert.deepEqual(terminals.getState().getTerminals("folder").map(terminal => terminal.id), [existing.id, root.id, child.id]);
+      assert.deepEqual(terminals.getState().getRootTerminals("folder").map(terminal => terminal.id), [existing.id, root.id]);
+      assert.equal(terminals.getState().activeIdByGroup.folder, root.id);
+      assert.equal(terminals.getState().terminalLayouts[root.id].second.terminalId, child.id);
+
+      remote("terminal/close", { terminals: [existing, root, { ...child, status: "exited" }] });
+      complete(child);
+      assert.equal(terminals.getState().getTerminals("folder").some(terminal => terminal.id === child.id), false, "late create response cannot resurrect an exited pane");
+    }
+  });
+  await t.test("closed terminal pages stay absent after peer updates, refresh and reconnect", async () => {
+    await reset();
+    const running = { id: "running", name: "Running", group_id: "folder", status: "running" };
+    const exited = { id: "exited", name: "Exited", group_id: "folder", status: "exited" };
+    remote("terminal/open", { terminals: [running, exited] });
+    terminals.getState().setActiveId("folder", running.id);
+    const closed = { ...running, status: "closed" };
+    remote("terminal/update", { terminals: [closed, exited] });
+    const assertPages = () => assert.deepEqual(terminals.getState().getTerminals("folder").map(term => term.id), [exited.id]);
+    assertPages();
+    assert.equal(terminals.getState().terminalLayouts[running.id], undefined);
+    await sync.getState().refresh();
+    assertPages();
+    sync.getState().disconnect();
+    terminals.getState().reset();
+    await sync.getState().connect(workspaceId, structuredClone(authority));
+    assertPages();
+  });
   await t.test("all local asset entry points emit atomic actions without viewport or dirty data",async()=>{
     await reset();
     frame.getState().setActiveGroup("folder");frame.getState().showHomePage();frame.getState().setActiveGroup("folder");
@@ -106,9 +168,55 @@ test("workspace mutation engine preserves inventory, viewport and durable intent
     state.fileManagerByGroup={folder:{searchQuery:"private draft"}};
     saveWorkspaceViewport(workspaceId,state);
     const raw=sessionStorage.getItem(`vibego:viewport:${workspaceId}`);
-    assert.doesNotMatch(raw,/openGroups|openTools|terminalsByGroup|terminalLayouts|private draft|searchQuery|\/repo/);
+    assert.doesNotMatch(raw,/openGroups|openTools|terminalsByGroup|private draft|searchQuery|\/repo/);
     assert.equal(workspaceSnapshotState(authority).activeGroupId,"folder");
     assert.deepEqual(workspaceSnapshotState(authority).fileManagerByGroup,{});
+  });
+  await t.test("nested terminal splits survive page switches, workspace switches and a fresh module", async () => {
+    await reset();
+    const root = { id: "root", name: "Root", group_id: "folder", status: "running" };
+    const child = { id: "child", name: "Child", group_id: "folder", parent_id: root.id, status: "running" };
+    const nested = { id: "nested", name: "Nested", group_id: "folder", parent_id: root.id, status: "running" };
+    const other = { id: "other", name: "Other", group_id: "folder", status: "running" };
+    remote("terminal/open", { terminals: [root, child, nested, other] });
+    terminals.getState().addTerminal("folder", { id: root.id, name: root.name });
+    terminals.getState().splitTerminal(root.id, root.id, child.id, "horizontal");
+    terminals.getState().splitTerminal(root.id, child.id, nested.id, "vertical");
+    terminals.getState().updateSplitRatio("folder", [], 0.35);
+    terminals.getState().updateSplitRatio("folder", [1], 0.7);
+    const layout = structuredClone(terminals.getState().terminalLayouts[root.id]);
+    terminals.getState().setActiveId("folder", other.id);
+    terminals.getState().setActiveId("folder", root.id);
+    terminals.getState().setFocusedId("folder", nested.id);
+    assert.deepEqual(terminals.getState().getActiveLayout("folder"), layout);
+    const state = workspaceSnapshotState(authority);
+    Object.assign(state, {
+      terminalLayouts: terminals.getState().terminalLayouts,
+      activeTerminalByGroup: terminals.getState().activeIdByGroup,
+      focusedIdByGroup: terminals.getState().focusedIdByGroup,
+      listManagerOpenByGroup: { folder: false },
+    });
+    saveWorkspaceViewport(workspaceId, state);
+    terminals.getState().reset();
+    const fresh = await load("stores/workspace-viewport.ts?terminal-split-reload");
+    const restored = fresh.workspaceSnapshotState(authority);
+    assert.deepEqual(restored.terminalLayouts[root.id], layout);
+    assert.equal(restored.activeTerminalByGroup.folder, root.id);
+    assert.equal(restored.focusedIdByGroup.folder, nested.id);
+    assert.equal(restored.listManagerOpenByGroup.folder, false);
+    assert.deepEqual(restored.terminalsByGroup.folder.map(terminal => terminal.id), [root.id, child.id, nested.id, other.id]);
+  });
+  await t.test("terminals with saved parent IDs recover a visible split when the old viewport lost its layout", async () => {
+    await reset();
+    const root = { id: "root", name: "Root", group_id: "folder", status: "running" };
+    const child = { id: "child", name: "Child", group_id: "folder", parent_id: root.id, status: "running" };
+    remote("terminal/open", { terminals: [root, child] });
+    const restored = workspaceSnapshotState(authority);
+    assert.deepEqual(restored.terminalLayouts[root.id], {
+      type: "split", direction: "horizontal", ratio: 0.5,
+      first: { type: "terminal", terminalId: root.id },
+      second: { type: "terminal", terminalId: child.id },
+    });
   });
   await t.test("slow previous workspace hydration cannot replace a newer workspace",async()=>{
     await reset();let resolve;workspaceApi.getSnapshot=()=>new Promise(done=>{resolve=done;});
@@ -129,7 +237,9 @@ test("workspace mutation engine preserves inventory, viewport and durable intent
     await reset();
     const {useSessionStore:sessions}=await load("stores/session-store.ts");
     const {sessionApi}=await load("api/session.ts");const {terminalApi}=await load("api/terminal.ts");
-    const list=sessionApi.list,terminalList=terminalApi.list;
+    const {settingsApi}=await load("api/settings.ts");
+    const list=sessionApi.list,terminalList=terminalApi.list,settingsSet=settingsApi.set;
+    settingsApi.set=async()=>({ok:true});
     let resolve;sessionApi.list=()=>new Promise(done=>{resolve=done;});terminalApi.list=async()=>({terminals:[]});
     sessionStorage.setItem("workspaceCurrentSessionId",workspaceId);
     sessions.setState({currentSessionId:null,sessions:[],loading:false,sessionInitialized:false});
@@ -139,6 +249,6 @@ test("workspace mutation engine preserves inventory, viewport and durable intent
       resolve({sessions:[{id:workspaceId,name:"Workspace"}],page:1,page_size:50,total:1});
       assert.equal(await pending,true);assert.equal(sessions.getState().currentSessionId,workspaceId);
       assert.ok(Socket.instances.some(socket=>new URL(socket.url).searchParams.get("workspace_id")==="*"));
-    } finally {sessionApi.list=list;terminalApi.list=terminalList;}
+    } finally {sessionApi.list=list;terminalApi.list=terminalList;settingsApi.set=settingsSet;}
   });
 });

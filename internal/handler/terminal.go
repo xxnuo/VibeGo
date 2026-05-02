@@ -77,13 +77,13 @@ type TerminalInfo struct {
 	Cols                int                           `json:"cols"`
 	Rows                int                           `json:"rows"`
 	RuntimeType         string                        `json:"runtime_type"`
-	SSHProfileID        string                        `json:"ssh_profile_id,omitempty"`
 	Readonly            bool                          `json:"readonly"`
 	Capabilities        terminal.TerminalCapabilities `json:"capabilities"`
 	Status              string                        `json:"status"`
 	WorkspaceSessionID  string                        `json:"workspace_session_id"`
 	GroupID             string                        `json:"group_id"`
 	ParentID            string                        `json:"parent_id"`
+	SplitGroupID        string                        `json:"split_group_id"`
 	ExitCode            int                           `json:"exit_code"`
 	HistorySize         int64                         `json:"history_size"`
 	ShellType           string                        `json:"shell_type"`
@@ -105,6 +105,20 @@ type TerminalInfo struct {
 func (h *TerminalHandler) List(c *gin.Context) {
 	workspaceSessionID := c.Query("workspace_session_id")
 	groupID := c.Query("group_id")
+	if c.Query("status") == "history" {
+		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+		page, err := h.manager.ListHistory(workspaceSessionID, groupID, c.Query("before"), limit)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, terminal.ErrInvalidHistoryCursor) {
+				status = http.StatusBadRequest
+			}
+			c.JSON(status, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, page)
+		return
+	}
 	sessions, err := h.manager.List(workspaceSessionID, groupID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -123,13 +137,13 @@ func (h *TerminalHandler) List(c *gin.Context) {
 			Cols:                s.Cols,
 			Rows:                s.Rows,
 			RuntimeType:         s.RuntimeType,
-			SSHProfileID:        s.SSHProfileID,
 			Readonly:            s.Readonly,
 			Capabilities:        s.Capabilities,
 			Status:              s.Status,
 			WorkspaceSessionID:  s.WorkspaceSessionID,
 			GroupID:             s.GroupID,
 			ParentID:            s.ParentID,
+			SplitGroupID:        s.SplitGroupID,
 			ExitCode:            s.ExitCode,
 			HistorySize:         s.HistorySize,
 			ShellType:           s.ShellType,
@@ -145,17 +159,15 @@ func (h *TerminalHandler) List(c *gin.Context) {
 }
 
 type NewTerminalRequest struct {
-	Name               string         `json:"name"`
-	Cwd                string         `json:"cwd"`
-	Cols               int            `json:"cols"`
-	Rows               int            `json:"rows"`
-	UserID             string         `json:"user_id"`
-	WorkspaceSessionID string         `json:"workspace_session_id"`
-	GroupID            string         `json:"group_id"`
-	ParentID           string         `json:"parent_id"`
-	RuntimeType        string         `json:"runtime_type"`
-	SSHProfileID       string         `json:"ssh_profile_id"`
-	SSHAuth            sshAuthRequest `json:"ssh_auth"`
+	Name               string `json:"name"`
+	Cwd                string `json:"cwd"`
+	Cols               int    `json:"cols"`
+	Rows               int    `json:"rows"`
+	UserID             string `json:"user_id"`
+	WorkspaceSessionID string `json:"workspace_session_id"`
+	GroupID            string `json:"group_id"`
+	ParentID           string `json:"parent_id"`
+	RuntimeType        string `json:"runtime_type"`
 }
 
 // New godoc
@@ -169,7 +181,11 @@ type NewTerminalRequest struct {
 // @Router /api/terminal/new [post]
 func (h *TerminalHandler) New(c *gin.Context) {
 	var req NewTerminalRequest
-	if !bindLimitedJSON(c, &req, sshSecretRequestMaxBody) {
+	if !bindLimitedJSON(c, &req, 2*1024*1024) {
+		return
+	}
+	if req.RuntimeType != "" && req.RuntimeType != terminal.RuntimeTypeLocal {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported terminal runtime"})
 		return
 	}
 
@@ -183,14 +199,9 @@ func (h *TerminalHandler) New(c *gin.Context) {
 		GroupID:            req.GroupID,
 		ParentID:           req.ParentID,
 		RuntimeType:        req.RuntimeType,
-		SSHProfileID:       req.SSHProfileID,
-		SSHAuth:            req.SSHAuth.secrets(),
 		Context:            c.Request.Context(),
 	})
 	if err != nil {
-		if writeSSHError(c, err) {
-			return
-		}
 		if errors.Is(err, terminal.ErrWorkspaceNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 			return
@@ -711,8 +722,7 @@ func (h *TerminalHandler) Reset(c *gin.Context) {
 }
 
 // ProcessIdentity returns process identifiers only when the active runtime
-// can observe them. In particular, a remote SSH runtime does not report a
-// guessed local PID.
+// can observe them.
 func (h *TerminalHandler) ProcessIdentity(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {
@@ -804,13 +814,13 @@ func (h *TerminalHandler) DeleteBatch(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	deleted := 0
+	deletedIDs := []string{}
 	for _, id := range req.IDs {
-		if err := h.manager.Delete(id); err == nil {
-			deleted++
+		if err := h.manager.DeleteHistory(id); err == nil {
+			deletedIDs = append(deletedIDs, id)
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": true, "deleted": deleted})
+	c.JSON(http.StatusOK, gin.H{"ok": true, "deleted": len(deletedIDs), "deleted_ids": deletedIDs})
 }
 
 // WebSocket godoc
@@ -838,7 +848,7 @@ func (h *TerminalHandler) WebSocket(c *gin.Context) {
 		}
 	}
 
-	termConn, err := h.manager.AttachWithOptions(id, conn, terminal.AttachOptions{Cursor: cursor})
+	termConn, err := h.manager.AttachWithOptions(id, conn, terminal.AttachOptions{Cursor: cursor, Flow: c.Query("flow")})
 	if err != nil {
 		log.Error().Err(err).Str("id", id).Msg("Failed to attach to terminal")
 		conn.Close()
