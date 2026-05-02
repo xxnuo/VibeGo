@@ -11,6 +11,7 @@ import {
   Search,
   Square,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import React, { useState } from "react";
@@ -23,6 +24,7 @@ interface FileManagerToolbarProps {
   onRefresh: () => void;
   onNewFile: () => void;
   onNewFolder: () => void;
+  onUpload: () => void;
   onDeleteSelected: () => void;
   mode?: "default" | "directory-picker";
   store?: FileManagerStoreApi;
@@ -32,6 +34,7 @@ const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
   onRefresh,
   onNewFile,
   onNewFolder,
+  onUpload,
   onDeleteSelected,
   mode = "default",
   store,
@@ -195,6 +198,13 @@ const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
                     </button>
 
                     <div className="w-px h-5 bg-ide-border mx-1" />
+
+                    <button
+                      onClick={onUpload}
+                      className="p-2 rounded-md text-ide-mute hover:bg-ide-bg hover:text-ide-text"
+                    >
+                      <Upload size={18} />
+                    </button>
 
                     <button
                       onClick={onNewFile}

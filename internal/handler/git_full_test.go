@@ -1167,6 +1167,57 @@ func TestGitFullPushSetsUpstreamForNewBranch(t *testing.T) {
 	assert.Equal(t, head, remoteRefs[0])
 }
 
+func TestGitFullTagsLifecycle(t *testing.T) {
+	dir := setupFullRepo(t)
+	defer os.RemoveAll(dir)
+
+	remoteDir, err := os.MkdirTemp("", "git-tags-remote")
+	require.NoError(t, err)
+	defer os.RemoveAll(remoteDir)
+
+	remotePath := filepath.Join(remoteDir, "origin.git")
+	runGitCommand(t, remoteDir, "init", "--bare", remotePath)
+	runGitCommand(t, dir, "remote", "add", "origin", remotePath)
+	baseBranch := runGitCommand(t, dir, "branch", "--show-current")
+	runGitCommand(t, dir, "push", "-u", "origin", baseBranch)
+
+	head := runGitCommand(t, dir, "rev-parse", "HEAD")
+	r, _ := setupRouter()
+
+	w := postJSON(r, "/git/create-tag", map[string]string{"path": dir, "name": "v1.0.0", "commit": head})
+	assert.Equal(t, http.StatusOK, w.Code)
+	var created GitTagsSnapshot
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &created))
+	assert.Contains(t, created.TagsToPush, "v1.0.0")
+
+	w = postJSON(r, "/git/log", map[string]interface{}{"path": dir, "limit": 1})
+	assert.Equal(t, http.StatusOK, w.Code)
+	var logResp struct {
+		Commits []CommitInfo `json:"commits"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &logResp))
+	require.NotEmpty(t, logResp.Commits)
+	assert.Contains(t, logResp.Commits[0].Tags, "v1.0.0")
+
+	w = postJSON(r, "/git/delete-tag", map[string]string{"path": dir, "name": "v1.0.0"})
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	w = postJSON(r, "/git/create-tag", map[string]string{"path": dir, "name": "v1.0.0", "commit": head})
+	assert.Equal(t, http.StatusOK, w.Code)
+	w = postJSON(r, "/git/push", map[string]interface{}{"path": dir, "remote": "origin", "tags": []string{"v1.0.0"}})
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, head, runGitCommand(t, remotePath, "rev-list", "-n", "1", "refs/tags/v1.0.0"))
+
+	w = postJSON(r, "/git/tags", map[string]string{"path": dir})
+	assert.Equal(t, http.StatusOK, w.Code)
+	var pushed GitTagsSnapshot
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &pushed))
+	assert.Empty(t, pushed.TagsToPush)
+
+	w = postJSON(r, "/git/delete-tag", map[string]string{"path": dir, "name": "v1.0.0"})
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
 func TestGitFullPushRestoresGoneUpstream(t *testing.T) {
 	dir := setupFullRepo(t)
 	defer os.RemoveAll(dir)

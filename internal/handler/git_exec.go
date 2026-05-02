@@ -63,7 +63,7 @@ func loadGitShellEnv() []string {
 	if shell == "" {
 		return nil
 	}
-	for _, args := range [][]string{{"-ilc", "env -0"}, {"-lc", "env -0"}, {"-c", "env -0"}} {
+	for _, args := range [][]string{{"-lc", "env -0"}, {"-c", "env -0"}} {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		cmd := exec.CommandContext(ctx, shell, args...)
 		cmd.Env = os.Environ()

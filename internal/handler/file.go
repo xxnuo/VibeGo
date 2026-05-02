@@ -879,8 +879,21 @@ func (h *FileHandler) Upload(c *gin.Context) {
 	}
 	var uploaded []string
 	var errs []string
-	for _, file := range files {
-		dstPath := filepath.Join(dstDir, file.Filename)
+	for i, file := range files {
+		name := file.Filename
+		if relativePaths := form.Value["relativePath"]; len(relativePaths) > i {
+			name = relativePaths[i]
+		}
+		name = filepath.Clean(filepath.FromSlash(name))
+		if name == "." || filepath.IsAbs(name) || strings.HasPrefix(name, ".."+string(filepath.Separator)) || name == ".." {
+			errs = append(errs, fmt.Sprintf("%s: invalid path", file.Filename))
+			continue
+		}
+		dstPath := filepath.Join(dstDir, name)
+		if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %s", file.Filename, err.Error()))
+			continue
+		}
 		if !overwrite {
 			if _, err := os.Stat(dstPath); err == nil {
 				errs = append(errs, fmt.Sprintf("%s: file exists", file.Filename))

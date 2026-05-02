@@ -13,14 +13,16 @@ import {
   Image,
   Loader2,
   Music,
+  Upload,
 } from "lucide-react";
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useStore } from "zustand";
 import { fileApi } from "@/api/file";
 import { useDialog } from "@/components/common";
 import FileDetailSheet from "@/components/file/file-detail-sheet";
 import FileManagerBreadcrumb from "@/components/file/file-manager-breadcrumb";
 import FileManagerToolbar from "@/components/file/file-manager-toolbar";
+import FileUploadPanel from "@/components/file/file-upload-panel";
 import { useFrameController } from "@/framework/frame/controller";
 import { getIntlLocale, type Locale, useTranslation } from "@/lib/i18n";
 import { useSettingsStore } from "@/lib/settings";
@@ -144,6 +146,7 @@ const FileManager: React.FC<FileManagerProps> = ({
   const locale = (useSettingsStore((s) => s.settings.locale) || "zh") as Locale;
   const t = useTranslation(locale);
   const dialog = useDialog();
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const listRef = useRef<HTMLDivElement>(null);
   const skipLoadPathRef = useRef<string | null>(null);
@@ -249,6 +252,12 @@ const FileManager: React.FC<FileManagerProps> = ({
       return;
     }
     setPageMenuItems([
+      {
+        id: "upload",
+        icon: <Upload size={20} />,
+        label: t("fileManager.upload"),
+        onClick: () => setUploadOpen(true),
+      },
       {
         id: "new-file",
         icon: <FilePlus size={20} />,
@@ -365,6 +374,7 @@ const FileManager: React.FC<FileManagerProps> = ({
         onRefresh={handleRefresh}
         onNewFile={handleShowNewFileDialog}
         onNewFolder={handleShowNewFolderDialog}
+        onUpload={() => setUploadOpen(true)}
         onDeleteSelected={handleDeleteSelected}
         mode={mode}
         store={storeApi}
@@ -422,13 +432,21 @@ const FileManager: React.FC<FileManagerProps> = ({
       </div>
 
       {mode === "default" && (
-        <FileDetailSheet
-          file={detailFile}
-          open={!!detailFile}
-          onClose={() => setDetailFile(null)}
-          onDelete={handleDelete}
-          onRename={handleShowRenameDialog}
-        />
+        <>
+          <FileUploadPanel
+            open={uploadOpen}
+            currentPath={currentPath}
+            onOpenChange={setUploadOpen}
+            onUploaded={handleRefresh}
+          />
+          <FileDetailSheet
+            file={detailFile}
+            open={!!detailFile}
+            onClose={() => setDetailFile(null)}
+            onDelete={handleDelete}
+            onRename={handleShowRenameDialog}
+          />
+        </>
       )}
     </div>
   );

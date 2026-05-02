@@ -1,4 +1,4 @@
-import { API_BASE, request } from "@/api/request";
+import { API_BASE, getAuthHeaders, request } from "@/api/request";
 
 export interface FileInfo {
   path: string;
@@ -48,6 +48,23 @@ export interface GrepMatch {
   file: string;
   line: number;
   content: string;
+}
+
+export interface UploadFileEntry {
+  file: File;
+  relativePath?: string;
+}
+
+export interface UploadProgress {
+  loaded: number;
+  total: number;
+  percent: number;
+}
+
+export interface UploadResult {
+  ok: boolean;
+  uploaded: string[];
+  errors?: string[];
 }
 
 export const fileApi = {
@@ -147,6 +164,46 @@ export const fileApi = {
     request<{ exist: boolean; path?: string }>("/file/check", {
       method: "POST",
       body: JSON.stringify({ path }),
+    }),
+
+  upload: (
+    path: string,
+    files: UploadFileEntry[],
+    opts?: { overwrite?: boolean; onProgress?: (progress: UploadProgress) => void }
+  ) =>
+    new Promise<UploadResult>((resolve, reject) => {
+      const form = new FormData();
+      form.append("path", path);
+      if (opts?.overwrite) form.append("overwrite", "true");
+      for (const entry of files) {
+        const relativePath = entry.relativePath || entry.file.webkitRelativePath || entry.file.name;
+        form.append("relativePath", relativePath);
+        form.append("file", entry.file, relativePath);
+      }
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${API_BASE}/file/upload`);
+      for (const [key, value] of Object.entries(getAuthHeaders())) {
+        xhr.setRequestHeader(key, value);
+      }
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        opts?.onProgress?.({
+          loaded: event.loaded,
+          total: event.total,
+          percent: Math.round((event.loaded / event.total) * 100),
+        });
+      };
+      xhr.onload = () => {
+        const data = xhr.responseText ? JSON.parse(xhr.responseText) : {};
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(data as UploadResult);
+          return;
+        }
+        reject(new Error(data.error || data.errors?.join("\n") || xhr.statusText || "Upload failed"));
+      };
+      xhr.onerror = () => reject(new Error("Upload failed"));
+      xhr.send(form);
     }),
 
   compress: (files: string[], dst: string, type: "zip" | "tar.gz", name: string) =>

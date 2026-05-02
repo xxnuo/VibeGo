@@ -11,7 +11,9 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { type ITheme, Terminal } from "@xterm/xterm";
 import { Check, ChevronDown, ChevronUp, Copy, X } from "lucide-react";
 import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { toast } from "sonner";
 import "@xterm/xterm/css/xterm.css";
+import { fileApi } from "@/api/file";
 import { type TerminalCapabilities, terminalApi } from "@/api/terminal";
 import { getTerminalFontFamily } from "@/components/terminal/fonts";
 import TerminalSelectionMenu from "@/components/terminal/terminal-selection-menu";
@@ -33,6 +35,8 @@ export interface TerminalInstanceHandle {
   sendInput: (data: string) => void;
   getSelection: () => string;
   paste: (text: string) => void;
+  pasteFromClipboard: () => Promise<boolean>;
+  pasteImageFiles: (files: File[]) => Promise<boolean>;
   clearSelection: () => void;
   selectAll: () => void;
   focus: () => void;
@@ -57,6 +61,7 @@ interface TerminalInstanceProps {
   isActive: boolean;
   isFocused?: boolean;
   isExited?: boolean;
+  initialCwd?: string;
   onExited?: () => void;
   onStateChange?: (state: TerminalInstanceStateUpdate) => void;
 }
@@ -456,8 +461,51 @@ const parseOsc7Path = (value: string): string | null => {
   }
 };
 
+const MIME_EXTENSION_MAP: Record<string, string> = {
+  "image/avif": "avif",
+  "image/bmp": "bmp",
+  "image/gif": "gif",
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/svg+xml": "svg",
+  "image/webp": "webp",
+};
+
+const getImageExtension = (file: File): string => {
+  const fromMime = MIME_EXTENSION_MAP[file.type.toLowerCase()];
+  if (fromMime) {
+    return fromMime;
+  }
+  const match = file.name.match(/\.([a-z0-9]+)$/i);
+  return match?.[1]?.toLowerCase() || "png";
+};
+
+const getPasteTimestamp = (): string => {
+  const date = new Date();
+  const pad = (value: number) => value.toString().padStart(2, "0");
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+};
+
+const createPastedImageFileName = (file: File, index: number): string => {
+  const ext = getImageExtension(file);
+  const random = Math.random().toString(36).slice(2, 8);
+  const suffix = index > 0 ? `-${index + 1}` : "";
+  return `vibego-paste-${getPasteTimestamp()}-${random}${suffix}.${ext}`;
+};
+
+const joinPath = (base: string, path: string): string => {
+  const trimmedBase = base.trim() || ".";
+  if (trimmedBase === "." || trimmedBase === "/") {
+    return trimmedBase === "/" ? `/${path}` : path;
+  }
+  return `${trimmedBase.replace(/[\\/]+$/, "")}/${path}`;
+};
+
 const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstanceProps>(
-  ({ terminalId, terminalName, isActive, isFocused = isActive, isExited = false, onExited, onStateChange }, ref) => {
+  (
+    { terminalId, terminalName, isActive, isFocused = isActive, isExited = false, initialCwd, onExited, onStateChange },
+    ref
+  ) => {
     const wrapperRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const terminalRef = useRef<Terminal | null>(null);
@@ -483,6 +531,9 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
     const readonlyRef = useRef(isExited);
     const capabilitiesRef = useRef<TerminalCapabilities>(DEFAULT_TERMINAL_CAPABILITIES);
     const onStateChangeRef = useRef<TerminalInstanceProps["onStateChange"]>(onStateChange);
+    const currentCwdRef = useRef(initialCwd || "");
+    const initialCwdRef = useRef(initialCwd || "");
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
     const callbacksRef = useRef<CallbackRefs>({
       isActive,
       isFocused,
@@ -519,6 +570,13 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
       onStateChangeRef.current = onStateChange;
     }, [onStateChange]);
 
+    useEffect(() => {
+      initialCwdRef.current = initialCwd || "";
+      if (!currentCwdRef.current && initialCwd) {
+        currentCwdRef.current = initialCwd;
+      }
+    }, [initialCwd]);
+
     const disposeOscHandlers = () => {
       oscHandlersRef.current.forEach((handler) => handler.dispose());
       oscHandlersRef.current = [];
@@ -532,6 +590,9 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
     );
 
     const emitStateChange = useCallback((state: TerminalInstanceStateUpdate) => {
+      if (state.currentCwd !== undefined) {
+        currentCwdRef.current = state.currentCwd;
+      }
       onStateChangeRef.current?.(state);
     }, []);
 
@@ -890,6 +951,9 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
               if (typeof msg.cursor === "number" && Number.isFinite(msg.cursor) && msg.cursor > lastCursorRef.current) {
                 lastCursorRef.current = msg.cursor;
               }
+              if (typeof msg.current_cwd === "string") {
+                currentCwdRef.current = msg.current_cwd;
+              }
               readonlyRef.current = !!msg.readonly || msg.status !== "running";
               capabilitiesRef.current = (msg.capabilities || capabilitiesRef.current) as TerminalCapabilities;
               emitStateChange({
@@ -1025,6 +1089,88 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
       [hideSelectionMenu]
     );
 
+    const pasteTextFromClipboard = useCallback(async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text && terminalRef.current) {
+          terminalRef.current.paste(text);
+          return true;
+        }
+      } catch {}
+      return false;
+    }, []);
+
+    const pasteImageFiles = useCallback(
+      async (files: File[]) => {
+        const images = files.filter((file) => file.type.startsWith("image/"));
+        if (images.length === 0) {
+          return false;
+        }
+        const targetDir = joinPath(currentCwdRef.current || initialCwdRef.current || ".", ".vibego/pasted-images");
+        const toastId = `terminal-paste-image-${terminalId}`;
+        toast.loading(t("terminal.pasteImageUploading"), { id: toastId });
+        try {
+          const entries = images.map((file, index) => ({
+            file,
+            relativePath: createPastedImageFileName(file, index),
+          }));
+          const result = await fileApi.upload(targetDir, entries, { overwrite: false });
+          if (!result.uploaded.length) {
+            throw new Error(result.errors?.join("\n") || t("terminal.pasteImageFailed"));
+          }
+          terminalRef.current?.paste(result.uploaded.join(" "));
+          toast.success(t("terminal.pasteImageInserted"), { id: toastId });
+          return true;
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : t("terminal.pasteImageFailed"), { id: toastId });
+          return false;
+        }
+      },
+      [t, terminalId]
+    );
+
+    const readClipboardImages = useCallback(async (): Promise<File[] | null> => {
+      if (!navigator.clipboard || typeof navigator.clipboard.read !== "function") {
+        return null;
+      }
+      try {
+        const items = await navigator.clipboard.read();
+        const files: File[] = [];
+        for (const item of items) {
+          const imageType = item.types.find((type) => type.startsWith("image/"));
+          if (!imageType) {
+            continue;
+          }
+          const blob = await item.getType(imageType);
+          files.push(new File([blob], `clipboard.${MIME_EXTENSION_MAP[imageType] || "png"}`, { type: imageType }));
+        }
+        return files;
+      } catch {
+        return null;
+      }
+    }, []);
+
+    const pasteFromClipboard = useCallback(async () => {
+      const images = await readClipboardImages();
+      if (images && images.length > 0) {
+        return pasteImageFiles(images);
+      }
+      return pasteTextFromClipboard();
+    }, [pasteImageFiles, pasteTextFromClipboard, readClipboardImages]);
+
+    const pasteFromClipboardOrPicker = useCallback(async () => {
+      const images = await readClipboardImages();
+      if (images && images.length > 0) {
+        return pasteImageFiles(images);
+      }
+      const pastedText = await pasteTextFromClipboard();
+      if (pastedText || images) {
+        return pastedText;
+      }
+      fileInputRef.current?.click();
+      return false;
+    }, [pasteImageFiles, pasteTextFromClipboard, readClipboardImages]);
+
     useImperativeHandle(
       ref,
       () => ({
@@ -1033,6 +1179,8 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
         paste: (text: string) => {
           if (terminalRef.current) terminalRef.current.paste(text);
         },
+        pasteFromClipboard: pasteFromClipboardOrPicker,
+        pasteImageFiles,
         clearSelection: () => clearTerminalSelection(),
         selectAll: () => {
           const terminal = terminalRef.current;
@@ -1040,7 +1188,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
         },
         focus: () => terminalRef.current?.focus(),
       }),
-      [sendTerminalInput, clearTerminalSelection]
+      [sendTerminalInput, pasteFromClipboardOrPicker, pasteImageFiles, clearTerminalSelection]
     );
 
     const handleSelectionCopy = useCallback(() => {
@@ -1390,14 +1538,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
         }
         if (event.type === "keydown" && shouldPasteIntoTerminal(event)) {
           event.preventDefault();
-          void navigator.clipboard
-            .readText()
-            .then((text) => {
-              if (text) {
-                terminal.paste(text);
-              }
-            })
-            .catch(() => {});
+          void pasteFromClipboard();
           return false;
         }
         const manualInput = event.type === "keydown" ? getTerminalShortcutInput(event) : null;
@@ -1473,6 +1614,7 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
       connectWebSocket,
       handleOscNotification,
       hideSelectionMenu,
+      pasteFromClipboard,
       persistTerminalCache,
       queueSelectionMenuUpdate,
       setLifecycle,
@@ -1613,11 +1755,34 @@ const TerminalInstance = React.forwardRef<TerminalInstanceHandle, TerminalInstan
         }}
         onFocusCapture={() => setTerminalBrowserShortcutFocus(terminalId, true)}
         onBlurCapture={() => setTimeout(syncBrowserShortcutFocus, 0)}
+        onPasteCapture={(e) => {
+          const files = Array.from(e.clipboardData.files).filter((file) => file.type.startsWith("image/"));
+          if (files.length === 0) {
+            return;
+          }
+          e.preventDefault();
+          void pasteImageFiles(files);
+        }}
         onPointerUpCapture={(e) => {
           selectionAnchorRef.current = { clientX: e.clientX, clientY: e.clientY };
           queueSelectionMenuUpdate();
         }}
       >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          tabIndex={-1}
+          onChange={(e) => {
+            const files = Array.from(e.target.files || []);
+            e.target.value = "";
+            if (files.length > 0) {
+              void pasteImageFiles(files);
+            }
+          }}
+        />
         <div
           ref={containerRef}
           className="absolute inset-0 [&_.xterm]:!p-0 [&_.xterm]:!m-0 [&_.xterm-viewport]:!p-0 [&_.xterm-screen]:!p-0 [&_.xterm-screen]:!m-0"

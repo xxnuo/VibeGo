@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import type { TerminalInstanceStateUpdate } from "@/components/terminal/terminal-instance";
+import type { TerminalInstanceHandle, TerminalInstanceStateUpdate } from "@/components/terminal/terminal-instance";
 import TerminalInstance from "@/components/terminal/terminal-instance";
 import type { LayoutNode } from "@/stores/terminal-store";
 
@@ -7,11 +7,12 @@ interface TerminalSplitViewProps {
   layout: LayoutNode;
   groupId: string;
   focusedId: string | null;
-  terminals: Array<{ id: string; name: string; status?: string }>;
+  terminals: Array<{ id: string; name: string; status?: string; currentCwd?: string }>;
   onFocus: (terminalId: string) => void;
   onExited: (terminalId: string) => void;
   onStateChange: (terminalId: string, state: TerminalInstanceStateUpdate) => void;
   onRatioChange: (path: number[], ratio: number) => void;
+  setTerminalRef?: (id: string) => (ref: TerminalInstanceHandle | null) => void;
   path?: number[];
 }
 
@@ -28,6 +29,7 @@ const TerminalSplitView: React.FC<TerminalSplitViewProps> = ({
   onExited,
   onStateChange,
   onRatioChange,
+  setTerminalRef,
   path = [],
 }) => {
   if (layout.type === "terminal") {
@@ -41,11 +43,13 @@ const TerminalSplitView: React.FC<TerminalSplitViewProps> = ({
         onClick={() => onFocus(layout.terminalId)}
       >
         <TerminalInstance
+          ref={setTerminalRef?.(layout.terminalId)}
           terminalId={layout.terminalId}
           terminalName={terminal?.name || "Terminal"}
           isActive={true}
           isFocused={isFocused}
           isExited={terminal?.status !== "running"}
+          initialCwd={terminal?.currentCwd}
           onExited={handleExited}
           onStateChange={handleStateChange}
         />
@@ -68,6 +72,7 @@ const TerminalSplitView: React.FC<TerminalSplitViewProps> = ({
         onExited={onExited}
         onStateChange={onStateChange}
         onRatioChange={onRatioChange}
+        setTerminalRef={setTerminalRef}
         path={[...path, 0]}
       />
       <TerminalSplitView
@@ -79,6 +84,7 @@ const TerminalSplitView: React.FC<TerminalSplitViewProps> = ({
         onExited={onExited}
         onStateChange={onStateChange}
         onRatioChange={onRatioChange}
+        setTerminalRef={setTerminalRef}
         path={[...path, 1]}
       />
     </SplitContainer>

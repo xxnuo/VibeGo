@@ -31,8 +31,9 @@ func TestNewGitCommandUsesShellEnvironment(t *testing.T) {
 	binDir := t.TempDir()
 	require.NoError(t, os.Symlink(gitPath, filepath.Join(binDir, "git")))
 
+	argsFile := filepath.Join(t.TempDir(), "args")
 	shell := filepath.Join(t.TempDir(), "shell")
-	require.NoError(t, os.WriteFile(shell, []byte("#!/bin/sh\nprintf 'PATH="+binDir+"\\0'\n"), 0755))
+	require.NoError(t, os.WriteFile(shell, []byte("#!/bin/sh\nprintf '%s\\n' \"$1\" > "+argsFile+"\nprintf 'PATH="+binDir+"\\0'\n"), 0755))
 
 	t.Setenv("SHELL", shell)
 	t.Setenv("PATH", t.TempDir())
@@ -45,6 +46,9 @@ func TestNewGitCommandUsesShellEnvironment(t *testing.T) {
 	assert.Contains(t, string(output), "git version")
 	assert.Equal(t, filepath.Join(binDir, "git"), cmd.Path)
 	assert.Contains(t, filepath.SplitList(envValue(cmd.Env, "PATH")), binDir)
+	usedArgs, err := os.ReadFile(argsFile)
+	require.NoError(t, err)
+	assert.Equal(t, "-lc\n", string(usedArgs))
 }
 
 func resetGitShellEnvCache() {

@@ -132,6 +132,9 @@ func (h *GitHandler) Register(r *gin.RouterGroup) {
 	g.POST("/commit-files", h.CommitFiles)
 	g.POST("/commit-diff", h.CommitDiff)
 	g.POST("/remotes", h.Remotes)
+	g.POST("/tags", h.Tags)
+	g.POST("/create-tag", h.CreateTag)
+	g.POST("/delete-tag", h.DeleteTag)
 	g.POST("/fetch", h.Fetch)
 	g.POST("/pull", h.Pull)
 	g.POST("/push", h.Push)
@@ -294,12 +297,13 @@ type GitLogRequest struct {
 }
 
 type CommitInfo struct {
-	Hash        string `json:"hash"`
-	Message     string `json:"message"`
-	Author      string `json:"author"`
-	AuthorEmail string `json:"authorEmail"`
-	Date        string `json:"date"`
-	ParentCount int    `json:"parentCount"`
+	Hash        string   `json:"hash"`
+	Message     string   `json:"message"`
+	Author      string   `json:"author"`
+	AuthorEmail string   `json:"authorEmail"`
+	Date        string   `json:"date"`
+	ParentCount int      `json:"parentCount"`
+	Tags        []string `json:"tags"`
 }
 
 // Log godoc
@@ -341,9 +345,9 @@ func (h *GitHandler) Log(c *gin.Context) {
 		skip = 0
 	}
 
-	format := "%x1e%H%x00%s%x00%an%x00%ae%x00%aI%x00%P"
+	format := "%x1e%H%x00%s%x00%an%x00%ae%x00%aI%x00%P%x00%D"
 	args := []string{"log", "-n", fmt.Sprintf("%d", limit),
-		fmt.Sprintf("--format=%s", format), "--no-decorate"}
+		fmt.Sprintf("--format=%s", format)}
 	if skip > 0 {
 		args = append(args, fmt.Sprintf("--skip=%d", skip))
 	}
@@ -369,8 +373,8 @@ func (h *GitHandler) Log(c *gin.Context) {
 		if entry == "" {
 			continue
 		}
-		parts := strings.SplitN(entry, "\x00", 6)
-		if len(parts) < 6 {
+		parts := strings.SplitN(entry, "\x00", 7)
+		if len(parts) < 7 {
 			continue
 		}
 		parentCount := 0
@@ -384,6 +388,7 @@ func (h *GitHandler) Log(c *gin.Context) {
 			AuthorEmail: parts[3],
 			Date:        parts[4],
 			ParentCount: parentCount,
+			Tags:        parseGitDecorationTags(parts[6]),
 		})
 	}
 
@@ -1260,6 +1265,145 @@ func (h *GitHandler) Remotes(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"remotes": result})
 }
 
+type GitTagsRequest struct {
+	Path   string `json:"path" binding:"required"`
+	Remote string `json:"remote"`
+}
+
+type GitTagInfo struct {
+	Name   string `json:"name"`
+	Commit string `json:"commit"`
+	Remote bool   `json:"remote"`
+}
+
+type GitTagsSnapshot struct {
+	Tags            []GitTagInfo `json:"tags"`
+	TagsToPush      []string     `json:"tagsToPush"`
+	TagsToPushError string       `json:"tagsToPushError,omitempty"`
+}
+
+type GitCreateTagRequest struct {
+	Path   string `json:"path" binding:"required"`
+	Name   string `json:"name" binding:"required"`
+	Commit string `json:"commit" binding:"required"`
+	Remote string `json:"remote"`
+}
+
+type GitDeleteTagRequest struct {
+	Path   string `json:"path" binding:"required"`
+	Name   string `json:"name" binding:"required"`
+	Remote string `json:"remote"`
+}
+
+func (h *GitHandler) Tags(c *gin.Context) {
+	var req GitTagsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	repoRoot, err := h.getRepoRoot(req.Path)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	remoteName := req.Remote
+	if remoteName == "" {
+		remoteName = "origin"
+	}
+	c.JSON(http.StatusOK, collectTagsSnapshot(repoRoot, remoteName))
+}
+
+func (h *GitHandler) CreateTag(c *gin.Context) {
+	var req GitCreateTagRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	repoRoot, err := h.getRepoRoot(req.Path)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := validateGitTagName(repoRoot, req.Name); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(req.Commit) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "commit is required"})
+		return
+	}
+
+	cmd := newGitCommand("tag", "-a", "-m", "", req.Name, req.Commit)
+	cmd.Dir = repoRoot
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": gitCommandError(err, output).Error()})
+		return
+	}
+
+	remoteName := req.Remote
+	if remoteName == "" {
+		remoteName = "origin"
+	}
+	snapshot := collectTagsSnapshot(repoRoot, remoteName)
+	h.broadcastRepoSyncNeeded(req.Path, gin.H{"history": true})
+	c.JSON(http.StatusOK, snapshot)
+}
+
+func (h *GitHandler) DeleteTag(c *gin.Context) {
+	var req GitDeleteTagRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	repoRoot, err := h.getRepoRoot(req.Path)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := validateGitTagName(repoRoot, req.Name); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	remoteName := req.Remote
+	if remoteName == "" {
+		remoteName = "origin"
+	}
+	snapshot := collectTagsSnapshot(repoRoot, remoteName)
+	if snapshot.TagsToPushError != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": snapshot.TagsToPushError})
+		return
+	}
+	canDelete := false
+	for _, tag := range snapshot.Tags {
+		if tag.Name == req.Name && !tag.Remote {
+			canDelete = true
+			break
+		}
+	}
+	if !canDelete {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot delete pushed tag"})
+		return
+	}
+
+	cmd := newGitCommand("tag", "-d", req.Name)
+	cmd.Dir = repoRoot
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": gitCommandError(err, output).Error()})
+		return
+	}
+
+	nextSnapshot := collectTagsSnapshot(repoRoot, remoteName)
+	h.broadcastRepoSyncNeeded(req.Path, gin.H{"history": true})
+	c.JSON(http.StatusOK, nextSnapshot)
+}
+
 type GitFetchRequest struct {
 	Path   string `json:"path" binding:"required"`
 	Remote string `json:"remote"`
@@ -1371,9 +1515,10 @@ func (h *GitHandler) Pull(c *gin.Context) {
 }
 
 type GitPushRequest struct {
-	Path   string `json:"path" binding:"required"`
-	Remote string `json:"remote"`
-	Force  bool   `json:"force"`
+	Path   string   `json:"path" binding:"required"`
+	Remote string   `json:"remote"`
+	Force  bool     `json:"force"`
+	Tags   []string `json:"tags"`
 }
 
 // Push godoc
@@ -1438,6 +1583,13 @@ func (h *GitHandler) Push(c *gin.Context) {
 		args = append(args, "--set-upstream")
 	}
 	args = append(args, remoteName, "HEAD:refs/heads/"+targetBranch)
+	for _, tag := range uniqueNonEmptyStrings(req.Tags) {
+		if err := validateGitTagName(repoRoot, tag); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		args = append(args, "refs/tags/"+tag+":refs/tags/"+tag)
+	}
 
 	cmd := newGitCommand(args...)
 	cmd.Dir = repoRoot

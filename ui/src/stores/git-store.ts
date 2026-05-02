@@ -9,6 +9,8 @@ import {
   type GitDraft,
   type GitInteractiveDiff,
   type GitStructuredFile,
+  type GitTagInfo,
+  type GitTagsSnapshot,
   type GitWSSnapshot,
   gitApi,
   type RemoteInfo,
@@ -32,6 +34,7 @@ export interface GitSyncOptions {
   stashes?: boolean;
   conflicts?: boolean;
   draft?: boolean;
+  tags?: boolean;
   silent?: boolean;
 }
 
@@ -60,6 +63,9 @@ export interface GitState {
   activeTab: "changes" | "history";
   stashes: StashEntry[];
   conflicts: string[];
+  tags: GitTagInfo[];
+  tagsToPush: string[];
+  tagsToPushError: string | null;
   isLoading: boolean;
   error: string | null;
 
@@ -85,6 +91,7 @@ export interface GitState {
   fetchStashes: () => Promise<void>;
   fetchConflicts: () => Promise<void>;
   fetchDraft: () => Promise<void>;
+  fetchTags: () => Promise<void>;
   syncRepo: (options?: GitSyncOptions) => Promise<void>;
 
   commitSelected: () => Promise<boolean>;
@@ -93,6 +100,8 @@ export interface GitState {
   smartSwitchBranch: (branch: string) => Promise<boolean>;
   createBranch: (branch: string, from?: string) => Promise<boolean>;
   deleteBranch: (branch: string) => Promise<boolean>;
+  createTag: (name: string, commit: string) => Promise<boolean>;
+  deleteTag: (name: string) => Promise<boolean>;
   gitFetch: () => Promise<boolean>;
   gitPull: () => Promise<boolean>;
   gitPush: (force?: boolean) => Promise<boolean>;
@@ -122,6 +131,7 @@ export interface GitState {
   applyRemotes: (remotes: RemoteInfo[]) => void;
   applyStashes: (stashes: StashEntry[]) => void;
   applyConflicts: (conflicts: string[]) => void;
+  applyTagsSnapshot: (snapshot: GitTagsSnapshot) => void;
   applyDraft: (draft?: Partial<GitDraftSnapshot>) => void;
   applySnapshot: (snapshot: GitWSSnapshot) => void;
 }
@@ -224,6 +234,9 @@ const createInitialGitSnapshot = () => ({
   activeTab: "changes" as const,
   stashes: [] as StashEntry[],
   conflicts: [] as string[],
+  tags: [] as GitTagInfo[],
+  tagsToPush: [] as string[],
+  tagsToPushError: null as string | null,
   isLoading: false,
   error: null as string | null,
 });
@@ -506,6 +519,14 @@ const createGitState =
         set({ conflicts: conflicts ?? [] });
       },
 
+      applyTagsSnapshot: (snapshot) => {
+        set({
+          tags: snapshot.tags ?? [],
+          tagsToPush: snapshot.tagsToPush ?? [],
+          tagsToPushError: snapshot.tagsToPushError ?? null,
+        });
+      },
+
       applyDraft: (draft) => {
         const nextDraft = applyIncomingDraft(draft);
         if (nextDraft) {
@@ -692,6 +713,23 @@ const createGitState =
         }
       },
 
+      fetchTags: async () => {
+        const { currentPath } = get();
+        if (!currentPath) {
+          return;
+        }
+
+        try {
+          const snapshot = await gitApi.tags(currentPath);
+          get().applyTagsSnapshot(snapshot);
+        } catch (err) {
+          set({
+            tagsToPush: [],
+            tagsToPushError: err instanceof Error ? err.message : "Failed to fetch tags",
+          });
+        }
+      },
+
       syncRepo: async (options = {}) => {
         const { currentPath, isRepo } = get();
         if (!currentPath || isRepo === false) {
@@ -706,7 +744,8 @@ const createGitState =
           options.branchStatus !== undefined ||
           options.stashes !== undefined ||
           options.conflicts !== undefined ||
-          options.draft !== undefined;
+          options.draft !== undefined ||
+          options.tags !== undefined;
 
         const shouldSyncStatus = options.status ?? !hasSelection;
         const shouldSyncHistory = options.history ?? !hasSelection;
@@ -715,6 +754,7 @@ const createGitState =
         const shouldSyncBranchStatus = options.branchStatus ?? !hasSelection;
         const shouldSyncStashes = options.stashes ?? !hasSelection;
         const shouldSyncConflicts = options.conflicts ?? !hasSelection;
+        const shouldSyncTags = options.tags ?? !hasSelection;
         const wantsDraftSync = options.draft ?? !hasSelection;
         const shouldSyncDraft = wantsDraftSync && !draftReadBlocked;
         const silent = options.silent ?? false;
@@ -734,6 +774,7 @@ const createGitState =
         const branchStatusPromise = shouldSyncBranchStatus ? gitApi.branchStatus(currentPath) : null;
         const stashesPromise = shouldSyncStashes ? gitApi.stashList(currentPath) : null;
         const conflictsPromise = shouldSyncConflicts ? gitApi.conflicts(currentPath) : null;
+        const tagsPromise = shouldSyncTags ? gitApi.tags(currentPath) : null;
         const draftPromise = shouldSyncDraft ? gitApi.getDraft(currentPath, getScopePayload()) : null;
 
         const [
@@ -744,6 +785,7 @@ const createGitState =
           branchStatusResult,
           stashesResult,
           conflictsResult,
+          tagsResult,
           draftResult,
         ] = await Promise.allSettled([
           statusPromise ?? Promise.resolve(null),
@@ -753,6 +795,7 @@ const createGitState =
           branchStatusPromise ?? Promise.resolve(null),
           stashesPromise ?? Promise.resolve(null),
           conflictsPromise ?? Promise.resolve(null),
+          tagsPromise ?? Promise.resolve(null),
           draftPromise ?? Promise.resolve(null),
         ]);
 
@@ -806,6 +849,16 @@ const createGitState =
           stateUpdate.conflicts = conflictsResult.value.conflicts ?? [];
         }
 
+        if (shouldSyncTags && tagsResult.status === "fulfilled" && tagsResult.value) {
+          stateUpdate.tags = tagsResult.value.tags ?? [];
+          stateUpdate.tagsToPush = tagsResult.value.tagsToPush ?? [];
+          stateUpdate.tagsToPushError = tagsResult.value.tagsToPushError ?? null;
+        } else if (shouldSyncTags && tagsResult.status === "rejected") {
+          stateUpdate.tagsToPush = [];
+          stateUpdate.tagsToPushError =
+            tagsResult.reason instanceof Error ? tagsResult.reason.message : "Failed to fetch tags";
+        }
+
         if (shouldSyncDraft && draftResult.status === "fulfilled" && draftResult.value) {
           const nextDraft = applyIncomingDraft(draftResult.value as GitDraft);
           if (nextDraft) {
@@ -832,6 +885,7 @@ const createGitState =
             branchStatusResult,
             stashesResult,
             conflictsResult,
+            tagsResult,
             draftResult,
           ].find((result) => result.status === "rejected");
 
@@ -1100,6 +1154,50 @@ const createGitState =
         }
       },
 
+      createTag: async (name, commit) => {
+        const { currentPath } = get();
+        if (!currentPath) {
+          return false;
+        }
+
+        set({ isLoading: true, error: null });
+
+        try {
+          const snapshot = await gitApi.createTag(currentPath, name, commit);
+          get().applyTagsSnapshot(snapshot);
+          const log = await gitApi.log(currentPath, Math.max(get().commits.length, 50));
+          set({ commits: log.commits });
+          return true;
+        } catch (err) {
+          set({ error: err instanceof Error ? err.message : "Failed to create tag" });
+          return false;
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      deleteTag: async (name) => {
+        const { currentPath } = get();
+        if (!currentPath) {
+          return false;
+        }
+
+        set({ isLoading: true, error: null });
+
+        try {
+          const snapshot = await gitApi.deleteTag(currentPath, name);
+          get().applyTagsSnapshot(snapshot);
+          const log = await gitApi.log(currentPath, Math.max(get().commits.length, 50));
+          set({ commits: log.commits });
+          return true;
+        } catch (err) {
+          set({ error: err instanceof Error ? err.message : "Failed to delete tag" });
+          return false;
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
       gitFetch: async () => {
         const { currentPath } = get();
         if (!currentPath) {
@@ -1113,6 +1211,7 @@ const createGitState =
           if (res.branchStatus) {
             get().applyBranchStatus(res.branchStatus);
           }
+          void get().fetchTags();
           return true;
         } catch (err) {
           set({ error: err instanceof Error ? err.message : "Failed to fetch" });
@@ -1146,6 +1245,7 @@ const createGitState =
           if (res.conflicts && res.conflicts.length > 0) {
             set({ activeTab: "changes" });
           }
+          void get().fetchTags();
           return true;
         } catch (err) {
           set({ error: err instanceof Error ? err.message : "Failed to pull" });
@@ -1164,10 +1264,12 @@ const createGitState =
         set({ isLoading: true, error: null });
 
         try {
-          const res = await gitApi.push(currentPath, "origin", force);
+          const tags = get().tagsToPushError ? [] : get().tagsToPush;
+          const res = await gitApi.push(currentPath, "origin", force, tags);
           if (res.branchStatus) {
             get().applyBranchStatus(res.branchStatus);
           }
+          void get().fetchTags();
           return true;
         } catch (err) {
           set({ error: err instanceof Error ? err.message : "Failed to push" });

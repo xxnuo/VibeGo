@@ -7,6 +7,19 @@ export interface GitCommit {
   authorEmail: string;
   date: string;
   parentCount: number;
+  tags: string[];
+}
+
+export interface GitTagInfo {
+  name: string;
+  commit: string;
+  remote: boolean;
+}
+
+export interface GitTagsSnapshot {
+  tags: GitTagInfo[];
+  tagsToPush: string[];
+  tagsToPushError?: string;
 }
 
 export interface GitDiff {
@@ -412,6 +425,24 @@ export const gitApi = {
       body: JSON.stringify({ path }),
     }),
 
+  tags: (path: string, remote = "origin") =>
+    request<GitTagsSnapshot>("/git/tags", {
+      method: "POST",
+      body: JSON.stringify({ path, remote }),
+    }),
+
+  createTag: (path: string, name: string, commit: string, remote = "origin") =>
+    request<GitTagsSnapshot>("/git/create-tag", {
+      method: "POST",
+      body: JSON.stringify({ path, name, commit, remote }),
+    }),
+
+  deleteTag: (path: string, name: string, remote = "origin") =>
+    request<GitTagsSnapshot>("/git/delete-tag", {
+      method: "POST",
+      body: JSON.stringify({ path, name, remote }),
+    }),
+
   fetch: (path: string, remote = "origin") =>
     request<{ ok: boolean; branchStatus: BranchStatusInfo }>("/git/fetch", {
       method: "POST",
@@ -424,10 +455,10 @@ export const gitApi = {
       body: JSON.stringify({ path, remote, branch }),
     }),
 
-  push: (path: string, remote = "origin", force?: boolean) =>
+  push: (path: string, remote = "origin", force?: boolean, tags?: string[]) =>
     request<{ ok: boolean; branchStatus: BranchStatusInfo }>("/git/push", {
       method: "POST",
-      body: JSON.stringify({ path, remote, force }),
+      body: JSON.stringify({ path, remote, force, tags }),
     }),
 
   stash: (path: string, message?: string, files?: string[]) =>

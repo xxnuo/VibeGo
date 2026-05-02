@@ -6,10 +6,13 @@ import {
   Clock,
   Copy,
   GitCommit as GitCommitIcon,
+  Plus,
+  Tag,
+  Trash2,
   Loader2,
   Undo2,
 } from "lucide-react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CommitFileInfo, GitCommit } from "@/api/git";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getIntlLocale, getTranslation, type Locale } from "@/lib/i18n";
@@ -126,8 +129,12 @@ interface GitHistoryViewProps {
   locale: Locale;
   remoteUrls: string[];
   aheadCount: number;
+  tagsToPush: string[];
+  tagsToPushError: string | null;
   onCommitSelect: (commit: GitCommit) => void;
   onUndoCommit: (commit: GitCommit) => void;
+  onCreateTag: (commit: GitCommit) => void;
+  onDeleteTag: (tag: string) => void;
   onFileClick: (commit: GitCommit, filePath: string) => void;
   selectedCommitFiles: CommitFileInfo[];
   selectedCommitHash: string | null;
@@ -200,17 +207,42 @@ const CopyHashButton: React.FC<{ hash: string; locale: Locale }> = ({ hash, loca
   );
 };
 
+const CopyTagButton: React.FC<{ tag: string; locale: Locale }> = ({ tag, locale }) => {
+  const [copied, setCopied] = useState(false);
+  const t = (key: string) => getTranslation(locale, key);
+  return (
+    <button
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-ide-mute/10 hover:bg-ide-accent/10 text-ide-text"
+      onClick={(e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(tag);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+      title={copied ? t("common.copied") : t("git.copyTag")}
+    >
+      <Tag size={9} />
+      <span className="max-w-[140px] truncate">{tag}</span>
+      {copied ? <Check size={9} className="text-green-400" /> : <Copy size={9} />}
+    </button>
+  );
+};
+
 interface CommitItemProps {
   commit: GitCommit;
   isExpanded: boolean;
   isSelected: boolean;
   isUnpushed: boolean;
+  unpushedTags: Set<string>;
+  tagPushCheckDisabled: boolean;
   locale: Locale;
   platforms: AvatarPlatform[];
   canUndoCommit: boolean;
   isLoading: boolean;
   onToggle: () => void;
   onUndoCommit: () => void;
+  onCreateTag: () => void;
+  onDeleteTag: (tag: string) => void;
   onFileClick: (filePath: string) => void;
   files: CommitFileInfo[];
 }
@@ -220,18 +252,23 @@ const CommitItem: React.FC<CommitItemProps> = ({
   isExpanded,
   isSelected,
   isUnpushed,
+  unpushedTags,
+  tagPushCheckDisabled,
   locale,
   platforms,
   canUndoCommit,
   isLoading,
   onToggle,
   onUndoCommit,
+  onCreateTag,
+  onDeleteTag,
   onFileClick,
   files,
 }) => {
   const t = useCallback((key: string) => getTranslation(locale, key), [locale]);
   const shortHash = commit.hash.substring(0, 7);
   const firstLine = commit.message.split("\n")[0];
+  const tags = commit.tags ?? [];
   const authorAvatarUrl = useCachedAvatarUrl(commit.authorEmail, platforms);
 
   return (
@@ -251,6 +288,15 @@ const CommitItem: React.FC<CommitItemProps> = ({
         </Avatar>
         <div className="flex-1 min-w-0">
           <div className="text-sm text-ide-text font-medium truncate">{firstLine}</div>
+          {tags.length > 0 && (
+            <div className="flex items-center gap-1 mt-1 min-w-0">
+              <span className="inline-flex items-center gap-1 max-w-[160px] px-1.5 py-0.5 rounded bg-ide-mute/10 text-[10px] text-ide-text">
+                <Tag size={9} className="shrink-0" />
+                <span className="truncate">{tags[0]}</span>
+              </span>
+              {tags.length > 1 && <span className="text-[10px] text-ide-mute">+{tags.length - 1}</span>}
+            </div>
+          )}
           <div className="flex items-center gap-2 mt-0.5 text-[10px] text-ide-mute">
             <span>{commit.author}</span>
             <span className="flex items-center gap-0.5">
@@ -291,20 +337,63 @@ const CommitItem: React.FC<CommitItemProps> = ({
               </span>
               <CopyHashButton hash={commit.hash} locale={locale} />
             </div>
-            {canUndoCommit && (
+            <div className="flex items-center gap-1.5">
               <button
                 className="px-2 py-0.5 rounded flex items-center gap-1 text-ide-accent hover:bg-ide-accent/10 disabled:opacity-50"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onUndoCommit();
+                  onCreateTag();
                 }}
                 disabled={isLoading}
               >
-                <Undo2 size={10} />
-                {t("git.undoCommit")}
+                <Plus size={10} />
+                {t("git.createTag")}
               </button>
-            )}
+              {canUndoCommit && (
+                <button
+                  className="px-2 py-0.5 rounded flex items-center gap-1 text-ide-accent hover:bg-ide-accent/10 disabled:opacity-50"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUndoCommit();
+                  }}
+                  disabled={isLoading}
+                >
+                  <Undo2 size={10} />
+                  {t("git.undoCommit")}
+                </button>
+              )}
+            </div>
           </div>
+          {tags.length > 0 && (
+            <div className="px-3 py-1.5 flex flex-wrap items-center gap-1.5 text-[10px] border-t border-ide-border/20">
+              {tags.map((tag) => {
+                const isUnpushedTag = unpushedTags.has(tag);
+                return (
+                  <span key={tag} className="inline-flex items-center gap-1">
+                    <CopyTagButton tag={tag} locale={locale} />
+                    {isUnpushedTag && (
+                      <span title={t("git.unpushedTag")}>
+                        <ArrowUp size={10} className="text-blue-400" />
+                      </span>
+                    )}
+                    {isUnpushedTag && !tagPushCheckDisabled && (
+                      <button
+                        className="p-0.5 rounded text-ide-mute hover:text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteTag(tag);
+                        }}
+                        disabled={isLoading}
+                        title={t("git.deleteTag")}
+                      >
+                        <Trash2 size={10} />
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+          )}
           {files.map((file) => (
             <div
               key={file.path}
@@ -332,8 +421,12 @@ const GitHistoryView: React.FC<GitHistoryViewProps> = ({
   locale,
   remoteUrls,
   aheadCount,
+  tagsToPush,
+  tagsToPushError,
   onCommitSelect,
   onUndoCommit,
+  onCreateTag,
+  onDeleteTag,
   onFileClick,
   selectedCommitFiles,
   selectedCommitHash,
@@ -342,7 +435,8 @@ const GitHistoryView: React.FC<GitHistoryViewProps> = ({
   const t = useCallback((key: string) => getTranslation(locale, key), [locale]);
   const [expandedHash, setExpandedHash] = useState<string | null>(null);
   const loadingMoreRef = useRef(false);
-  const platforms = React.useMemo(() => detectPlatforms(remoteUrls), [remoteUrls]);
+  const platforms = useMemo(() => detectPlatforms(remoteUrls), [remoteUrls]);
+  const unpushedTags = useMemo(() => new Set(tagsToPush), [tagsToPush]);
 
   const handleToggle = useCallback(
     (commit: GitCommit) => {
@@ -383,6 +477,20 @@ const GitHistoryView: React.FC<GitHistoryViewProps> = ({
 
   return (
     <div className="h-full overflow-y-auto bg-ide-bg" onScroll={handleScroll}>
+      {tagsToPushError && (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-500/8 border-b border-yellow-500/20">
+          <Tag size={12} className="text-yellow-400" />
+          <span className="text-[11px] text-yellow-400 font-medium">{t("git.tagsStatusUnavailable")}</span>
+        </div>
+      )}
+      {!tagsToPushError && tagsToPush.length > 0 && (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/8 border-b border-blue-500/20">
+          <Tag size={12} className="text-blue-400" />
+          <span className="text-[11px] text-blue-400 font-medium">
+            {tagsToPush.length} {t("git.unpushedTags")}
+          </span>
+        </div>
+      )}
       {unpushedCount > 0 && (
         <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/8 border-b border-blue-500/20">
           <ArrowUp size={12} className="text-blue-400" />
@@ -398,12 +506,16 @@ const GitHistoryView: React.FC<GitHistoryViewProps> = ({
           isExpanded={expandedHash === commit.hash}
           isSelected={selectedCommitHash === commit.hash}
           isUnpushed={index < unpushedCount}
+          unpushedTags={unpushedTags}
+          tagPushCheckDisabled={Boolean(tagsToPushError)}
           locale={locale}
           platforms={platforms}
           canUndoCommit={index === 0 && commit.parentCount > 0}
           isLoading={isLoading}
           onToggle={() => handleToggle(commit)}
           onUndoCommit={() => onUndoCommit(commit)}
+          onCreateTag={() => onCreateTag(commit)}
+          onDeleteTag={onDeleteTag}
           onFileClick={(path) => onFileClick(commit, path)}
           files={expandedHash === commit.hash ? selectedCommitFiles : []}
         />

@@ -71,6 +71,8 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
     remoteUrls,
     aheadCount,
     behindCount,
+    tagsToPush,
+    tagsToPushError,
     stashes,
     conflicts,
     error,
@@ -92,6 +94,8 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
     stashDrop,
     createBranch,
     deleteBranch,
+    createTag,
+    deleteTag,
     setSelectedCommit,
     getCommitFiles,
     getCommitDiff,
@@ -125,6 +129,8 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
       remoteUrls: state.remoteUrls,
       aheadCount: state.aheadCount,
       behindCount: state.behindCount,
+      tagsToPush: state.tagsToPush,
+      tagsToPushError: state.tagsToPushError,
       stashes: state.stashes,
       conflicts: state.conflicts,
       error: state.error,
@@ -146,6 +152,8 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
       stashDrop: state.stashDrop,
       createBranch: state.createBranch,
       deleteBranch: state.deleteBranch,
+      createTag: state.createTag,
+      deleteTag: state.deleteTag,
       setSelectedCommit: state.setSelectedCommit,
       getCommitFiles: state.getCommitFiles,
       getCommitDiff: state.getCommitDiff,
@@ -327,13 +335,17 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
   );
 
   const smartAction = useMemo(() => {
+    const tagCount = tagsToPushError ? 0 : tagsToPush.length;
+    const pushLabel =
+      tagCount > 0
+        ? `${t("git.push")} (${aheadCount}${aheadCount > 0 ? " + " : ""}${tagCount} ${t("git.tag")})`
+        : `${t("git.push")} (${aheadCount})`;
     if (!hasRemote) return { label: t("git.publish"), icon: <CloudUpload size={14} />, action: handlePush };
     if (behindCount > 0)
       return { label: `${t("git.pull")} (${behindCount})`, icon: <ArrowDown size={14} />, action: handlePull };
-    if (aheadCount > 0)
-      return { label: `${t("git.push")} (${aheadCount})`, icon: <ArrowUp size={14} />, action: handlePush };
+    if (aheadCount > 0 || tagCount > 0) return { label: pushLabel, icon: <ArrowUp size={14} />, action: handlePush };
     return { label: t("git.fetch"), icon: <RefreshCw size={14} />, action: handleFetch };
-  }, [hasRemote, aheadCount, behindCount, handleFetch, handlePull, handlePush, t]);
+  }, [hasRemote, aheadCount, behindCount, tagsToPush, tagsToPushError, handleFetch, handlePull, handlePush, t]);
 
   const topBarConfig = useMemo(() => {
     if (!isActive) return null;
@@ -473,6 +485,31 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
     [allFiles.length, commits, conflicts.length, dialog, error, isLoading, setActiveTab, t, undoLastCommit]
   );
 
+  const handleCreateTag = useCallback(
+    async (commitInfo: GitCommit) => {
+      const name = await dialog.prompt(t("git.createTag"), { placeholder: t("git.newTag") });
+      const tagName = name?.trim();
+      if (!tagName) {
+        return;
+      }
+      const ok = await createTag(tagName, commitInfo.hash);
+      if (!ok) {
+        await dialog.alert(t("git.operationFailed"), getOrCreateGitStore(groupId).getState().error || undefined);
+      }
+    },
+    [createTag, dialog, groupId, t]
+  );
+
+  const handleDeleteTag = useCallback(
+    async (tag: string) => {
+      const ok = await deleteTag(tag);
+      if (!ok) {
+        await dialog.alert(t("git.operationFailed"), getOrCreateGitStore(groupId).getState().error || undefined);
+      }
+    },
+    [deleteTag, dialog, groupId, t]
+  );
+
   const handleConflictClick = useCallback(
     (conflictPath: string) => {
       onConflict?.(path, conflictPath);
@@ -537,7 +574,7 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
             )}
           </button>
           <div className="flex-1" />
-          {(hasRemote || aheadCount > 0) && (
+          {(hasRemote || aheadCount > 0 || (!tagsToPushError && tagsToPush.length > 0)) && (
             <button
               className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-ide-accent hover:bg-ide-accent/10 active:bg-ide-accent/15 transition-colors disabled:opacity-50 shrink-0"
               onClick={() => {
@@ -584,8 +621,12 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
               locale={locale}
               remoteUrls={remoteUrls}
               aheadCount={aheadCount}
+              tagsToPush={tagsToPush}
+              tagsToPushError={tagsToPushError}
               onCommitSelect={handleCommitSelect}
               onUndoCommit={handleHistoryUndoCommit}
+              onCreateTag={handleCreateTag}
+              onDeleteTag={handleDeleteTag}
               onFileClick={handleHistoryFileClick}
               selectedCommitFiles={selectedCommitFiles}
               selectedCommitHash={selectedCommit?.hash || null}

@@ -117,12 +117,31 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
     [queryClient, terminalStatusMap]
   );
 
-  const handleCloseTerminalPages = useCallback(
+  const confirmCloseRunningTerminals = useCallback(
     async (terminalIds: string[]) => {
+      const runningCount = Array.from(new Set(terminalIds)).filter(
+        (terminalId) => terminalStatusMap.get(terminalId) === "running"
+      ).length;
+      if (runningCount === 0) return true;
+      return dialog.confirm(
+        runningCount > 1 ? t("terminal.closeRunningTitleMany") : t("terminal.closeRunningTitle"),
+        t("terminal.closeRunningConfirm").replace("{count}", String(runningCount)),
+        { confirmText: t("common.close"), confirmVariant: "danger" }
+      );
+    },
+    [dialog, t, terminalStatusMap]
+  );
+
+  const handleCloseTerminalPages = useCallback(
+    async (terminalIds: string[], options?: { skipRunningConfirm?: boolean }) => {
       const pageTerminalIds = Array.from(
         new Set(terminalIds.flatMap((terminalId) => getTerminalPageIds(groupId, terminalId)))
       );
       if (pageTerminalIds.length === 0) return;
+      if (!options?.skipRunningConfirm) {
+        const confirmed = await confirmCloseRunningTerminals(pageTerminalIds);
+        if (!confirmed) return;
+      }
       try {
         await closeTerminalIds(pageTerminalIds);
         terminalIds.forEach((terminalId) => removeTerminalPage(groupId, terminalId));
@@ -130,11 +149,14 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
         await dialog.alert(e instanceof Error ? e.message : t("terminal.closeFailed"));
       }
     },
-    [closeTerminalIds, dialog, getTerminalPageIds, groupId, removeTerminalPage, t]
+    [closeTerminalIds, confirmCloseRunningTerminals, dialog, getTerminalPageIds, groupId, removeTerminalPage, t]
   );
 
   const handleClearAll = useCallback(async () => {
-    await handleCloseTerminalPages(rootTerminals.map((terminal) => terminal.id));
+    await handleCloseTerminalPages(
+      rootTerminals.map((terminal) => terminal.id),
+      { skipRunningConfirm: true }
+    );
   }, [handleCloseTerminalPages, rootTerminals]);
 
   const handleCreateTerminal = useCallback(() => {
@@ -239,6 +261,8 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
     const targetId = focusedId;
     if (!targetId || !hasSplit) return;
     const closeSplit = async () => {
+      const confirmed = await confirmCloseRunningTerminals([targetId]);
+      if (!confirmed) return;
       try {
         await closeTerminalIds([targetId]);
         removeTerminal(groupId, targetId);
@@ -247,7 +271,7 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
       }
     };
     void closeSplit();
-  }, [closeTerminalIds, dialog, focusedId, groupId, hasSplit, removeTerminal, t]);
+  }, [closeTerminalIds, confirmCloseRunningTerminals, dialog, focusedId, groupId, hasSplit, removeTerminal, t]);
 
   const handleDeleteTerminalPage = useCallback(
     async (terminalId: string) => {
@@ -486,9 +510,7 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
           return true;
         }
         case "paste":
-          void navigator.clipboard.readText().then((text) => {
-            if (text) handle.paste(text);
-          });
+          void handle.pasteFromClipboard();
           return true;
         case "cut": {
           const sel = handle.getSelection();
@@ -576,6 +598,7 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
               onExited={handleTerminalExited}
               onStateChange={handleTerminalStateChange}
               onRatioChange={handleRatioChange}
+              setTerminalRef={setTerminalRef}
             />
           ) : (
             terminals.map((terminal) => (
@@ -586,6 +609,7 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
                 terminalName={terminal.name}
                 isActive={terminal.id === activeTerminalId}
                 isExited={terminal.status !== "running"}
+                initialCwd={terminal.currentCwd || cwd}
                 onExited={makeTerminalExitedHandler(terminal.id)}
                 onStateChange={makeTerminalStateChangeHandler(terminal.id)}
               />
@@ -600,6 +624,7 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
               terminalName={terminal.name}
               isActive={terminal.id === activeTerminalId}
               isExited={terminal.status !== "running"}
+              initialCwd={terminal.currentCwd || cwd}
               onExited={makeTerminalExitedHandler(terminal.id)}
               onStateChange={makeTerminalStateChangeHandler(terminal.id)}
             />

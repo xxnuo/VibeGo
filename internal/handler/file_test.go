@@ -1309,6 +1309,49 @@ func TestFileUploadOverwrite(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestFileUploadNestedPath(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("file", "folder/upload.txt")
+	part.Write([]byte("nested content"))
+	writer.WriteField("path", tmpDir)
+	writer.WriteField("relativePath", "folder/upload.txt")
+	writer.Close()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/file/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	content, err := os.ReadFile(filepath.Join(tmpDir, "folder", "upload.txt"))
+	assert.NoError(t, err)
+	assert.Equal(t, "nested content", string(content))
+}
+
+func TestFileUploadRejectsTraversal(t *testing.T) {
+	_, r, tmpDir := setupTestFileHandler(t)
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("file", "../upload.txt")
+	part.Write([]byte("content"))
+	writer.WriteField("path", tmpDir)
+	writer.WriteField("relativePath", "../upload.txt")
+	writer.Close()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/file/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	_, err := os.Stat(filepath.Join(tmpDir, "..", "upload.txt"))
+	assert.True(t, os.IsNotExist(err))
+}
+
 func TestFileUploadNoOverwrite(t *testing.T) {
 	_, r, tmpDir := setupTestFileHandler(t)
 

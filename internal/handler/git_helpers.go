@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -76,9 +77,9 @@ func collectCommitLog(repoRoot string, limit int) []CommitInfo {
 	if limit <= 0 {
 		limit = 20
 	}
-	format := strings.Join([]string{"%H", "%s", "%an", "%ae", "%aI", "%P"}, "%x00")
+	format := strings.Join([]string{"%H", "%s", "%an", "%ae", "%aI", "%P", "%D"}, "%x00")
 	cmd := newGitCommand("log", "-n", strconv.Itoa(limit),
-		fmt.Sprintf("--format=%s", format), "--no-decorate")
+		fmt.Sprintf("--format=%s", format))
 	cmd.Dir = repoRoot
 	output, err := cmd.Output()
 	if err != nil {
@@ -90,8 +91,8 @@ func collectCommitLog(repoRoot string, limit int) []CommitInfo {
 		if line == "" {
 			continue
 		}
-		parts := strings.SplitN(line, "\x00", 6)
-		if len(parts) < 6 {
+		parts := strings.SplitN(line, "\x00", 7)
+		if len(parts) < 7 {
 			continue
 		}
 		parentCount := 0
@@ -105,9 +106,132 @@ func collectCommitLog(repoRoot string, limit int) []CommitInfo {
 			AuthorEmail: parts[3],
 			Date:        parts[4],
 			ParentCount: parentCount,
+			Tags:        parseGitDecorationTags(parts[6]),
 		})
 	}
 	return commits
+}
+
+func parseGitDecorationTags(decoration string) []string {
+	var tags []string
+	for _, part := range strings.Split(decoration, ",") {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(part, "tag: ") {
+			tags = append(tags, strings.TrimPrefix(part, "tag: "))
+		}
+	}
+	sort.Strings(tags)
+	return tags
+}
+
+func uniqueNonEmptyStrings(values []string) []string {
+	seen := map[string]bool{}
+	var result []string
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		result = append(result, value)
+	}
+	return result
+}
+
+func validateGitTagName(repoRoot, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return errors.New("tag name is required")
+	}
+	if len(name) > 245 {
+		return errors.New("tag name is too long")
+	}
+	cmd := newGitCommand("check-ref-format", "--allow-onelevel", "refs/tags/"+name)
+	cmd.Dir = repoRoot
+	if output, err := cmd.CombinedOutput(); err != nil {
+		msg := strings.TrimSpace(string(output))
+		if msg == "" {
+			msg = "invalid tag name"
+		}
+		return errors.New(msg)
+	}
+	return nil
+}
+
+func collectTagsSnapshot(repoRoot, remoteName string) GitTagsSnapshot {
+	localTags := collectLocalTags(repoRoot)
+	remoteTags, remoteErr := collectRemoteTags(repoRoot, remoteName)
+	tags := make([]GitTagInfo, 0, len(localTags))
+	tagsToPush := []string{}
+	for name, commit := range localTags {
+		_, remote := remoteTags[name]
+		tags = append(tags, GitTagInfo{Name: name, Commit: commit, Remote: remote})
+		if remoteErr == nil && !remote {
+			tagsToPush = append(tagsToPush, name)
+		}
+	}
+	sort.Slice(tags, func(i, j int) bool { return tags[i].Name < tags[j].Name })
+	sort.Strings(tagsToPush)
+	snapshot := GitTagsSnapshot{Tags: tags, TagsToPush: tagsToPush}
+	if remoteErr != nil {
+		snapshot.TagsToPush = []string{}
+		snapshot.TagsToPushError = remoteErr.Error()
+	}
+	return snapshot
+}
+
+func collectLocalTags(repoRoot string) map[string]string {
+	cmd := newGitCommand("show-ref", "--tags", "-d")
+	cmd.Dir = repoRoot
+	output, err := cmd.Output()
+	if err != nil {
+		return map[string]string{}
+	}
+	tags := map[string]string{}
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			continue
+		}
+		ref := fields[1]
+		if strings.HasSuffix(ref, "^{}") {
+			name := strings.TrimSuffix(strings.TrimPrefix(ref, "refs/tags/"), "^{}")
+			tags[name] = fields[0]
+			continue
+		}
+		name := strings.TrimPrefix(ref, "refs/tags/")
+		if _, exists := tags[name]; !exists {
+			tags[name] = fields[0]
+		}
+	}
+	return tags
+}
+
+func collectRemoteTags(repoRoot, remoteName string) (map[string]string, error) {
+	cmd := newGitCommand("ls-remote", "--tags", remoteName)
+	cmd.Dir = repoRoot
+	output, err := cmd.Output()
+	if err != nil {
+		return map[string]string{}, err
+	}
+	tags := map[string]string{}
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			continue
+		}
+		ref := fields[1]
+		if strings.HasSuffix(ref, "^{}") {
+			name := strings.TrimSuffix(strings.TrimPrefix(ref, "refs/tags/"), "^{}")
+			tags[name] = fields[0]
+			continue
+		}
+		name := strings.TrimPrefix(ref, "refs/tags/")
+		if _, exists := tags[name]; !exists {
+			tags[name] = fields[0]
+		}
+	}
+	return tags, nil
 }
 
 func collectHeadHash(repoRoot string) string {
