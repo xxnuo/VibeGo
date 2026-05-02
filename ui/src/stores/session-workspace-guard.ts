@@ -28,11 +28,7 @@ export function createWorkspaceSaveLatch(sessionId: string): WorkspaceSaveLatch 
 export function getTerminalWorkspaceGroupIds(groups: readonly WorkspaceFrameGroup[]): Set<string> {
   return new Set(
     groups
-      .filter(
-        (group) =>
-          (group.type === "group" && group.pages?.some((page) => page.type === "terminal")) ||
-          (group.type === "tool" && group.pageId === "blockterm")
-      )
+      .filter((group) => group.type === "group" && group.pages?.some((page) => page.type === "terminal"))
       .map((group) => group.id)
   );
 }

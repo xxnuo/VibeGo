@@ -25,12 +25,8 @@ type TerminalSession struct {
 	ShellIntegration    bool   `gorm:"column:shell_integration" json:"shell_integration"`
 	LastCommand         string `gorm:"column:last_command;type:text" json:"last_command"`
 	LastCommandExitCode *int   `gorm:"column:last_command_exit_code" json:"last_command_exit_code"`
-	// BlockTermViewJSON stores terminal-scoped presentation state such as the
-	// desktop BlockTerm sidebar. It is separate from workspace state and block
-	// presentation metadata.
-	BlockTermViewJSON string `gorm:"column:blockterm_view_json;type:text" json:"blockterm_view_json,omitempty"`
-	CreatedAt         int64  `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt         int64  `gorm:"column:updated_at" json:"updated_at"`
+	CreatedAt           int64  `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt           int64  `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (TerminalSession) TableName() string {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -28,7 +27,6 @@ type localCommand struct {
 
 func newLocalCommand(shell string, args []string, cwd string, cols, rows int, opts ...localCommandOption) (*localCommand, error) {
 	env := append(os.Environ(), "TERM=xterm-256color", "PROMPT_EOL_MARK=")
-	env = prepareBlockTermShellEnvironment(shell, env)
 	if !hasEnvKey(env, "LANG") {
 		env = append(env, "LANG=C.UTF-8")
 	}
@@ -41,7 +39,7 @@ func newLocalCommand(shell string, args []string, cwd string, cols, rows int, op
 
 	spawnOpts := ptyx.SpawnOpts{
 		Prog: shell,
-		Args: prepareBlockTermShellArgs(shell, args),
+		Args: args,
 		Env:  env,
 		Dir:  cwd,
 		Cols: cols,
@@ -85,58 +83,6 @@ func newLocalCommand(shell string, args []string, cwd string, cols, rows int, op
 	}()
 
 	return lcmd, nil
-}
-
-// BlockTerm wrappers begin with a space so shells that support the usual
-// history-ignore option do not persist the wrapper (and its lifecycle token).
-// Configure that option before the interactive shell reads its first line.
-func prepareBlockTermShellEnvironment(shell string, env []string) []string {
-	if shellBaseName(shell) != "bash" {
-		return env
-	}
-
-	value := ""
-	for _, item := range env {
-		if strings.HasPrefix(item, "HISTCONTROL=") {
-			value = strings.TrimPrefix(item, "HISTCONTROL=")
-		}
-	}
-	return setEnvironmentValue(env, "HISTCONTROL", ensureBashHistoryIgnoreSpace(value))
-}
-
-func prepareBlockTermShellArgs(shell string, args []string) []string {
-	if len(args) != 0 || shellBaseName(shell) != "zsh" {
-		return args
-	}
-	return []string{"-o", "HIST_IGNORE_SPACE"}
-}
-
-func shellBaseName(shell string) string {
-	return strings.ToLower(filepath.Base(strings.TrimSpace(shell)))
-}
-
-func ensureBashHistoryIgnoreSpace(value string) string {
-	for _, item := range strings.Split(value, ":") {
-		switch strings.TrimSpace(item) {
-		case "ignorespace", "ignoreboth":
-			return value
-		}
-	}
-	if value == "" {
-		return "ignorespace"
-	}
-	return value + ":ignorespace"
-}
-
-func setEnvironmentValue(env []string, key, value string) []string {
-	prefix := key + "="
-	filtered := make([]string, 0, len(env)+1)
-	for _, item := range env {
-		if !strings.HasPrefix(item, prefix) {
-			filtered = append(filtered, item)
-		}
-	}
-	return append(filtered, prefix+value)
 }
 
 func (lc *localCommand) Read(p []byte) (int, error) {

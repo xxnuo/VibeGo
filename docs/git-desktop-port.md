@@ -91,7 +91,7 @@
 
 ## 当前验证边界
 
-- 当前工作树（保留未提交的 BlockTerm 改动）已通过：`go test ./... -count=1 -timeout 300s`、`go test ./... -race -p 1 -count=1 -timeout 300s`、`go vet ./...`、`go build ./...`、`cd ui && pnpm run check`、`cd ui && pnpm exec tsc -b --pretty false`、`cd ui && pnpm run build`、`cd ui && node --test --test-concurrency=1 tests/*.test.mjs`（72/72）和 `git diff --check`。
+- 当前工作树已通过：`go test ./... -count=1 -timeout 300s`、`go test ./... -race -p 1 -count=1 -timeout 300s`、`go vet ./...`、`go build ./...`、`cd ui && pnpm run check`、`cd ui && pnpm exec tsc -b --pretty false`、`cd ui && pnpm run build`、`cd ui && node --test --test-concurrency=1 tests/*.test.mjs`（72/72）和 `git diff --check`。
 - handler 测试使用真实临时仓库覆盖日常 Git、partial commit/index 恢复、patch/hash 过期保护、图片工作树/历史预览、提交选项、branch、远程 tracking checkout/删除/prune、stash、conflict metadata/resolve、高级历史和仓库设置；fetch/pull/push/force push 使用本地 bare remote 验证，其中 fetch 覆盖 prune、pull 覆盖无显式 `pull.ff` 时的 fast-forward 默认行为，不代表 SSH/HTTPS 凭据、代理、2FA 或托管平台认证已通过。
 - 本轮 HTTP smoke 使用旧二进制 `/tmp/vibego-git-smoke-20260826`（端口 `28741`）；修复后二进制 `/tmp/vibego-git-smoke-fixed-20260826`（端口 `28742`，SHA-256 `e56d387e098acb713a9361df697c98a319b7751ed9d4a227192b083cb7503f79`）实际用于桌面浏览器 smoke。HTTP smoke 真实验证 repository settings、remote push URL 保留/清理、`.gitignore`、worktree 增删、squash/reorder，以及二进制和 `524289` 字节 patch 的有界 diff。
 - 本轮桌面浏览器 smoke 使用修复后二进制（SHA-256 `e56d387e098acb713a9361df697c98a319b7751ed9d4a227192b083cb7503f79`，端口 `28742`），检查历史列表及压缩/重排入口、仓库设置面板和高级操作控件；控制台错误和 HTTP 4xx/5xx 均为 0，截图为 `/tmp/vibego-git-ui-fixed.png`。新增 cherry-pick/revert/mixed reset、图片 diff 和 worktree 打开入口已通过 Go/Node/TypeScript/构建验证，但尚未以当前工作树重新做浏览器交互 smoke。

@@ -2,7 +2,6 @@ import { Check, ChevronRight, Clock, Edit2, GripVertical, Layers, Trash2, X } fr
 import React from "react";
 import { toast } from "sonner";
 import { useDialog } from "@/components/common";
-import { reorderBlockTermItems } from "@/components/terminal/blockterm-session-settings";
 import { useReorderableList } from "@/hooks/use-reorderable-list";
 import { getIntlLocale, type Locale, useTranslation } from "@/lib/i18n";
 import { useSessionStore } from "@/stores/session-store";
@@ -30,7 +29,12 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({ onSwitchSession, 
 
   const handleReorder = React.useCallback(
     (fromId: string, toId: string) => {
-      const next = reorderBlockTermItems(sessions, fromId, toId);
+      const fromIndex = sessions.findIndex((session) => session.id === fromId);
+      const toIndex = sessions.findIndex((session) => session.id === toId);
+      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+      const next = [...sessions];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
       if (next.every((session, index) => session.id === sessions[index]?.id)) return;
       void reorderSessions(next.map((session) => session.id)).catch((error) => {
         toast.error(error instanceof Error ? error.message : t("common.saveFailed"));
@@ -156,7 +160,7 @@ const RecentSessionList: React.FC<RecentSessionListProps> = ({ onSwitchSession, 
                 key={session.id}
                 {...sessionReorder.bindItem(session.id)}
                 style={sessionReorder.getItemStyle(session.id)}
-                data-blockterm-workspace-session-id={session.id}
+                data-workspace-session-id={session.id}
                 onClick={() => handleSwitch(session.id)}
                 className={`group relative flex items-center gap-2 rounded-lg border p-2.5 transition-all sm:gap-3 sm:p-3 ${
                   isCurrent

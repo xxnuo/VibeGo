@@ -45,10 +45,6 @@ type RemoteFileProvider interface {
 	OpenSFTP(context.Context, string) (*sftp.Client, error)
 }
 
-type RemoteBlockFileProvider interface {
-	OpenBlockSFTP(context.Context, string, string, int64) (*sftp.Client, error)
-}
-
 type remoteFileDescriptor struct {
 	Version        int    `json:"v"`
 	Terminal       string `json:"terminal_id"`
@@ -208,20 +204,7 @@ func (h *FileHandler) openRemoteFile(c *gin.Context, scope remoteFileScope) (*sf
 		return nil, func() {}, sshconnection.ErrRemoteFilesUnsupported
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), remoteFileOperationTimeout)
-	var client *sftp.Client
-	var err error
-	if scope.BlockID == "" {
-		client, err = h.remote.OpenSFTP(ctx, scope.TerminalID)
-	} else if blockProvider, ok := h.remote.(RemoteBlockFileProvider); ok {
-		client, err = blockProvider.OpenBlockSFTP(
-			ctx,
-			scope.TerminalID,
-			scope.BlockID,
-			*scope.BlockCreatedAt,
-		)
-	} else {
-		err = sshconnection.ErrRemoteFilesUnsupported
-	}
+	client, err := h.remote.OpenSFTP(ctx, scope.TerminalID)
 	if err != nil {
 		cancel()
 		return nil, func() {}, err
@@ -270,9 +253,6 @@ func writeRemoteFileError(c *gin.Context, err error) {
 	case errors.Is(err, sshconnection.ErrRemoteFilesUnsupported):
 		status = http.StatusBadRequest
 		code = "remote_files_unsupported"
-	case errors.Is(err, sshconnection.ErrRemoteFileBlockNotFound):
-		status = http.StatusNotFound
-		code = "remote_file_block_not_found"
 	case errors.Is(err, terminal.ErrTerminalNotFound):
 		status = http.StatusNotFound
 		code = "terminal_not_found"

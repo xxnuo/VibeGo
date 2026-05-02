@@ -43,7 +43,7 @@ By default, VibeGo starts at `http://localhost:1984`.
 - **Files:** Browse, edit, and organize project files with syntax highlighting, file tree management, and quick navigation.
 - **Terminal:** Run real shell sessions in the browser, with vertical and horizontal split panes for AI CLIs, build tools, dev servers, and long-running tasks.
 - **Git:** Review status and diffs, commit, push, pull, force push, and manage branches or merges from a compact Git interface.
-- **Custom Pages:** Open additional pages for AI session browsing, BlockTerm, process monitoring, port management, remote control, remote desktop, and keyboard testing. Page entries can be shown or hidden from the New Page menu.
+- **Custom Pages:** Open additional pages for AI session browsing, process monitoring, port management, remote control, remote desktop, and keyboard testing. Page entries can be shown or hidden from the New Page menu.
 - **Anywhere UI:** A responsive interface for phones, tablets, and large desktop screens, with dark/light modes and customizable themes, built for quick checks as well as real work.
 - **Secure Access:** Built-in authentication, LAN access controls, and rate limiting (Fail2ban) to protect your remote coding entry point.
 

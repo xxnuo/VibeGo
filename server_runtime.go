@@ -12,7 +12,6 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -28,7 +27,6 @@ import (
 	"github.com/xxnuo/vibego/internal/middleware"
 	"github.com/xxnuo/vibego/internal/model"
 	"github.com/xxnuo/vibego/internal/service/asr"
-	"github.com/xxnuo/vibego/internal/service/blockterm"
 	"github.com/xxnuo/vibego/internal/service/sshconnection"
 	"github.com/xxnuo/vibego/internal/service/terminal"
 	vibegoTls "github.com/xxnuo/vibego/internal/tls"
@@ -110,8 +108,8 @@ func runServerWithOptions(ctx context.Context, options serverOptions) error {
 		&model.SSHConnectionProfile{},
 		&model.SSHKnownHost{},
 	)
-	if err := config.MigrateBlockTerm(db); err != nil {
-		return fmt.Errorf("migrate BlockTerm data: %w", err)
+	if err := config.MigrateWorkspaceSettings(db); err != nil {
+		return fmt.Errorf("migrate workspace settings: %w", err)
 	}
 	sshService := sshconnection.New(db)
 	defer sshService.Close()
@@ -120,11 +118,6 @@ func runServerWithOptions(ctx context.Context, options serverOptions) error {
 		RuntimeFactory: sshService,
 	})
 	terminalManager.CleanupOnStart()
-	blockTermCore, err := blockterm.Open(filepath.Join(cfg.ConfigDir, "blockterm-v2.sqlite"), cfg.DefaultShell)
-	if err != nil {
-		return fmt.Errorf("open BlockTerm core: %w", err)
-	}
-	defer blockTermCore.Close()
 	fileViews, err := middleware.NewFileViewAuthorizer()
 	if err != nil {
 		return err
@@ -151,7 +144,6 @@ func runServerWithOptions(ctx context.Context, options serverOptions) error {
 	fileHandler.SetRemoteFileProvider(sshService)
 	fileHandler.Register(api)
 	handler.NewTerminalHandler(terminalManager).Register(api)
-	handler.RegisterBlockTermV2(api, blockTermCore)
 	handler.NewSSHHandler(sshService).Register(api)
 	githubHandler.RegisterProtectedRoutes(api)
 	gitHandler := handler.NewGitHandler(db)

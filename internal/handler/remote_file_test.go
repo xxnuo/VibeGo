@@ -35,36 +35,8 @@ type singleSFTPClientProvider struct {
 	client *sftp.Client
 }
 
-type blockAwareSFTPProvider struct {
-	base *testSFTPProvider
-
-	mu       sync.Mutex
-	terminal string
-	blockID  string
-	created  int64
-	calls    int
-}
-
 func (p *singleSFTPClientProvider) OpenSFTP(context.Context, string) (*sftp.Client, error) {
 	return p.client, nil
-}
-
-func (p *blockAwareSFTPProvider) OpenSFTP(ctx context.Context, terminalID string) (*sftp.Client, error) {
-	return p.base.OpenSFTP(ctx, terminalID)
-}
-
-func (p *blockAwareSFTPProvider) OpenBlockSFTP(
-	ctx context.Context,
-	terminalID, blockID string,
-	blockCreatedAt int64,
-) (*sftp.Client, error) {
-	p.mu.Lock()
-	p.terminal = terminalID
-	p.blockID = blockID
-	p.created = blockCreatedAt
-	p.calls++
-	p.mu.Unlock()
-	return p.base.OpenSFTP(ctx, terminalID)
 }
 
 func newStalledSFTPClient(t *testing.T) (*sftp.Client, <-chan struct{}) {
@@ -342,79 +314,6 @@ func TestRemoteFileRendererTransportOverSFTP(t *testing.T) {
 	require.Equal(t, "2345", w.Body.String())
 	require.Equal(t, "bytes 2-5/10", w.Header().Get("Content-Range"))
 	require.Contains(t, w.Header().Get("Content-Disposition"), "inline")
-}
-
-func TestRemoteFileBlockScopeUsesOptionalV2DescriptorAndKeepsV1Compatibility(t *testing.T) {
-	root := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(root, "block.txt"), []byte("block-content"), 0644))
-	provider := &blockAwareSFTPProvider{base: &testSFTPProvider{root: root}}
-	t.Cleanup(provider.base.Close)
-	r, views := setupRemoteFileHandler(t, provider)
-
-	query := "terminal_id=parent-terminal&block_id=child-block&block_created_at=42&path=block.txt"
-	w := remoteFileRequestRecorder(t, r, http.MethodGet, "/api/file/remote/info?"+query, nil)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	provider.mu.Lock()
-	require.Equal(t, "parent-terminal", provider.terminal)
-	require.Equal(t, "child-block", provider.blockID)
-	require.EqualValues(t, 42, provider.created)
-	require.Equal(t, 1, provider.calls)
-	provider.mu.Unlock()
-
-	w = remoteFileRequestRecorder(t, r, http.MethodGet,
-		"/api/file/remote/view-url?"+query, nil)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	var grant struct {
-		URL string `json:"url"`
-	}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &grant))
-	parsed, err := url.Parse(grant.URL)
-	require.NoError(t, err)
-	sealed := parsed.Query().Get("path")
-	require.True(t, strings.HasPrefix(sealed, remoteFileDescriptorV2Prefix))
-	decoded, remote, err := decodeRemoteFileDescriptor(views, sealed)
-	require.NoError(t, err)
-	require.True(t, remote)
-	require.Equal(t, 2, decoded.Version)
-	require.Equal(t, "parent-terminal", decoded.Terminal)
-	require.Equal(t, "child-block", decoded.BlockID)
-	require.NotNil(t, decoded.BlockCreatedAt)
-	require.EqualValues(t, 42, *decoded.BlockCreatedAt)
-
-	cookies := w.Result().Cookies()
-	require.Len(t, cookies, 1)
-	w = httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, grant.URL, nil)
-	req.AddCookie(cookies[0])
-	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	require.Equal(t, "block-content", w.Body.String())
-	provider.mu.Lock()
-	require.Equal(t, "parent-terminal", provider.terminal)
-	require.Equal(t, "child-block", provider.blockID)
-	require.EqualValues(t, 42, provider.created)
-	require.Equal(t, 3, provider.calls)
-	provider.mu.Unlock()
-
-	// The old terminal-only endpoint still emits/accepts v1 descriptors.
-	w = remoteFileRequestRecorder(t, r, http.MethodGet,
-		"/api/file/remote/view-url?terminal_id=parent-terminal&path=block.txt", nil)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &grant))
-	parsed, err = url.Parse(grant.URL)
-	require.NoError(t, err)
-	sealed = parsed.Query().Get("path")
-	require.True(t, strings.HasPrefix(sealed, remoteFileDescriptorPrefix))
-	require.False(t, strings.HasPrefix(sealed, remoteFileDescriptorV2Prefix))
-	decoded, remote, err = decodeRemoteFileDescriptor(views, sealed)
-	require.NoError(t, err)
-	require.True(t, remote)
-	require.Equal(t, 1, decoded.Version)
-	require.Empty(t, decoded.BlockID)
-
-	w = remoteFileRequestRecorder(t, r, http.MethodGet,
-		"/api/file/remote/info?terminal_id=parent-terminal&block_id=child-block&path=block.txt", nil)
-	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 }
 
 func TestRemoteSaveRejectsSymlinkDirectoryAndSpecialFile(t *testing.T) {

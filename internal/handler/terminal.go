@@ -64,10 +64,6 @@ func (h *TerminalHandler) Register(r *gin.RouterGroup) {
 	g.POST("/delete", h.Delete)
 	g.POST("/delete-batch", h.DeleteBatch)
 	g.GET("/ws/:id", h.WebSocket)
-	// BlockTerm view state is terminal-scoped but lives alongside the terminal
-	// lifecycle routes so ownership and deletion use the same manager lock.
-	r.GET("/blockterm/sessions/:terminal_id/view", h.GetBlockTermView)
-	r.PATCH("/blockterm/sessions/:terminal_id/view", h.PatchBlockTermView)
 }
 
 type TerminalInfo struct {
@@ -685,8 +681,7 @@ func (h *TerminalHandler) UpdateRuntimeInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
-// Reset replaces a live local PTY while retaining the terminal identity and
-// its durable BlockTerm data.
+// Reset replaces a live local PTY while retaining the terminal identity.
 func (h *TerminalHandler) Reset(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {

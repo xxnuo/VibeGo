@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xxnuo/vibego/internal/model"
-	"github.com/xxnuo/vibego/internal/service/blocktermmodel"
 	"github.com/xxnuo/vibego/internal/service/settings"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -154,45 +153,6 @@ func TestSettingsResetPreservesGitHubToken(t *testing.T) {
 	assert.Equal(t, "server-secret", value)
 	_, err = h.store.Get("theme")
 	assert.Error(t, err)
-}
-
-func TestSettingsProtectsBlockTermModelConfiguration(t *testing.T) {
-	h, r := setupTestSettingsHandler(t)
-	require.NoError(t, h.store.Set(blocktermmodel.SettingAPIToken, "model-secret"))
-	require.NoError(t, h.store.Set(blocktermmodel.SettingBaseURL, "https://example.com/v1"))
-	require.NoError(t, h.store.Set("theme", "dark"))
-
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/settings/list", nil))
-	require.Equal(t, http.StatusOK, w.Code)
-	require.NotContains(t, w.Body.String(), "model-secret")
-	require.NotContains(t, w.Body.String(), blocktermmodel.SettingAPIToken)
-	require.NotContains(t, w.Body.String(), blocktermmodel.SettingBaseURL)
-
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/settings/get?key="+blocktermmodel.SettingAPIToken, nil))
-	require.Equal(t, http.StatusNotFound, w.Code)
-
-	w = httptest.NewRecorder()
-	setRequest := httptest.NewRequest(http.MethodPost, "/api/settings/set", bytes.NewBufferString(
-		`{"key":"`+blocktermmodel.SettingAPIToken+`","value":"replacement"}`,
-	))
-	setRequest.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, setRequest)
-	require.Equal(t, http.StatusForbidden, w.Code)
-
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/api/settings/"+blocktermmodel.SettingAPIToken, nil))
-	require.Equal(t, http.StatusForbidden, w.Code)
-
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/settings/reset", nil))
-	require.Equal(t, http.StatusOK, w.Code)
-	value, err := h.store.Get(blocktermmodel.SettingAPIToken)
-	require.NoError(t, err)
-	require.Equal(t, "model-secret", value)
-	_, err = h.store.Get("theme")
-	require.Error(t, err)
 }
 
 func TestSettingsDelete(t *testing.T) {

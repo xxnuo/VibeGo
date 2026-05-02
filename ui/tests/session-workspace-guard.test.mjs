@@ -14,10 +14,9 @@ test("keeps only frame groups that can own terminal workspace state", () => {
       { id: "home", type: "home" },
       { id: "files-only", type: "group", pages: [{ type: "files" }] },
       { id: "folder", type: "group", pages: [{ type: "files" }, { type: "terminal" }] },
-      { id: "blockterm", type: "tool", pageId: "blockterm" },
       { id: "other-tool", type: "tool", pageId: "other" },
     ])],
-    ["folder", "blockterm"]
+    ["folder"]
   );
 });
 

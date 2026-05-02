@@ -30,7 +30,6 @@ func setupTestHandler(t *testing.T) (*TerminalHandler, func()) {
 		&model.UserSession{},
 		&model.TerminalSession{},
 		&model.TerminalHistory{},
-		&model.BlockTermBlock{},
 	); err != nil {
 		t.Fatalf("failed to migrate: %v", err)
 	}
@@ -1040,23 +1039,6 @@ func TestTerminalHandlerReset(t *testing.T) {
 	active, ok := handler.manager.Get(info.ID)
 	if !ok || active.Status != model.StatusRunning || active.Readonly {
 		t.Fatalf("terminal was not reset in place: %+v", active)
-	}
-
-	if err := handler.manager.DB().Create(&model.BlockTermBlock{
-		ID:         "handler-reset-running-" + info.ID,
-		TerminalID: info.ID,
-		LineNum:    1,
-		Kind:       "command",
-		Command:    "sleep 30",
-		Status:     "running",
-	}).Error; err != nil {
-		t.Fatalf("seed running block: %v", err)
-	}
-	req = httptest.NewRequest(http.MethodPost, "/api/terminal/"+info.ID+"/reset", nil)
-	w = httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	if w.Code != http.StatusConflict {
-		t.Fatalf("expected status 409, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

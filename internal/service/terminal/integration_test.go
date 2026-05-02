@@ -28,8 +28,6 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&model.UserSession{},
 		&model.TerminalSession{},
 		&model.TerminalHistory{},
-		&model.BlockTermBlock{},
-		&model.BlockTermCommandHistory{},
 	); err != nil {
 		t.Fatalf("failed to migrate: %v", err)
 	}
@@ -751,20 +749,6 @@ func TestManager_DeleteRemovesSplitTree(t *testing.T) {
 	if err := db.Create(&model.TerminalHistory{SessionID: grandchild.ID, Data: []byte("grandchild"), CreatedAt: time.Now().Unix()}).Error; err != nil {
 		t.Fatalf("failed to seed grandchild history: %v", err)
 	}
-	for line, terminalID := range []string{root.ID, child.ID, grandchild.ID} {
-		block := model.BlockTermBlock{ID: fmt.Sprintf("block-%d", line), TerminalID: terminalID, LineNum: line}
-		if err := db.Create(&block).Error; err != nil {
-			t.Fatalf("failed to seed block for %s: %v", terminalID, err)
-		}
-		if err := db.Create(&model.BlockTermCommandHistory{
-			ID:         block.ID,
-			TerminalID: terminalID,
-			LineNum:    line,
-			Command:    fmt.Sprintf("command-%d", line),
-		}).Error; err != nil {
-			t.Fatalf("failed to seed command history for %s: %v", terminalID, err)
-		}
-	}
 
 	if err := manager.Delete(root.ID); err != nil {
 		t.Fatalf("failed to delete split tree: %v", err)
@@ -785,22 +769,6 @@ func TestManager_DeleteRemovesSplitTree(t *testing.T) {
 	}
 	if remainingHistory != 0 {
 		t.Fatalf("expected split tree history to be deleted, got %d", remainingHistory)
-	}
-
-	var remainingBlocks int64
-	if err := db.Model(&model.BlockTermBlock{}).Where("terminal_id IN ?", terminalIDs).Count(&remainingBlocks).Error; err != nil {
-		t.Fatalf("failed to count blocks: %v", err)
-	}
-	if remainingBlocks != 0 {
-		t.Fatalf("expected split tree blocks to be deleted, got %d", remainingBlocks)
-	}
-
-	var remainingCommandHistory int64
-	if err := db.Model(&model.BlockTermCommandHistory{}).Where("terminal_id IN ?", terminalIDs).Count(&remainingCommandHistory).Error; err != nil {
-		t.Fatalf("failed to count command history: %v", err)
-	}
-	if remainingCommandHistory != int64(len(terminalIDs)) {
-		t.Fatalf("expected split tree command history to be retained, got %d", remainingCommandHistory)
 	}
 }
 
@@ -862,15 +830,6 @@ func TestManager_DeleteKeepsDescendantsOutsideRootScope(t *testing.T) {
 		if err := db.Create(&model.TerminalHistory{SessionID: terminalID, Data: []byte("history"), CreatedAt: int64(i + 1)}).Error; err != nil {
 			t.Fatalf("seed history for %s: %v", terminalID, err)
 		}
-		if err := db.Create(&model.BlockTermBlock{
-			ID:         fmt.Sprintf("scoped-block-%d", i),
-			TerminalID: terminalID,
-			LineNum:    0,
-			CreatedAt:  int64(i + 1),
-			UpdatedAt:  int64(i + 1),
-		}).Error; err != nil {
-			t.Fatalf("seed block for %s: %v", terminalID, err)
-		}
 	}
 
 	if err := manager.Delete(root.ID); err != nil {
@@ -896,12 +855,6 @@ func TestManager_DeleteKeepsDescendantsOutsideRootScope(t *testing.T) {
 	}
 	if count != int64(len(preservedIDs)) {
 		t.Fatalf("cross-scope history was deleted: got %d, want %d", count, len(preservedIDs))
-	}
-	if err := db.Model(&model.BlockTermBlock{}).Where("terminal_id IN ?", preservedIDs).Count(&count).Error; err != nil {
-		t.Fatalf("count preserved blocks: %v", err)
-	}
-	if count != int64(len(preservedIDs)) {
-		t.Fatalf("cross-scope blocks were deleted: got %d, want %d", count, len(preservedIDs))
 	}
 	for _, terminalID := range preservedIDs {
 		if _, ok := manager.Get(terminalID); !ok {
@@ -964,130 +917,6 @@ func TestManager_CleanupOnStart(t *testing.T) {
 	}
 	if gotExited.UpdatedAt != exited.UpdatedAt {
 		t.Fatalf("expected existing exited terminal updated_at to remain %d, got %d", exited.UpdatedAt, gotExited.UpdatedAt)
-	}
-}
-
-func TestManagerCleanupStaleTerminalStateInterruptsOwnedRunningBlocks(t *testing.T) {
-	db := setupTestDB(t)
-	manager := NewManager(db, &ManagerConfig{Shell: "/bin/sh"})
-
-	staleID := "startup-stale-with-blocks"
-	exitedID := "startup-already-exited-with-block"
-	closedID := "startup-already-closed-with-block"
-	if err := db.Create(&model.TerminalSession{ID: staleID, Status: model.StatusRunning, Readonly: false, UpdatedAt: 1}).Error; err != nil {
-		t.Fatalf("create stale terminal: %v", err)
-	}
-	if err := db.Create(&model.TerminalSession{ID: exitedID, Status: model.StatusExited, Readonly: true, UpdatedAt: 2}).Error; err != nil {
-		t.Fatalf("create exited terminal: %v", err)
-	}
-	if err := db.Create(&model.TerminalSession{ID: closedID, Status: model.StatusClosed, Readonly: true, UpdatedAt: 3}).Error; err != nil {
-		t.Fatalf("create closed terminal: %v", err)
-	}
-
-	exitCode := 7
-	startedAt := int64(10)
-	if err := db.Create(&model.BlockTermBlock{
-		ID: "startup-stale-running-block", TerminalID: staleID, LineNum: 0,
-		Kind: "command", Status: "running", ExitCode: &exitCode, StartedAt: &startedAt,
-	}).Error; err != nil {
-		t.Fatalf("create stale running block: %v", err)
-	}
-	if err := db.Create(&model.BlockTermBlock{
-		ID: "startup-stale-success-block", TerminalID: staleID, LineNum: 1,
-		Kind: "command", Status: "success", ExitCode: &exitCode, StartedAt: &startedAt,
-	}).Error; err != nil {
-		t.Fatalf("create stale completed block: %v", err)
-	}
-	if err := db.Create(&model.BlockTermBlock{
-		ID: "startup-exited-running-block", TerminalID: exitedID, LineNum: 0,
-		Kind: "command", Status: "running",
-	}).Error; err != nil {
-		t.Fatalf("create exited-terminal block: %v", err)
-	}
-	if err := db.Create(&model.BlockTermBlock{
-		ID: "startup-closed-running-block", TerminalID: closedID, LineNum: 0,
-		Kind: "command", Status: "running",
-	}).Error; err != nil {
-		t.Fatalf("create closed-terminal block: %v", err)
-	}
-
-	manager.CleanupOnStart()
-
-	var stale model.TerminalSession
-	if err := db.First(&stale, "id = ?", staleID).Error; err != nil {
-		t.Fatalf("load stale terminal: %v", err)
-	}
-	if stale.Status != model.StatusExited || !stale.Readonly || stale.UpdatedAt <= 1 {
-		t.Fatalf("stale terminal state = status %q readonly %t updated_at %d", stale.Status, stale.Readonly, stale.UpdatedAt)
-	}
-
-	var interrupted model.BlockTermBlock
-	if err := db.First(&interrupted, "id = ?", "startup-stale-running-block").Error; err != nil {
-		t.Fatalf("load interrupted block: %v", err)
-	}
-	if interrupted.Status != "interrupted" || interrupted.ExitCode != nil || interrupted.FinishedAt == nil || *interrupted.FinishedAt <= 1 {
-		t.Fatalf("stale running block state = status %q exit_code %v finished_at %v", interrupted.Status, interrupted.ExitCode, interrupted.FinishedAt)
-	}
-
-	var completed model.BlockTermBlock
-	if err := db.First(&completed, "id = ?", "startup-stale-success-block").Error; err != nil {
-		t.Fatalf("load completed block: %v", err)
-	}
-	if completed.Status != "success" || completed.ExitCode == nil || completed.FinishedAt != nil {
-		t.Fatalf("completed block was changed: status %q exit_code %v finished_at %v", completed.Status, completed.ExitCode, completed.FinishedAt)
-	}
-
-	for _, id := range []string{"startup-exited-running-block", "startup-closed-running-block"} {
-		var block model.BlockTermBlock
-		if err := db.First(&block, "id = ?", id).Error; err != nil {
-			t.Fatalf("load non-stale block %s: %v", id, err)
-		}
-		if block.Status != "running" || block.FinishedAt != nil {
-			t.Fatalf("non-stale block %s changed: status %q finished_at %v", id, block.Status, block.FinishedAt)
-		}
-	}
-}
-
-func TestManagerCleanupStaleTerminalStateRollsBackTerminalAndBlocksTogether(t *testing.T) {
-	db := setupTestDB(t)
-	manager := NewManager(db, &ManagerConfig{Shell: "/bin/sh"})
-	const terminalID = "startup-atomicity-terminal"
-	const blockID = "startup-atomicity-block"
-	if err := db.Create(&model.TerminalSession{ID: terminalID, Status: model.StatusRunning, Readonly: false, UpdatedAt: 1}).Error; err != nil {
-		t.Fatalf("create terminal: %v", err)
-	}
-	if err := db.Create(&model.BlockTermBlock{ID: blockID, TerminalID: terminalID, LineNum: 0, Kind: "command", Status: "running"}).Error; err != nil {
-		t.Fatalf("create block: %v", err)
-	}
-
-	updateErr := errors.New("startup block update failed")
-	const callbackName = "test:cleanup_stale_terminal_state_block_error"
-	if err := db.Callback().Update().Before("gorm:update").Register(callbackName, func(tx *gorm.DB) {
-		if tx.Statement.Schema != nil && tx.Statement.Schema.Table == (model.BlockTermBlock{}).TableName() {
-			tx.AddError(updateErr)
-		}
-	}); err != nil {
-		t.Fatalf("register update callback: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Callback().Update().Remove(callbackName) })
-
-	if err := manager.cleanupStaleTerminalState(); !errors.Is(err, updateErr) {
-		t.Fatalf("cleanup error = %v, want %v", err, updateErr)
-	}
-
-	var session model.TerminalSession
-	if err := db.First(&session, "id = ?", terminalID).Error; err != nil {
-		t.Fatalf("load terminal after rollback: %v", err)
-	}
-	if session.Status != model.StatusRunning || session.Readonly || session.UpdatedAt != 1 {
-		t.Fatalf("terminal changed despite rollback: status %q readonly %t updated_at %d", session.Status, session.Readonly, session.UpdatedAt)
-	}
-	var block model.BlockTermBlock
-	if err := db.First(&block, "id = ?", blockID).Error; err != nil {
-		t.Fatalf("load block after rollback: %v", err)
-	}
-	if block.Status != "running" || block.FinishedAt != nil || block.ExitCode != nil {
-		t.Fatalf("block changed despite rollback: status %q finished_at %v exit_code %v", block.Status, block.FinishedAt, block.ExitCode)
 	}
 }
 

@@ -392,8 +392,6 @@ func setupSSHServiceTestDB(t *testing.T) *gorm.DB {
 		&model.UserSession{},
 		&model.TerminalSession{},
 		&model.TerminalHistory{},
-		&model.BlockTermBlock{},
-		&model.BlockTermCommandHistory{},
 		&model.SSHConnectionProfile{},
 		&model.SSHKnownHost{},
 	))
@@ -809,83 +807,6 @@ func TestOpenSFTPRejectsMissingAndLocalTerminals(t *testing.T) {
 	require.NoError(t, db.Create(&model.TerminalSession{ID: "local-files", RuntimeType: terminal.RuntimeTypeLocal}).Error)
 	_, err = service.OpenSFTP(context.Background(), "local-files")
 	require.ErrorIs(t, err, ErrRemoteFilesUnsupported)
-}
-
-func TestOpenBlockSFTPUsesDurableBlockSelectionAndHistoryFallback(t *testing.T) {
-	serverA := newTestSSHServer(t, "password-a")
-	serverB := newTestSSHServer(t, "password-b")
-	rootA := t.TempDir()
-	rootB := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(rootA, "profile.txt"), []byte("profile-a"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(rootB, "profile.txt"), []byte("profile-b"), 0644))
-	serverA.setSFTPRoot(rootA)
-	serverB.setSFTPRoot(rootB)
-
-	db := setupSSHServiceTestDB(t)
-	service := New(db)
-	t.Cleanup(service.Close)
-	profileA := createPasswordProfile(t, service, serverA)
-	profileB := createPasswordProfile(t, service, serverB)
-	trustTestServer(t, service, profileA.ID, "password-a")
-	trustTestServer(t, service, profileB.ID, "password-b")
-	require.NoError(t, service.Connect(context.Background(), profileA.ID, terminal.SSHAuthSecrets{Password: "password-a"}))
-	require.NoError(t, service.Connect(context.Background(), profileB.ID, terminal.SSHAuthSecrets{Password: "password-b"}))
-
-	// A local parent may own an SSH child. The child selection, rather than the
-	// parent terminal row, determines which connected profile opens SFTP.
-	require.NoError(t, db.Create(&model.TerminalSession{
-		ID: "block-files-local-parent", RuntimeType: terminal.RuntimeTypeLocal,
-	}).Error)
-	require.NoError(t, db.Create(&model.BlockTermBlock{
-		ID: "block-files-child-b", TerminalID: "block-files-local-parent", LineNum: 1, CreatedAt: 11,
-		RuntimeType: terminal.RuntimeTypeSSH, SSHProfileID: profileB.ID,
-	}).Error)
-	client, err := service.OpenBlockSFTP(context.Background(), "block-files-local-parent", "block-files-child-b", 11)
-	require.NoError(t, err)
-	require.Equal(t, "profile-b", readSFTPTestFile(t, client, "profile.txt"))
-	require.NoError(t, client.Close())
-
-	// An SSH parent connected through profile A may still have a child pinned to
-	// profile B; the parent profile must not leak into the child transport.
-	require.NoError(t, db.Create(&model.TerminalSession{
-		ID: "block-files-ssh-parent", RuntimeType: terminal.RuntimeTypeSSH, SSHProfileID: profileA.ID,
-	}).Error)
-	require.NoError(t, db.Create(&model.BlockTermBlock{
-		ID: "block-files-child-cross-profile", TerminalID: "block-files-ssh-parent", LineNum: 1, CreatedAt: 12,
-		RuntimeType: terminal.RuntimeTypeSSH, SSHProfileID: profileB.ID,
-	}).Error)
-	client, err = service.OpenBlockSFTP(context.Background(), "block-files-ssh-parent", "block-files-child-cross-profile", 12)
-	require.NoError(t, err)
-	require.Equal(t, "profile-b", readSFTPTestFile(t, client, "profile.txt"))
-	require.NoError(t, client.Close())
-	require.NoError(t, db.Create(&model.BlockTermBlock{
-		ID: "block-files-local-child", TerminalID: "block-files-ssh-parent", LineNum: 2, CreatedAt: 14,
-		RuntimeType: terminal.RuntimeTypeLocal,
-	}).Error)
-	_, err = service.OpenBlockSFTP(context.Background(), "block-files-ssh-parent", "block-files-local-child", 14)
-	require.ErrorIs(t, err, ErrRemoteFilesUnsupported)
-
-	// The immutable history row remains usable after the source block is
-	// removed, while a purged row is no longer an authorized file scope.
-	require.NoError(t, db.Create(&model.BlockTermCommandHistory{
-		ID: "block-files-history-fallback", TerminalID: "block-files-ssh-parent", LineNum: 2,
-		Command: "echo history", CreatedAt: 13,
-		RuntimeType: terminal.RuntimeTypeSSH, SSHProfileID: profileB.ID,
-	}).Error)
-	client, err = service.OpenBlockSFTP(context.Background(), "block-files-ssh-parent", "block-files-history-fallback", 13)
-	require.NoError(t, err)
-	require.NoError(t, client.Close())
-	require.NoError(t, db.Model(&model.BlockTermCommandHistory{}).
-		Where("id = ?", "block-files-history-fallback").Update("history_purged_at", int64(14)).Error)
-	_, err = service.OpenBlockSFTP(context.Background(), "block-files-ssh-parent", "block-files-history-fallback", 13)
-	require.ErrorIs(t, err, ErrRemoteFileBlockNotFound)
-
-	// The lookup is exact on both terminal and creation identity; a client cannot
-	// borrow a valid child block from another terminal or lifecycle.
-	_, err = service.OpenBlockSFTP(context.Background(), "block-files-local-parent", "block-files-child-cross-profile", 12)
-	require.ErrorIs(t, err, ErrRemoteFileBlockNotFound)
-	_, err = service.OpenBlockSFTP(context.Background(), "block-files-ssh-parent", "block-files-child-cross-profile", 99)
-	require.ErrorIs(t, err, ErrRemoteFileBlockNotFound)
 }
 
 func readSFTPTestFile(t *testing.T, client *sftp.Client, name string) string {

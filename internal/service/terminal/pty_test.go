@@ -5,62 +5,11 @@ import (
 	"errors"
 	"io"
 	"os"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
-
-func TestPrepareBlockTermShellEnvironment(t *testing.T) {
-	tests := []struct {
-		name  string
-		shell string
-		env   []string
-		want  []string
-	}{
-		{
-			name:  "bash adds ignorespace",
-			shell: "/bin/bash",
-			env:   []string{"PATH=/bin", "HISTCONTROL=ignoredups"},
-			want:  []string{"PATH=/bin", "HISTCONTROL=ignoredups:ignorespace"},
-		},
-		{
-			name:  "bash preserves ignoreboth",
-			shell: "/usr/bin/bash",
-			env:   []string{"HISTCONTROL=ignoreboth", "PATH=/bin"},
-			want:  []string{"PATH=/bin", "HISTCONTROL=ignoreboth"},
-		},
-		{
-			name:  "other shell remains unchanged",
-			shell: "/bin/zsh",
-			env:   []string{"PATH=/bin", "HISTCONTROL=ignoredups"},
-			want:  []string{"PATH=/bin", "HISTCONTROL=ignoredups"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := prepareBlockTermShellEnvironment(tt.shell, append([]string(nil), tt.env...))
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("environment = %#v, want %#v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestPrepareBlockTermShellArgs(t *testing.T) {
-	if got := prepareBlockTermShellArgs("/bin/zsh", nil); !reflect.DeepEqual(got, []string{"-o", "HIST_IGNORE_SPACE"}) {
-		t.Fatalf("zsh args = %#v", got)
-	}
-	args := []string{"-f"}
-	if got := prepareBlockTermShellArgs("/bin/zsh", args); !reflect.DeepEqual(got, args) {
-		t.Fatalf("explicit zsh args = %#v, want %#v", got, args)
-	}
-	if got := prepareBlockTermShellArgs("/bin/bash", nil); got != nil {
-		t.Fatalf("bash args = %#v, want nil", got)
-	}
-}
 
 func TestLocalCommand_WindowTitleVariables(t *testing.T) {
 	tmpDir := os.TempDir()

@@ -26,8 +26,6 @@ func setupSSHHandlerTest(t *testing.T) (*gorm.DB, *sshconnection.Service, *termi
 		&model.UserSession{},
 		&model.TerminalSession{},
 		&model.TerminalHistory{},
-		&model.BlockTermBlock{},
-		&model.BlockTermCommandHistory{},
 		&model.SSHConnectionProfile{},
 		&model.SSHKnownHost{},
 	))

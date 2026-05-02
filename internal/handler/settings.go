@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/xxnuo/vibego/internal/service/blocktermmodel"
 	"github.com/xxnuo/vibego/internal/service/settings"
 	"gorm.io/gorm"
 )
@@ -127,8 +126,7 @@ func (h *SettingsHandler) Get(c *gin.Context) {
 // @Failure 500 {object} map[string]string
 // @Router /api/settings/reset [post]
 func (h *SettingsHandler) Reset(c *gin.Context) {
-	privateKeys := append([]string{"github.access_token", "github_token", "githubToken"}, blocktermmodel.PrivateSettingKeys()...)
-	if err := h.store.ClearExcept(privateKeys...); err != nil {
+	if err := h.store.ClearExcept("github.access_token", "github_token", "githubToken"); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -154,15 +152,7 @@ func (h *SettingsHandler) Delete(c *gin.Context) {
 
 func isPrivateSettingKey(key string) bool {
 	key = strings.TrimSpace(key)
-	if key == "github.access_token" || key == "github_token" || key == "githubToken" {
-		return true
-	}
-	for _, privateKey := range blocktermmodel.PrivateSettingKeys() {
-		if key == privateKey {
-			return true
-		}
-	}
-	return false
+	return key == "github.access_token" || key == "github_token" || key == "githubToken"
 }
 
 func applyGitSettingDefaults(values map[string]string) {

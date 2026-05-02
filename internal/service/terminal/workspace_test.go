@@ -218,15 +218,6 @@ func TestDeleteWorkspaceKeepsCrossWorkspaceDescendantData(t *testing.T) {
 		if err := db.Create(&model.TerminalHistory{SessionID: terminalID, Data: []byte("history"), CreatedAt: int64(i + 1)}).Error; err != nil {
 			t.Fatalf("seed history for %s: %v", terminalID, err)
 		}
-		if err := db.Create(&model.BlockTermBlock{
-			ID:         terminalID + "-block",
-			TerminalID: terminalID,
-			LineNum:    0,
-			CreatedAt:  int64(i + 1),
-			UpdatedAt:  int64(i + 1),
-		}).Error; err != nil {
-			t.Fatalf("seed block for %s: %v", terminalID, err)
-		}
 	}
 
 	if err := manager.DeleteWorkspace("workspace-1"); err != nil {
@@ -251,12 +242,6 @@ func TestDeleteWorkspaceKeepsCrossWorkspaceDescendantData(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("cross-workspace history was deleted: %d", count)
-	}
-	if err := db.Model(&model.BlockTermBlock{}).Where("terminal_id = ?", fakeChild.ID).Count(&count).Error; err != nil {
-		t.Fatalf("count fake child blocks: %v", err)
-	}
-	if count != 1 {
-		t.Fatalf("cross-workspace block was deleted: %d", count)
 	}
 	if _, ok := manager.Get(fakeChild.ID); !ok {
 		t.Fatal("cross-workspace fake child is no longer active")

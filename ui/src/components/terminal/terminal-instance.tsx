@@ -15,7 +15,6 @@ import { toast } from "sonner";
 import "@xterm/xterm/css/xterm.css";
 import { fileApi } from "@/api/file";
 import { type TerminalCapabilities, terminalApi } from "@/api/terminal";
-import { decodeBase64Bytes } from "@/components/terminal/blockterm-model";
 import { getResolvedTerminalFontFamily } from "@/components/terminal/fonts";
 import TerminalSelectionMenu from "@/components/terminal/terminal-selection-menu";
 import { useTranslation } from "@/lib/i18n";
@@ -430,6 +429,15 @@ const parseOsc777Notification = (data: string): ParsedTerminalNotification | nul
   }
 
   return { title: normalizedTitle, body };
+};
+
+const decodeBase64Bytes = (value: string): Uint8Array => {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
 };
 
 const decodeBase64Utf8 = (value: string): string => {

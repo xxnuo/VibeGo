@@ -1,6 +1,5 @@
 import {
   Activity,
-  Blocks,
   Bot,
   Files,
   GitGraph,
@@ -41,20 +40,6 @@ registerPage({
   singleton: true,
   newPageDefaultVisible: true,
   View: lazy(() => import("@/pages/tools/codex")),
-});
-
-registerPage({
-  id: "blockterm",
-  name: "BlockTerm",
-  nameKey: "plugin.blockTerm.name",
-  descriptionKey: "plugin.blockTerm.description",
-  icon: Blocks,
-  category: "tool",
-  order: 15,
-  singleton: true,
-  newPageDefaultVisible: true,
-  tags: [{ labelKey: "pageTag.test" }],
-  View: lazy(() => import("@/pages/tools/blockterm")),
 });
 
 registerPage({

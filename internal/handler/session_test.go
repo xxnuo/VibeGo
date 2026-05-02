@@ -34,8 +34,6 @@ func setupTestSessionHandler(t *testing.T) (*SessionHandler, *gin.Engine) {
 		&model.UserSession{},
 		&model.TerminalSession{},
 		&model.TerminalHistory{},
-		&model.BlockTermBlock{},
-		&model.BlockTermCommandHistory{},
 	))
 	manager := terminal.NewManager(db, &terminal.ManagerConfig{Shell: "/bin/sh"})
 	h := NewSessionHandler(db, manager)
@@ -858,30 +856,11 @@ func TestSessionRemoveCleansWorkspaceTerminalTree(t *testing.T) {
 	require.NoError(t, err)
 
 	removedIDs := []string{root.ID, child.ID, grandchild.ID}
-	for i, terminalID := range append(append([]string{}, removedIDs...), unrelated.ID) {
-		workspaceSessionID := "remove-workspace"
-		if terminalID == unrelated.ID {
-			workspaceSessionID = "keep-workspace"
-		}
+	for _, terminalID := range append(append([]string{}, removedIDs...), unrelated.ID) {
 		require.NoError(t, h.db.Create(&model.TerminalHistory{
 			SessionID: terminalID,
 			Data:      []byte("history"),
 			CreatedAt: now,
-		}).Error)
-		require.NoError(t, h.db.Create(&model.BlockTermBlock{
-			ID:         fmt.Sprintf("block-%d", i),
-			TerminalID: terminalID,
-			LineNum:    0,
-			CreatedAt:  now,
-			UpdatedAt:  now,
-		}).Error)
-		require.NoError(t, h.db.Create(&model.BlockTermCommandHistory{
-			ID:                 fmt.Sprintf("block-%d", i),
-			TerminalID:         terminalID,
-			WorkspaceSessionID: workspaceSessionID,
-			LineNum:            0,
-			Command:            fmt.Sprintf("command-%d", i),
-			CreatedAt:          now,
 		}).Error)
 	}
 
@@ -902,16 +881,10 @@ func TestSessionRemoveCleansWorkspaceTerminalTree(t *testing.T) {
 	assert.Zero(t, count)
 	require.NoError(t, h.db.Model(&model.TerminalHistory{}).Where("session_id IN ?", removedIDs).Count(&count).Error)
 	assert.Zero(t, count)
-	require.NoError(t, h.db.Model(&model.BlockTermBlock{}).Where("terminal_id IN ?", removedIDs).Count(&count).Error)
-	assert.Zero(t, count)
-	require.NoError(t, h.db.Model(&model.BlockTermCommandHistory{}).Where("terminal_id IN ?", removedIDs).Count(&count).Error)
-	assert.EqualValues(t, len(removedIDs), count)
 
 	require.NoError(t, h.db.Model(&model.UserSession{}).Where("id = ?", "keep-workspace").Count(&count).Error)
 	assert.EqualValues(t, 1, count)
 	require.NoError(t, h.db.Model(&model.TerminalSession{}).Where("id = ?", unrelated.ID).Count(&count).Error)
-	assert.EqualValues(t, 1, count)
-	require.NoError(t, h.db.Model(&model.BlockTermCommandHistory{}).Where("terminal_id = ?", unrelated.ID).Count(&count).Error)
 	assert.EqualValues(t, 1, count)
 	_, active := h.manager.Get(unrelated.ID)
 	assert.True(t, active)

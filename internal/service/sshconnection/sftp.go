@@ -12,8 +12,6 @@ import (
 	"gorm.io/gorm"
 )
 
-var ErrRemoteFileBlockNotFound = errors.New("remote file block not found")
-
 // OpenSFTP returns a short-lived SFTP client backed by the SSH connection
 // shared by the terminal runtime. The caller owns the returned client and
 // must close it before returning the HTTP response.
@@ -37,91 +35,6 @@ func (s *Service) OpenSFTP(ctx context.Context, terminalID string) (*sftp.Client
 		return nil, ErrRemoteFilesUnsupported
 	}
 	return s.openSFTPForProfile(ctx, session.SSHProfileID)
-}
-
-// OpenBlockSFTP resolves the connection exclusively from a durable BlockTerm
-// identity. The terminal is part of the lookup key and is never used as a
-// runtime/profile fallback, so a child block may safely select a different SSH
-// profile from its parent terminal. Deleted blocks fall back to their visible
-// immutable history snapshot.
-func (s *Service) OpenBlockSFTP(
-	ctx context.Context,
-	terminalID string,
-	blockID string,
-	blockCreatedAt int64,
-) (*sftp.Client, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	terminalID = strings.TrimSpace(terminalID)
-	blockID = strings.TrimSpace(blockID)
-	if terminalID == "" || blockID == "" || blockCreatedAt < 0 {
-		return nil, ErrRemoteFileBlockNotFound
-	}
-	if s == nil || s.db == nil {
-		return nil, ErrRemoteFileBlockNotFound
-	}
-
-	type runtimeSelection struct {
-		ID           string `gorm:"column:id"`
-		RuntimeType  string `gorm:"column:runtime_type"`
-		SSHProfileID string `gorm:"column:ssh_profile_id"`
-	}
-	selection := runtimeSelection{}
-	found := false
-	if s.db.Migrator().HasTable(&model.BlockTermBlock{}) {
-		columns := []string{"id"}
-		if s.db.Migrator().HasColumn(&model.BlockTermBlock{}, "runtime_type") {
-			columns = append(columns, "runtime_type")
-		}
-		if s.db.Migrator().HasColumn(&model.BlockTermBlock{}, "ssh_profile_id") {
-			columns = append(columns, "ssh_profile_id")
-		}
-		err := s.db.WithContext(ctx).
-			Table((model.BlockTermBlock{}).TableName()).
-			Select(columns).
-			Where("id = ? AND terminal_id = ? AND created_at = ?", blockID, terminalID, blockCreatedAt).
-			Take(&selection).Error
-		switch {
-		case err == nil:
-			found = true
-		case errors.Is(err, gorm.ErrRecordNotFound):
-		default:
-			return nil, err
-		}
-	}
-	if !found && s.db.Migrator().HasTable(&model.BlockTermCommandHistory{}) {
-		columns := []string{"id"}
-		if s.db.Migrator().HasColumn(&model.BlockTermCommandHistory{}, "runtime_type") {
-			columns = append(columns, "runtime_type")
-		}
-		if s.db.Migrator().HasColumn(&model.BlockTermCommandHistory{}, "ssh_profile_id") {
-			columns = append(columns, "ssh_profile_id")
-		}
-		historyQuery := s.db.WithContext(ctx).
-			Table((model.BlockTermCommandHistory{}).TableName()).
-			Select(columns).
-			Where("id = ? AND terminal_id = ? AND created_at = ?", blockID, terminalID, blockCreatedAt)
-		if s.db.Migrator().HasColumn(&model.BlockTermCommandHistory{}, "history_purged_at") {
-			historyQuery = historyQuery.Where("history_purged_at IS NULL")
-		}
-		err := historyQuery.Take(&selection).Error
-		switch {
-		case err == nil:
-			found = true
-		case errors.Is(err, gorm.ErrRecordNotFound):
-		default:
-			return nil, err
-		}
-	}
-	if !found {
-		return nil, ErrRemoteFileBlockNotFound
-	}
-	if strings.TrimSpace(selection.RuntimeType) != terminal.RuntimeTypeSSH ||
-		strings.TrimSpace(selection.SSHProfileID) == "" {
-		return nil, ErrRemoteFilesUnsupported
-	}
-	return s.openSFTPForProfile(ctx, selection.SSHProfileID)
 }
 
 func (s *Service) openSFTPForProfile(ctx context.Context, profileID string) (*sftp.Client, error) {

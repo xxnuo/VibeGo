@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/xxnuo/vibego/internal/model"
-	"github.com/xxnuo/vibego/internal/service/blocktermhistory"
 	"gorm.io/gorm"
 )
 
@@ -186,25 +185,10 @@ func (m *Manager) DeleteWorkspace(workspaceSessionID string) error {
 		}
 	}
 
-	m.blockTermMutationMu.Lock()
-	defer m.blockTermMutationMu.Unlock()
 	err = m.db.Transaction(func(tx *gorm.DB) error {
 		if len(ids) > 0 {
-			if err := blocktermhistory.SyncTerminals(tx, ids); err != nil {
-				return err
-			}
 			if err := tx.Where("session_id IN ?", ids).Delete(&model.TerminalHistory{}).Error; err != nil {
 				return err
-			}
-			if tx.Migrator().HasTable(&model.BlockTermOutputSegment{}) {
-				if err := tx.Where("terminal_id IN ?", ids).Delete(&model.BlockTermOutputSegment{}).Error; err != nil {
-					return err
-				}
-			}
-			if tx.Migrator().HasTable(&model.BlockTermBlock{}) {
-				if err := tx.Where("terminal_id IN ?", ids).Delete(&model.BlockTermBlock{}).Error; err != nil {
-					return err
-				}
 			}
 			if err := tx.Where("id IN ?", ids).Delete(&model.TerminalSession{}).Error; err != nil {
 				return err
@@ -220,12 +204,5 @@ func (m *Manager) DeleteWorkspace(workspaceSessionID string) error {
 		}
 		return nil
 	})
-	if err == nil {
-		// Durable blocks and their history have been removed by the transaction;
-		// drop only the in-memory independent-runtime lifecycle markers here.
-		for _, id := range ids {
-			m.clearBlockRuntimePreparationStateForTerminal(id)
-		}
-	}
 	return err
 }

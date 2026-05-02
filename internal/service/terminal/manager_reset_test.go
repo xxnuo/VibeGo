@@ -31,21 +31,9 @@ func TestManagerResetLocalPreservesTerminalDataAndCursor(t *testing.T) {
 	at.historyBuffer.Restore([]byte("preserved-before-reset"), 100)
 	at.historyMu.Unlock()
 
-	const viewJSON = `{"sidebar":{"open":false,"width":"50%","block_id":null}}`
 	if err := db.Model(&model.TerminalSession{}).Where("id = ?", info.ID).
-		Updates(map[string]any{"blockterm_view_json": viewJSON, "last_command": "before-reset"}).Error; err != nil {
+		Updates(map[string]any{"last_command": "before-reset"}).Error; err != nil {
 		t.Fatalf("seed terminal metadata: %v", err)
-	}
-	blockID := "reset-preserved-" + info.ID
-	if err := db.Create(&model.BlockTermBlock{
-		ID:         blockID,
-		TerminalID: info.ID,
-		LineNum:    7,
-		Kind:       "command",
-		Command:    "printf preserved",
-		Status:     "success",
-	}).Error; err != nil {
-		t.Fatalf("seed block: %v", err)
 	}
 
 	resetInfo, err := manager.Reset(info.ID)
@@ -78,44 +66,8 @@ func TestManagerResetLocalPreservesTerminalDataAndCursor(t *testing.T) {
 	if err := db.First(&stored, "id = ?", info.ID).Error; err != nil {
 		t.Fatalf("load reset terminal: %v", err)
 	}
-	if stored.BlockTermViewJSON != viewJSON || stored.LastCommand != "" || stored.Status != model.StatusRunning {
+	if stored.LastCommand != "" || stored.Status != model.StatusRunning {
 		t.Fatalf("unexpected stored reset terminal: %+v", stored)
-	}
-	var block model.BlockTermBlock
-	if err := db.First(&block, "id = ?", blockID).Error; err != nil {
-		t.Fatalf("reset removed durable block: %v", err)
-	}
-}
-
-func TestManagerResetRejectsActiveBlockWithoutClosingTerminal(t *testing.T) {
-	db := setupTestDB(t)
-	manager := NewManager(db, &ManagerConfig{Shell: "/bin/sh"})
-
-	info, err := manager.Create(CreateOptions{Name: "reset-busy", Cwd: os.TempDir()})
-	if err != nil {
-		t.Fatalf("create terminal: %v", err)
-	}
-	defer manager.Close(info.ID)
-	at, _ := manager.getActive(info.ID)
-	oldRuntime := at.Runtime
-	if err := db.Create(&model.BlockTermBlock{
-		ID:         "reset-running-" + info.ID,
-		TerminalID: info.ID,
-		LineNum:    1,
-		Kind:       "command",
-		Command:    "sleep 30",
-		Status:     "running",
-	}).Error; err != nil {
-		t.Fatalf("seed running block: %v", err)
-	}
-
-	_, err = manager.Reset(info.ID)
-	if !errors.Is(err, ErrTerminalResetBusy) {
-		t.Fatalf("Reset() error = %v, want ErrTerminalResetBusy", err)
-	}
-	current, ok := manager.getActive(info.ID)
-	if !ok || current.Runtime != oldRuntime || current.status.Load().(string) != model.StatusRunning {
-		t.Fatalf("busy reset changed active terminal: %+v", current)
 	}
 }
 

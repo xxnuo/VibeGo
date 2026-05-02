@@ -91,10 +91,6 @@ type ManagerConfig struct {
 	WSReadTimeout        time.Duration
 	WSWriteTimeout       time.Duration
 	RuntimeFactory       RuntimeFactory
-	// BlockTermRuntimeRegistry optionally supplies a shared route table. When
-	// omitted, NewManager creates an in-memory registry so session routes are
-	// still fenced; legacy protocol messages remain compatible.
-	BlockTermRuntimeRegistry *BlockTermRuntimeRegistry
 }
 
 func (c *ManagerConfig) applyDefaults() {
