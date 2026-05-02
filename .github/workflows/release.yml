@@ -86,14 +86,12 @@ jobs:
             cgo_enabled: 1
             msystem: UCRT64
             msys_packages: mingw-w64-ucrt-x86_64-gcc
-            cc: C:\msys64\ucrt64\bin\gcc.exe
           - runner: windows-11-arm
             goos: windows
             goarch: arm64
             cgo_enabled: 1
             msystem: CLANGARM64
             msys_packages: mingw-w64-clang-aarch64-clang
-            cc: C:\msys64\clangarm64\bin\clang.exe
 
     steps:
       - uses: actions/checkout@v6
@@ -134,10 +132,26 @@ jobs:
           pnpm run build
 
       - name: Build backend
+        if: ${{ matrix.goos != 'windows' }}
         shell: bash
         env:
           CGO_ENABLED: ${{ matrix.cgo_enabled }}
           CC: ${{ matrix.cc }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          VERSION_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          mkdir -p dist
+          ext=""
+          if [ "${GOOS}" = "windows" ]; then ext=".exe"; fi
+          output="vibego_${VERSION_TAG}_${GOOS}_${GOARCH}${ext}"
+          go build -trimpath -ldflags "-s -w -X github.com/xxnuo/vibego/internal/version.Version=${VERSION_TAG}" -o "dist/${output}" ./
+
+      - name: Build backend
+        if: ${{ matrix.goos == 'windows' }}
+        shell: msys2 {0}
+        env:
+          CGO_ENABLED: ${{ matrix.cgo_enabled }}
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           VERSION_TAG: ${{ github.event.inputs.tag || github.ref_name }}
