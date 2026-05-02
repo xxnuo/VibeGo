@@ -21,7 +21,6 @@ import {
   useSessionStore,
 } from "@/stores";
 import type { GenericGroup, ToolGroup } from "@/stores/frame-store";
-import * as gitStoreModule from "@/stores/git-store";
 import { enqueueWorkspaceMutation } from "@/stores/session-store";
 import "@/pages";
 
@@ -248,20 +247,6 @@ const App: React.FC = () => {
           } finally {
             storeApi.getState().setLoading(false);
           }
-          break;
-        }
-        case "git": {
-          const gitStore = gitStoreModule.getOrCreateGitStore(activeGroup.id);
-          const state = gitStore.getState();
-          await Promise.allSettled([
-            state.fetchStatus(),
-            state.fetchBranches(),
-            state.fetchBranchStatus(),
-            state.fetchRemotes(),
-            state.fetchStashes(),
-            state.fetchConflicts(),
-            state.fetchLog(),
-          ]);
           break;
         }
         case "terminal":

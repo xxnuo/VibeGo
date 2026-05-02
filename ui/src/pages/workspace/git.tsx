@@ -1,6 +1,9 @@
-import React, { useCallback } from "react";
+import { RefreshCw } from "lucide-react";
+import React, { useCallback, useMemo } from "react";
 import type { GitDiff, GitSubmoduleStatus } from "@/api/git";
 import { ConflictView, DiffView, GitView } from "@/components/git";
+import { useContributedViewActions, type WorkbenchAction } from "@/framework/workbench";
+import { useTranslation } from "@/lib/i18n";
 import type { PageViewProps } from "@/pages/types";
 import { getOrCreateGitStore, useFrameStore } from "@/stores";
 import { useAppStore } from "@/stores/app-store";
@@ -34,6 +37,7 @@ interface GitDiffTabPayload {
 
 const GitViewPage: React.FC<PageViewProps> = ({ context }) => {
   const locale = useAppStore((s) => s.locale);
+  const t = useTranslation(locale);
   const tabs = useFrameStore((s) => s.getCurrentTabs());
   const activeTabId = useFrameStore((s) => s.getCurrentActiveTabId());
   const openPreviewTab = useFrameStore((s) => s.openPreviewTab);
@@ -41,6 +45,32 @@ const GitViewPage: React.FC<PageViewProps> = ({ context }) => {
   const removeCurrentTab = useFrameStore((s) => s.removeCurrentTab);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
+  const viewActions = useMemo<WorkbenchAction[]>(
+    () =>
+      context.isActive && activeTabId !== null
+        ? [
+            {
+              id: "git-refresh",
+              icon: <RefreshCw size={18} />,
+              title: t("common.refresh"),
+              onClick: async () => {
+                const state = getOrCreateGitStore(context.groupId).getState();
+                await Promise.allSettled([
+                  state.fetchStatus(),
+                  state.fetchBranches(),
+                  state.fetchBranchStatus(),
+                  state.fetchRemotes(),
+                  state.fetchStashes(),
+                  state.fetchConflicts(),
+                  state.fetchLog(),
+                ]);
+              },
+            },
+          ]
+        : [],
+    [context.groupId, context.isActive, activeTabId, t]
+  );
+  useContributedViewActions(viewActions);
 
   const handleGitDiff = useCallback(
     ({
