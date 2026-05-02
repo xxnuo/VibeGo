@@ -1,7 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Activity,
-  AlertTriangle,
   ArrowDown,
   ArrowUp,
   ChevronDown,
@@ -12,7 +11,6 @@ import {
   List,
   Network,
   RefreshCw,
-  Search,
   Server,
   Timer,
   X,
@@ -21,27 +19,16 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "
 import { Area, AreaChart, Cell, Pie, PieChart, Tooltip, XAxis, YAxis } from "recharts";
 import type { ProcessInfo } from "@/api/process";
 import { ActionButton } from "@/components/common/action-button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { PluginScaffold, PluginSearchInput, PluginToolbar } from "@/components/common/plugin-kit";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { usePluginHost } from "@/framework/host";
 import { usePageTopBar } from "@/hooks/use-page-top-bar";
 import { useCombinedStats, useProcessKill } from "@/hooks/use-process";
 import { getIntlLocale, useTranslation } from "@/lib/i18n";
 import type { PageViewProps } from "@/pages/types";
-import { useAppStore } from "@/stores/app-store";
 
 type SortField = "pid" | "name" | "cpuPercent" | "memPercent" | "status" | "numThreads" | "createTime";
 type SortDirection = "asc" | "desc";
@@ -364,26 +351,40 @@ function flattenTree(nodes: TreeNode[], expandedPids: Set<number>, level = 0): {
 }
 
 const ProcessMonitorView: React.FC<PageViewProps> = () => {
-  const locale = useAppStore((s) => s.locale);
+  const host = usePluginHost();
+  const locale = host.env.locale as "zh" | "en";
   const t = useTranslation(locale);
   const intlLocale = getIntlLocale(locale);
-  const isMobile = useIsMobile();
+  const isMobile = host.env.isMobile;
   const refreshOptions = useMemo(() => getRefreshOptions(t), [t]);
-  const [refreshInterval, setRefreshInterval] = useState<number>(2000);
+  const [refreshInterval, setRefreshInterval] = useState(() => host.storage.global.get("refresh_interval", 2000));
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortField, setSortField] = useState<SortField>("cpuPercent");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [sortField, setSortField] = useState<SortField>(() => host.storage.global.get("sort_field", "cpuPercent"));
+  const [sortDirection, setSortDirection] = useState<SortDirection>(() =>
+    host.storage.global.get("sort_direction", "desc")
+  );
   const [selectedProcess, setSelectedProcess] = useState<ProcessInfo | null>(null);
-  const [killDialogOpen, setKillDialogOpen] = useState(false);
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
-  const [killSignal, setKillSignal] = useState("SIGTERM");
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [viewMode, setViewMode] = useState<ViewMode>(() => host.storage.global.get("view_mode", "list"));
   const [expandedPids, setExpandedPids] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    void host.storage.global.update("refresh_interval", refreshInterval);
+    void host.storage.global.update("sort_field", sortField);
+    void host.storage.global.update("sort_direction", sortDirection);
+    void host.storage.global.update("view_mode", viewMode);
+  }, [host.storage.global, refreshInterval, sortField, sortDirection, viewMode]);
 
   const cpuHistoryRef = useRef<{ time: string; value: number }[]>([]);
   const [, forceUpdate] = useState({});
   const parentRef = useRef<HTMLDivElement>(null);
   const processFocusTargetRef = useRef<{ action: "detail" | "kill"; pid: number } | null>(null);
+  const confirmController = useRef<AbortController | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    confirmController.current = controller;
+    return () => controller.abort();
+  }, []);
 
   const { data: combinedData, refetch, isLoading } = useCombinedStats(500, 0, refreshInterval || undefined);
   const killMutation = useProcessKill();
@@ -410,27 +411,29 @@ const ProcessMonitorView: React.FC<PageViewProps> = () => {
     {
       show: true,
       centerContent: t("plugin.processMonitor.title"),
-      rightButtons: [
-        {
-          icon: isLoading ? <RefreshCw size={18} className="animate-spin" /> : <RefreshCw size={18} />,
-          title: t("plugin.processMonitor.refresh"),
-          onClick: handleRefresh,
-        },
-      ],
     },
+    [t]
+  );
+
+  host.useActions(
+    [
+      {
+        id: "process-refresh",
+        icon: <RefreshCw size={18} className={isLoading ? "animate-spin" : ""} />,
+        title: t("plugin.processMonitor.refresh"),
+        onClick: handleRefresh,
+      },
+    ],
     [t, isLoading, handleRefresh]
   );
 
-  const handleSort = useCallback((field: SortField) => {
-    setSortField((prev) => {
-      if (prev === field) {
-        setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
-        return prev;
-      }
-      setSortDirection("desc");
-      return field;
-    });
-  }, []);
+  const handleSort = useCallback(
+    (field: SortField) => {
+      setSortDirection(sortField === field && sortDirection === "desc" ? "asc" : "desc");
+      setSortField(field);
+    },
+    [sortField, sortDirection]
+  );
 
   const restoreProcessFocus = useCallback(() => {
     const target = processFocusTargetRef.current;
@@ -458,26 +461,48 @@ const ProcessMonitorView: React.FC<PageViewProps> = () => {
     setDetailSheetOpen(true);
   }, []);
 
-  const handleKillClick = useCallback((proc: ProcessInfo) => {
-    processFocusTargetRef.current = { action: "kill", pid: proc.pid };
-    setSelectedProcess(proc);
-    setKillDialogOpen(true);
-  }, []);
-
-  const handleKillProcess = useCallback(() => {
-    if (selectedProcess) {
-      processFocusTargetRef.current = null;
-      killMutation.mutate(
-        { pid: selectedProcess.pid, signal: killSignal },
+  const handleKillClick = useCallback(
+    async (proc: ProcessInfo) => {
+      const fromDetail = detailSheetOpen;
+      processFocusTargetRef.current = { action: fromDetail ? "detail" : "kill", pid: proc.pid };
+      setDetailSheetOpen(false);
+      const picked = await host.ui.showQuickPick(
+        [
+          { id: "SIGTERM", label: "SIGTERM", description: t("plugin.processMonitor.sigterm") },
+          { id: "SIGKILL", label: "SIGKILL", description: t("plugin.processMonitor.sigkill") },
+          { id: "SIGHUP", label: "SIGHUP", description: t("plugin.processMonitor.sighup") },
+        ],
+        { placeholder: `${t("plugin.processMonitor.killTitle")}: ${proc.name} (PID: ${proc.pid})` }
+      );
+      if (confirmController.current?.signal.aborted) return;
+      if (!picked) {
+        if (fromDetail) setDetailSheetOpen(true);
+        else restoreProcessFocus();
+        return;
+      }
+      const confirmed = await host.ui.confirm(
+        t("plugin.processMonitor.killTitle"),
+        `${t("plugin.processMonitor.killConfirm").replace("{name}", proc.name).replace("{pid}", String(proc.pid))} [${picked.id}]`,
         {
-          onSuccess: () => {
-            setKillDialogOpen(false);
-            setSelectedProcess(null);
-          },
+          confirmVariant: "danger",
+          confirmText: t("plugin.processMonitor.killProcess"),
+          signal: confirmController.current?.signal,
         }
       );
-    }
-  }, [selectedProcess, killSignal, killMutation]);
+      if (confirmController.current?.signal.aborted) return;
+      if (confirmed) {
+        killMutation.mutate(
+          { pid: proc.pid, signal: picked.id },
+          {
+            onSuccess: () => setSelectedProcess(null),
+          }
+        );
+      }
+      if (!confirmed && fromDetail) setDetailSheetOpen(true);
+      else restoreProcessFocus();
+    },
+    [host.ui, t, killMutation, detailSheetOpen, restoreProcessFocus]
+  );
 
   const handleToggleExpand = useCallback((pid: number) => {
     setExpandedPids((prev) => {
@@ -546,65 +571,56 @@ const ProcessMonitorView: React.FC<PageViewProps> = () => {
   const cpuHistory = cpuHistoryRef.current;
 
   return (
-    <div className="h-full flex flex-col bg-ide-bg overflow-hidden">
-      <div className="shrink-0 px-3 sm:px-4 py-2 border-b border-ide-border">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="relative min-w-0 flex-1 md:flex-none">
-            <Search
-              size={14}
-              className="absolute left-2 top-1/2 -translate-y-1/2 text-ide-mute sm:w-4 sm:h-4 sm:left-2.5"
-            />
-            <Input
-              name="process-search"
-              aria-label={t("plugin.processMonitor.search")}
-              placeholder={t("plugin.processMonitor.search")}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="h-11 w-full border-ide-border bg-ide-panel pl-7 text-base md:h-8 md:w-48 md:pl-8 md:text-sm"
-            />
-          </div>
-          <div className="flex shrink-0 overflow-hidden rounded-md border border-ide-border">
-            <Button
-              variant={viewMode === "list" ? "secondary" : "ghost"}
-              size="sm"
-              className="h-11 w-11 rounded-none p-0 md:h-7 md:w-auto md:px-2"
-              onClick={() => setViewMode("list")}
-              aria-label={t("plugin.processMonitor.listView")}
-              title={t("plugin.processMonitor.listView")}
-              aria-pressed={viewMode === "list"}
-            >
-              <List size={14} />
-            </Button>
-            <Button
-              variant={viewMode === "tree" ? "secondary" : "ghost"}
-              size="sm"
-              className="h-11 w-11 rounded-none p-0 md:h-7 md:w-auto md:px-2"
-              onClick={() => setViewMode("tree")}
-              aria-label={t("plugin.processMonitor.treeView")}
-              title={t("plugin.processMonitor.treeView")}
-              aria-pressed={viewMode === "tree"}
-            >
-              <Network size={14} />
-            </Button>
-          </div>
-          <Select value={refreshInterval.toString()} onValueChange={(v) => setRefreshInterval(Number(v))}>
-            <SelectTrigger
-              aria-label={t("plugin.processMonitor.refresh")}
-              className="h-11 min-h-11 w-20 shrink-0 border-ide-border bg-ide-panel px-2 text-xs md:h-8 md:min-h-0 md:px-3 md:text-sm"
-            >
-              <Timer size={12} className="hidden md:block md:size-3.5" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {refreshOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value} className="min-h-11 md:min-h-0">
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+    <PluginScaffold>
+      <PluginToolbar className="px-3 sm:px-4">
+        <PluginSearchInput
+          name="process-search"
+          placeholder={t("plugin.processMonitor.search")}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="h-11 bg-ide-panel text-base md:h-8 md:min-h-8 md:max-w-48 md:text-sm"
+        />
+        <div className="flex shrink-0 overflow-hidden rounded-md border border-ide-border">
+          <Button
+            variant={viewMode === "list" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-11 w-11 rounded-none p-0 md:h-7 md:w-auto md:px-2"
+            onClick={() => setViewMode("list")}
+            aria-label={t("plugin.processMonitor.listView")}
+            title={t("plugin.processMonitor.listView")}
+            aria-pressed={viewMode === "list"}
+          >
+            <List size={14} />
+          </Button>
+          <Button
+            variant={viewMode === "tree" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-11 w-11 rounded-none p-0 md:h-7 md:w-auto md:px-2"
+            onClick={() => setViewMode("tree")}
+            aria-label={t("plugin.processMonitor.treeView")}
+            title={t("plugin.processMonitor.treeView")}
+            aria-pressed={viewMode === "tree"}
+          >
+            <Network size={14} />
+          </Button>
         </div>
-      </div>
+        <Select value={refreshInterval.toString()} onValueChange={(v) => setRefreshInterval(Number(v))}>
+          <SelectTrigger
+            aria-label={t("plugin.processMonitor.refresh")}
+            className="h-11 min-h-11 w-20 shrink-0 border-ide-border bg-ide-panel px-2 text-xs md:h-8 md:min-h-0 md:px-3 md:text-sm"
+          >
+            <Timer size={12} className="hidden md:block md:size-3.5" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {refreshOptions.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value} className="min-h-11 md:min-h-0">
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </PluginToolbar>
 
       <div className="flex-shrink-0 p-2 sm:p-4 border-b border-ide-border overflow-x-auto">
         <Tabs defaultValue="overview" className="w-full">
@@ -921,61 +937,7 @@ const ProcessMonitorView: React.FC<PageViewProps> = () => {
         locale={intlLocale}
         t={t}
       />
-
-      <AlertDialog
-        open={killDialogOpen}
-        onOpenChange={(open) => {
-          setKillDialogOpen(open);
-          if (!open) restoreProcessFocus();
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-base sm:text-lg">
-              <AlertTriangle className="text-red-500" size={18} />
-              {t("plugin.processMonitor.killTitle")}
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm">
-              {t("plugin.processMonitor.killConfirm")
-                .replace("{name}", selectedProcess?.name || "")
-                .replace("{pid}", String(selectedProcess?.pid || ""))}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-3 sm:py-4">
-            <label htmlFor="process-kill-signal" className="text-xs sm:text-sm text-ide-mute block mb-2">
-              {t("plugin.processMonitor.signal")}
-            </label>
-            <Select value={killSignal} onValueChange={setKillSignal}>
-              <SelectTrigger id="process-kill-signal" className="min-h-11 w-full text-sm md:min-h-0">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="SIGTERM" className="min-h-11 md:min-h-0">
-                  {t("plugin.processMonitor.sigterm")}
-                </SelectItem>
-                <SelectItem value="SIGKILL" className="min-h-11 md:min-h-0">
-                  {t("plugin.processMonitor.sigkill")}
-                </SelectItem>
-                <SelectItem value="SIGHUP" className="min-h-11 md:min-h-0">
-                  {t("plugin.processMonitor.sighup")}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="min-h-11 text-sm md:min-h-0">{t("common.cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleKillProcess}
-              variant="destructive"
-              disabled={killMutation.isPending}
-              className="min-h-11 text-sm md:min-h-0"
-            >
-              {killMutation.isPending ? t("plugin.processMonitor.killing") : t("plugin.processMonitor.killProcess")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+    </PluginScaffold>
   );
 };
 

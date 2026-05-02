@@ -8,27 +8,19 @@ import {
   Power,
   PowerOff,
   RefreshCw,
-  Search,
   Skull,
   Timer,
   Trash2,
 } from "lucide-react";
-import React, { useCallback, useId, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ForwardRule, PortInfo } from "@/api/port";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { PluginEmptyState, PluginScaffold, PluginSearchInput, PluginToolbar } from "@/components/common/plugin-kit";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { usePluginHost } from "@/framework/host";
 import { usePageTopBar } from "@/hooks/use-page-top-bar";
 import {
   useAddForward,
@@ -40,7 +32,6 @@ import {
 } from "@/hooks/use-port";
 import { useTranslation } from "@/lib/i18n";
 import type { PageViewProps } from "@/pages/types";
-import { useAppStore } from "@/stores/app-store";
 
 function getRefreshOptions(t: (key: string) => string) {
   return [
@@ -197,20 +188,28 @@ const PortRow: React.FC<{
 };
 
 const PortManagerView: React.FC<PageViewProps> = () => {
-  const locale = useAppStore((s) => s.locale);
+  const host = usePluginHost();
+  const locale = host.env.locale as "zh" | "en";
   const t = useTranslation(locale);
   const fieldId = useId();
   const refreshOptions = useMemo(() => getRefreshOptions(t), [t]);
+  const confirmController = useRef<AbortController | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    confirmController.current = controller;
+    return () => controller.abort();
+  }, []);
 
-  const [refreshInterval, setRefreshInterval] = useState<number>(5000);
+  const [refreshInterval, setRefreshInterval] = useState(() => host.storage.global.get("refresh_interval", 5000));
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeTab, setActiveTab] = useState("ports");
+  const [activeTab, setActiveTab] = useState(() => host.storage.global.get("active_tab", "ports"));
+
+  useEffect(() => {
+    void host.storage.global.update("refresh_interval", refreshInterval);
+    void host.storage.global.update("active_tab", activeTab);
+  }, [host.storage.global, refreshInterval, activeTab]);
 
   const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
-  const [killDialogOpen, setKillDialogOpen] = useState(false);
-  const [removeTarget, setRemoveTarget] = useState<ForwardRule | null>(null);
-  const [killTarget, setKillTarget] = useState<number>(0);
 
   const [newListenPort, setNewListenPort] = useState("");
   const [newProtocol, setNewProtocol] = useState("tcp");
@@ -239,14 +238,28 @@ const PortManagerView: React.FC<PageViewProps> = () => {
     {
       show: true,
       centerContent: t("plugin.portManager.title"),
-      rightButtons: [
-        {
-          icon: isLoading ? <RefreshCw size={18} className="animate-spin" /> : <RefreshCw size={18} />,
-          title: t("plugin.portManager.refresh"),
-          onClick: handleRefresh,
-        },
-      ],
     },
+    [t]
+  );
+
+  host.useActions(
+    [
+      {
+        id: "port-refresh",
+        icon: <RefreshCw size={18} className={isLoading ? "animate-spin" : ""} />,
+        title: t("plugin.portManager.refresh"),
+        onClick: handleRefresh,
+      },
+      {
+        id: "port-add-forward",
+        icon: <Plus size={18} />,
+        title: t("plugin.portManager.addForward"),
+        onClick: () => {
+          setAddError("");
+          setAddDialogOpen(true);
+        },
+      },
+    ],
     [t, isLoading, handleRefresh]
   );
 
@@ -303,15 +316,23 @@ const PortManagerView: React.FC<PageViewProps> = () => {
     );
   }, [newListenPort, newProtocol, newTargetAddr, addForwardMutation]);
 
-  const handleRemoveForward = useCallback(() => {
-    if (!removeTarget) return;
-    removeForwardMutation.mutate(removeTarget.id, {
-      onSuccess: () => {
-        setRemoveDialogOpen(false);
-        setRemoveTarget(null);
-      },
-    });
-  }, [removeTarget, removeForwardMutation]);
+  const handleRemoveForward = useCallback(
+    async (rule: ForwardRule) => {
+      if (
+        await host.ui.confirm(
+          t("plugin.portManager.removeConfirm"),
+          `${t("plugin.portManager.removeConfirmDesc")}\n:${rule.listenPort} → ${rule.targetAddr}`,
+          {
+            confirmVariant: "danger",
+            confirmText: t("plugin.portManager.remove"),
+            signal: confirmController.current?.signal,
+          }
+        )
+      )
+        removeForwardMutation.mutate(rule.id);
+    },
+    [host.ui, t, removeForwardMutation]
+  );
 
   const handleToggleForward = useCallback(
     (id: string, enabled: boolean) => {
@@ -320,15 +341,23 @@ const PortManagerView: React.FC<PageViewProps> = () => {
     [toggleForwardMutation]
   );
 
-  const handleKillProcess = useCallback(() => {
-    if (!killTarget) return;
-    killProcessMutation.mutate(killTarget, {
-      onSuccess: () => {
-        setKillDialogOpen(false);
-        setKillTarget(0);
-      },
-    });
-  }, [killTarget, killProcessMutation]);
+  const handleKillProcess = useCallback(
+    async (pid: number) => {
+      if (
+        await host.ui.confirm(
+          t("plugin.portManager.killConfirm"),
+          `${t("plugin.portManager.killConfirmDesc")}\nPID: ${pid}`,
+          {
+            confirmVariant: "danger",
+            confirmText: t("plugin.portManager.killProcess"),
+            signal: confirmController.current?.signal,
+          }
+        )
+      )
+        killProcessMutation.mutate(pid);
+    },
+    [host.ui, t, killProcessMutation]
+  );
 
   const handleCreateForwardFromPort = useCallback((portNum: number) => {
     setNewTargetAddr(`localhost:${portNum}`);
@@ -346,42 +375,34 @@ const PortManagerView: React.FC<PageViewProps> = () => {
   }, []);
 
   return (
-    <div className="h-full flex flex-col bg-ide-bg overflow-hidden">
-      <div className="shrink-0 px-3 sm:px-4 py-2 border-b border-ide-border">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="relative min-w-0 flex-1 md:flex-none">
-            <Search
-              size={14}
-              className="absolute left-2 top-1/2 -translate-y-1/2 text-ide-mute sm:w-4 sm:h-4 sm:left-2.5"
-            />
-            <Input
-              id={`${fieldId}-search`}
-              name="port-search"
-              aria-label={t("plugin.portManager.search")}
-              placeholder={t("plugin.portManager.search")}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="h-11 w-full border-ide-border bg-ide-panel pl-7 text-base md:h-8 md:w-48 md:pl-8 md:text-sm"
-            />
-          </div>
-          <Select value={refreshInterval.toString()} onValueChange={(v) => setRefreshInterval(Number(v))}>
-            <SelectTrigger
-              aria-label={t("plugin.portManager.refresh")}
-              className="h-11 min-h-11 w-20 shrink-0 border-ide-border bg-ide-panel px-2 text-xs md:h-8 md:min-h-0 md:px-3 md:text-sm"
-            >
-              <Timer size={12} className="hidden md:block md:size-3.5" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {refreshOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value} className="min-h-11 md:min-h-0">
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+    <PluginScaffold>
+      <PluginToolbar className="px-3 sm:px-4">
+        <PluginSearchInput
+          id={`${fieldId}-search`}
+          name="port-search"
+          aria-label={t("plugin.portManager.search")}
+          placeholder={t("plugin.portManager.search")}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="h-11 bg-ide-panel text-base md:h-8 md:min-h-8 md:max-w-48 md:text-sm"
+        />
+        <Select value={refreshInterval.toString()} onValueChange={(v) => setRefreshInterval(Number(v))}>
+          <SelectTrigger
+            aria-label={t("plugin.portManager.refresh")}
+            className="h-11 min-h-11 w-20 shrink-0 border-ide-border bg-ide-panel px-2 text-xs md:h-8 md:min-h-0 md:px-3 md:text-sm"
+          >
+            <Timer size={12} className="hidden md:block md:size-3.5" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {refreshOptions.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value} className="min-h-11 md:min-h-0">
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </PluginToolbar>
 
       <div className="flex-1 overflow-hidden">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
@@ -421,19 +442,16 @@ const PortManagerView: React.FC<PageViewProps> = () => {
               </div>
 
               {filteredPorts.length === 0 ? (
-                <div className="flex items-center justify-center h-32 text-ide-mute text-sm">
+                <PluginEmptyState>
                   {isLoading ? t("plugin.portManager.loading") : t("plugin.portManager.noListeningPorts")}
-                </div>
+                </PluginEmptyState>
               ) : (
                 filteredPorts.map((port: PortInfo, idx: number) => (
                   <PortRow
                     key={`${port.port}-${port.protocol}-${idx}`}
                     port={port}
                     t={t}
-                    onKill={(pid) => {
-                      setKillTarget(pid);
-                      setKillDialogOpen(true);
-                    }}
+                    onKill={handleKillProcess}
                     onCreateForward={handleCreateForwardFromPort}
                     killing={killProcessMutation.isPending}
                   />
@@ -444,27 +462,9 @@ const PortManagerView: React.FC<PageViewProps> = () => {
 
           <TabsContent value="forwards" className="flex-1 overflow-hidden mt-0 px-0">
             <div className="h-full flex flex-col">
-              <div className="shrink-0 px-3 sm:px-4 py-2 border-b border-ide-border">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-11 gap-1 text-xs md:h-7"
-                  onClick={() => {
-                    setAddError("");
-                    setAddDialogOpen(true);
-                  }}
-                >
-                  <Plus size={14} />
-                  {t("plugin.portManager.addForward")}
-                </Button>
-              </div>
-
               <div className="flex-1 overflow-auto">
                 {filteredForwards.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-32 text-ide-mute text-sm gap-2">
-                    <ArrowRightLeft size={24} className="opacity-30" />
-                    {t("plugin.portManager.noForwards")}
-                  </div>
+                  <PluginEmptyState>{t("plugin.portManager.noForwards")}</PluginEmptyState>
                 ) : (
                   filteredForwards.map((fwd: ForwardRule) => (
                     <div
@@ -518,10 +518,8 @@ const PortManagerView: React.FC<PageViewProps> = () => {
                           variant="ghost"
                           size="sm"
                           className="size-11 p-0 text-red-500 hover:bg-red-500/10 hover:text-red-600 md:size-7"
-                          onClick={() => {
-                            setRemoveTarget(fwd);
-                            setRemoveDialogOpen(true);
-                          }}
+                          onClick={() => handleRemoveForward(fwd)}
+                          disabled={removeForwardMutation.isPending}
                           aria-label={t("plugin.portManager.remove")}
                           title={t("plugin.portManager.remove")}
                         >
@@ -537,20 +535,20 @@ const PortManagerView: React.FC<PageViewProps> = () => {
         </Tabs>
       </div>
 
-      <AlertDialog
+      <Dialog
         open={addDialogOpen}
         onOpenChange={(open) => {
           setAddDialogOpen(open);
           if (!open) setAddError("");
         }}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
+        <DialogContent aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
               <ArrowRightLeft size={18} className="text-ide-accent" />
               {t("plugin.portManager.addForwardTitle")}
-            </AlertDialogTitle>
-          </AlertDialogHeader>
+            </DialogTitle>
+          </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1.5">
               <label htmlFor={`${fieldId}-protocol`} className="text-xs text-ide-mute">
@@ -623,69 +621,21 @@ const PortManagerView: React.FC<PageViewProps> = () => {
             </div>
             {addError && <div className="text-xs text-red-500 bg-red-500/10 px-3 py-2 rounded-md">{addError}</div>}
           </div>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="min-h-11 text-sm md:min-h-0">{t("common.cancel")}</AlertDialogCancel>
-            <AlertDialogAction
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setAddDialogOpen(false)} className="min-h-11 text-sm md:min-h-0">
+              {t("common.cancel")}
+            </Button>
+            <Button
               onClick={handleAddForward}
               disabled={!newListenPort || !newTargetAddr || addForwardMutation.isPending}
               className="min-h-11 text-sm md:min-h-0"
             >
               {addForwardMutation.isPending ? t("plugin.portManager.creating") : t("plugin.portManager.create")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("plugin.portManager.removeConfirm")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("plugin.portManager.removeConfirmDesc")}
-              {removeTarget && (
-                <span className="block mt-2 font-mono text-sm">
-                  :{removeTarget.listenPort} → {removeTarget.targetAddr}
-                </span>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="min-h-11 text-sm md:min-h-0">{t("common.cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleRemoveForward}
-              variant="destructive"
-              disabled={removeForwardMutation.isPending}
-              className="min-h-11 text-sm md:min-h-0"
-            >
-              {t("plugin.portManager.remove")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={killDialogOpen} onOpenChange={setKillDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("plugin.portManager.killConfirm")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("plugin.portManager.killConfirmDesc")}
-              <span className="block mt-2 font-mono text-sm">PID: {killTarget}</span>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="min-h-11 text-sm md:min-h-0">{t("common.cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleKillProcess}
-              variant="destructive"
-              disabled={killProcessMutation.isPending}
-              className="min-h-11 text-sm md:min-h-0"
-            >
-              {t("plugin.portManager.killProcess")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </PluginScaffold>
   );
 };
 

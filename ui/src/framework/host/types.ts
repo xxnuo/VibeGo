@@ -161,7 +161,7 @@ export interface PluginHostUI {
   confirm: (
     title: string,
     message?: string,
-    options?: { confirmText?: string; cancelText?: string; confirmVariant?: "default" | "danger" }
+    options?: { confirmText?: string; cancelText?: string; confirmVariant?: "default" | "danger"; signal?: AbortSignal }
   ) => Promise<boolean>;
   prompt: (
     title: string,

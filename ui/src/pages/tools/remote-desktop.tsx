@@ -10,7 +10,7 @@ import {
 } from "@/api/remote-desktop";
 import { MobileRemoteControls } from "@/components/remote-desktop/mobile-remote-controls";
 import { RemoteDesktopStage } from "@/components/remote-desktop/remote-desktop-stage";
-import { RemoteDesktopToolbar } from "@/components/remote-desktop/remote-desktop-toolbar";
+import { qualityPresets, RemoteDesktopToolbar } from "@/components/remote-desktop/remote-desktop-toolbar";
 import type {
   ActiveMenu,
   ConfigPatch,
@@ -21,11 +21,10 @@ import type {
   SpecialKey,
   ToolbarState,
 } from "@/components/remote-desktop/types";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { type PluginStorage, usePluginHost } from "@/framework/host";
 import { usePageTopBar } from "@/hooks/use-page-top-bar";
 import { useTranslation } from "@/lib/i18n";
 import type { PageViewProps } from "@/pages/types";
-import { useAppStore } from "@/stores/app-store";
 
 const toolbarStorageKey = "vibego_remote_desktop_toolbar";
 const viewStorageKey = "vibego_remote_desktop_view";
@@ -51,9 +50,11 @@ const defaultViewConfig: RemoteDesktopViewConfig = {
   virtualMouseScale: 100,
 };
 
-const readStored = <T,>(key: string, fallback: T): T => {
+const readStored = <T,>(storage: PluginStorage, key: string, legacyKey: string, fallback: T): T => {
+  const stored = storage.get<T | null>(key, null);
+  if (stored) return { ...fallback, ...stored };
   try {
-    const raw = localStorage.getItem(key);
+    const raw = localStorage.getItem(legacyKey);
     return raw ? { ...fallback, ...JSON.parse(raw) } : fallback;
   } catch {
     return fallback;
@@ -61,9 +62,11 @@ const readStored = <T,>(key: string, fallback: T): T => {
 };
 
 const RemoteDesktopView: React.FC<PageViewProps> = () => {
-  const locale = useAppStore((s) => s.locale);
+  const host = usePluginHost();
+  const storage = host.storage.global;
+  const locale = host.env.locale as "zh" | "en";
   const t = useTranslation(locale);
-  const isMobile = useIsMobile();
+  const isMobile = host.env.isMobile;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -88,11 +91,20 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
   const [frameMeta, setFrameMeta] = useState<RemoteDesktopFrameMetadata | null>(null);
   const [qos, setQos] = useState<RemoteDesktopQos | null>(null);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
-  const [viewConfig, setViewConfig] = useState<RemoteDesktopViewConfig>(() =>
-    readStored(viewStorageKey, defaultViewConfig)
-  );
+  const [viewConfig, setViewConfig] = useState<RemoteDesktopViewConfig>(() => {
+    const stored = readStored(storage, "view_config", viewStorageKey, defaultViewConfig);
+    return {
+      ...stored,
+      qualityPreset: storage.get("remoteDesktop.qualityPreset", stored.qualityPreset),
+      keyboardMode: storage.get("remoteDesktop.keyboardMode", stored.keyboardMode),
+    };
+  });
+  const viewConfigRef = useRef(viewConfig);
+  viewConfigRef.current = viewConfig;
   const [remoteCursor, setRemoteCursor] = useState<{ x: number; y: number } | null>(null);
-  const [toolbar, setToolbar] = useState<ToolbarState>(() => readStored(toolbarStorageKey, defaultToolbar));
+  const [toolbar, setToolbar] = useState<ToolbarState>(() =>
+    readStored(storage, "toolbar", toolbarStorageKey, defaultToolbar)
+  );
   const [mobileDesktopToolbarOpen, setMobileDesktopToolbarOpen] = useState(false);
   const [activeMenu, setActiveMenu] = useState<ActiveMenu>(null);
   const [installingHelper, setInstallingHelper] = useState(false);
@@ -111,12 +123,16 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
   );
 
   useEffect(() => {
-    localStorage.setItem(toolbarStorageKey, JSON.stringify(toolbar));
-  }, [toolbar]);
+    void storage.update("toolbar", toolbar);
+  }, [storage, toolbar]);
 
   useEffect(() => {
-    localStorage.setItem(viewStorageKey, JSON.stringify(viewConfig));
-  }, [viewConfig]);
+    void storage.update("view_config", viewConfig);
+    if (storage.get("remoteDesktop.qualityPreset") === undefined)
+      void storage.update("remoteDesktop.qualityPreset", viewConfig.qualityPreset);
+    if (storage.get("remoteDesktop.keyboardMode") === undefined)
+      void storage.update("remoteDesktop.keyboardMode", viewConfig.keyboardMode);
+  }, [storage, viewConfig]);
 
   const loadState = useCallback(async () => {
     try {
@@ -191,14 +207,23 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
         showVirtualMouse: next?.showVirtualMouse ?? viewConfig.showVirtualMouse,
         virtualMouseScale: next?.virtualMouseScale ?? viewConfig.virtualMouseScale,
       };
-      const nextFps = next?.fps ?? fps;
-      const nextQuality = next?.quality ?? quality;
+      const preset =
+        nextViewConfig.qualityPreset !== "custom" && (!next || next.qualityPreset)
+          ? qualityPresets[nextViewConfig.qualityPreset]
+          : undefined;
+      const nextFps = next?.fps ?? preset?.fps ?? fps;
+      const nextQuality = next?.quality ?? preset?.quality ?? quality;
       if (next?.displayId != null) setDisplayId(next.displayId);
-      if (next?.fps != null) setFps(next.fps);
-      if (next?.quality != null) setQuality(next.quality);
+      setFps(nextFps);
+      setQuality(nextQuality);
       if (next?.controlEnabled != null) setControlEnabled(next.controlEnabled);
       if (next?.clipboardSync != null) setClipboardSync(next.clipboardSync);
       setViewConfig(nextViewConfig);
+      viewConfigRef.current = nextViewConfig;
+      if (next?.qualityPreset && storage.get("remoteDesktop.qualityPreset") !== next.qualityPreset)
+        void storage.update("remoteDesktop.qualityPreset", next.qualityPreset);
+      if (next?.keyboardMode && storage.get("remoteDesktop.keyboardMode") !== next.keyboardMode)
+        void storage.update("remoteDesktop.keyboardMode", next.keyboardMode);
       send({
         type: "configure",
         version: 2,
@@ -215,8 +240,23 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
         clipboardSync: nextClipboardSync,
       });
     },
-    [clipboardSync, controlEnabled, displayId, fps, quality, send, viewConfig]
+    [clipboardSync, controlEnabled, displayId, fps, quality, send, storage, viewConfig]
   );
+
+  useEffect(() => {
+    const update = () => {
+      const qualityPreset = storage.get<QualityPreset>("remoteDesktop.qualityPreset", viewConfig.qualityPreset);
+      const keyboardMode = storage.get<KeyboardMode>("remoteDesktop.keyboardMode", viewConfig.keyboardMode);
+      if (qualityPreset !== viewConfigRef.current.qualityPreset || keyboardMode !== viewConfigRef.current.keyboardMode)
+        configure({ qualityPreset, keyboardMode });
+    };
+    window.addEventListener("storage", update);
+    window.addEventListener("plugin-storage-change", update);
+    return () => {
+      window.removeEventListener("storage", update);
+      window.removeEventListener("plugin-storage-change", update);
+    };
+  }, [configure, storage, viewConfig.qualityPreset, viewConfig.keyboardMode]);
 
   const applyConfig = useCallback((config: Partial<RemoteDesktopConfig> & Record<string, unknown>) => {
     const nextDisplayId = Number(config.displayId ?? config.DisplayID);

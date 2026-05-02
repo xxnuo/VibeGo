@@ -12,6 +12,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { lazy } from "react";
+import { definePlugin, registerPlugin } from "@/framework/workbench/registry";
 import { registerPage } from "@/pages/registry";
 
 export { pageRegistry, registerPage, unregisterPage } from "@/pages/registry";
@@ -62,29 +63,49 @@ registerPage({
   View: lazy(() => import("@/pages/system/settings")),
 });
 
-registerPage({
-  id: "process-monitor",
-  name: "Process Monitor",
-  nameKey: "plugin.processMonitor.name",
-  descriptionKey: "plugin.processMonitor.description",
-  icon: Activity,
-  order: 10,
-  category: "tool",
-  singleton: true,
-  View: lazy(() => import("@/pages/tools/process-monitor")),
-});
+registerPlugin(
+  definePlugin({
+    id: "process-monitor",
+    name: "Process Monitor",
+    contributions: {
+      pages: [
+        {
+          id: "process-monitor",
+          name: "Process Monitor",
+          nameKey: "plugin.processMonitor.name",
+          descriptionKey: "plugin.processMonitor.description",
+          icon: Activity,
+          order: 10,
+          category: "tool",
+          singleton: true,
+          View: lazy(() => import("@/pages/tools/process-monitor")),
+        },
+      ],
+    },
+  })
+);
 
-registerPage({
-  id: "port-manager",
-  name: "Port Manager",
-  nameKey: "plugin.portManager.name",
-  descriptionKey: "plugin.portManager.description",
-  icon: Network,
-  order: 12,
-  category: "tool",
-  singleton: true,
-  View: lazy(() => import("@/pages/tools/port-manager")),
-});
+registerPlugin(
+  definePlugin({
+    id: "port-manager",
+    name: "Port Manager",
+    contributions: {
+      pages: [
+        {
+          id: "port-manager",
+          name: "Port Manager",
+          nameKey: "plugin.portManager.name",
+          descriptionKey: "plugin.portManager.description",
+          icon: Network,
+          order: 12,
+          category: "tool",
+          singleton: true,
+          View: lazy(() => import("@/pages/tools/port-manager")),
+        },
+      ],
+    },
+  })
+);
 
 registerPage({
   id: "files",
@@ -116,29 +137,66 @@ registerPage({
   View: lazy(() => import("@/pages/workspace/terminal")),
 });
 
-registerPage({
-  id: "remote-control",
-  name: "Remote Control",
-  nameKey: "plugin.remoteControl.name",
-  descriptionKey: "plugin.remoteControl.description",
-  icon: Radius,
-  order: 15,
-  category: "tool",
-  singleton: true,
-  View: lazy(() => import("@/pages/tools/remote-control")),
-});
+registerPlugin(
+  definePlugin({
+    id: "remote-control",
+    name: "Remote Control",
+    contributions: {
+      pages: [
+        {
+          id: "remote-control",
+          name: "Remote Control",
+          nameKey: "plugin.remoteControl.name",
+          descriptionKey: "plugin.remoteControl.description",
+          icon: Radius,
+          order: 15,
+          category: "tool",
+          singleton: true,
+          View: lazy(() => import("@/pages/tools/remote-control")),
+        },
+      ],
+    },
+  })
+);
 
-registerPage({
-  id: "remote-desktop",
-  name: "Remote Desktop",
-  nameKey: "plugin.remoteDesktop.name",
-  descriptionKey: "plugin.remoteDesktop.description",
-  icon: MonitorUp,
-  order: 16,
-  category: "tool",
-  singleton: true,
-  View: lazy(() => import("@/pages/tools/remote-desktop")),
-});
+registerPlugin(
+  definePlugin({
+    id: "remote-desktop",
+    name: "Remote Desktop",
+    contributions: {
+      pages: [
+        {
+          id: "remote-desktop",
+          name: "Remote Desktop",
+          nameKey: "plugin.remoteDesktop.name",
+          descriptionKey: "plugin.remoteDesktop.description",
+          icon: MonitorUp,
+          order: 16,
+          category: "tool",
+          singleton: true,
+          View: lazy(() => import("@/pages/tools/remote-desktop")),
+        },
+      ],
+      configuration: {
+        title: "Remote Desktop",
+        properties: {
+          "remoteDesktop.qualityPreset": {
+            type: "string",
+            title: "Quality Preset",
+            default: "balanced",
+            enum: ["smooth", "balanced", "sharp", "custom"],
+          },
+          "remoteDesktop.keyboardMode": {
+            type: "string",
+            title: "Keyboard Mode",
+            default: "legacy",
+            enum: ["legacy", "text"],
+          },
+        },
+      },
+    },
+  })
+);
 
 registerPage({
   id: "keyboard-test",

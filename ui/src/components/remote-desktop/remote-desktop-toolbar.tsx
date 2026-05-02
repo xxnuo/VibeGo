@@ -55,7 +55,7 @@ const buttonClass =
 const menuButtonClass =
   "min-h-11 px-3 flex items-center justify-center gap-1.5 border border-ide-border bg-ide-panel text-xs hover:bg-ide-border/50 md:min-h-0 md:h-8 md:px-2";
 
-const qualityPresets: Record<QualityPreset, { fps: number; quality: number }> = {
+export const qualityPresets: Record<QualityPreset, { fps: number; quality: number }> = {
   smooth: { fps: 20, quality: 55 },
   balanced: { fps: 12, quality: 70 },
   sharp: { fps: 8, quality: 88 },

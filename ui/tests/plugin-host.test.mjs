@@ -41,6 +41,23 @@ test("plugin host services and workbench integration", async t => {
     assert.equal(b.get("foo:bar","none"),"none"); assert.equal(other.get("foo:bar"),undefined); assert.equal(createPluginStorage("p:1").get("setting"),true);
     await a.delete("foo:bar"); assert.deepEqual(a.keys(),[]);
   });
+  await t.test("tool preferences persist in separate plugin namespaces", async () => {
+    const ports = createPluginStorage("port-manager");
+    const processes = createPluginStorage("process-monitor");
+    await ports.update("refresh_interval", 5000);
+    await ports.update("active_tab", "forwards");
+    await processes.update("refresh_interval", 1000);
+    await processes.update("sort_field", "name");
+    await processes.update("sort_direction", "asc");
+    await processes.update("view_mode", "tree");
+    assert.equal(createPluginStorage("port-manager").get("refresh_interval"), 5000);
+    assert.equal(processes.get("refresh_interval"), 1000);
+    assert.equal(ports.get("view_mode"), undefined);
+    assert.equal(processes.get("active_tab"), undefined);
+    await ports.update("refresh_interval", 0);
+    assert.equal(ports.get("refresh_interval"), 0);
+    assert.equal(processes.get("refresh_interval"), 1000);
+  });
   await t.test("when parser handles precedence, comparisons, malformed and hostile clauses", () => {
     const values = { "git.isRepo": true,isMobile: false,count: 3,activeTabType: "files",falseKey: true };
     for (const clause of [undefined,"git.isRepo && !isMobile", "(isMobile || git.isRepo) && count >= 3", "activeTabType == files", "falseKey", "false || true && true"]) assert.equal(evaluateWhen(clause,values),true,clause);
@@ -85,6 +102,38 @@ test("plugin host services and workbench integration", async t => {
     assert.match(document.body.textContent,/Compile/); assert.equal(document.querySelector("progress").value,45);
     await act(() => document.querySelector('button[aria-label="取消"]').click()); assert.equal(signal.aborted,true);
     await act(async () => { resolve(42); assert.equal(await task,42); }); assert.equal(document.querySelector("progress"),null);
+  });
+  await t.test("host confirmations and quick picks gate destructive operations", async () => {
+    await render("a", React.createElement(React.Fragment, null, React.createElement(Probe), React.createElement(PluginWorkbenchRuntime)));
+    const calls = [];
+    const run = async () => {
+      const picked = await host.ui.showQuickPick([
+        { id: "SIGTERM", label: "SIGTERM" }, { id: "SIGKILL", label: "SIGKILL" }, { id: "SIGHUP", label: "SIGHUP" },
+      ], { placeholder: "Signal" });
+      if (picked && await host.ui.confirm("Kill fixture", picked.id, { confirmVariant: "danger", confirmText: "Kill" })) calls.push(picked.id);
+    };
+    const { usePluginUIStore } = await load("framework/host/ui-service.ts");
+    let pending;
+    await act(() => { pending = run(); });
+    await act(() => usePluginUIStore.getState().picks[0].resolve(null));
+    await pending;
+    assert.deepEqual(calls, []);
+    await act(() => { pending = run(); });
+    await act(() => [...document.querySelectorAll("button")].find(button => button.textContent === "SIGKILL").click());
+    assert.match(document.querySelector('[role="dialog"]').textContent, /SIGKILL/);
+    await act(() => [...document.querySelectorAll('[role="dialog"] button')].find(button => button.textContent === "取消").click());
+    await pending;
+    assert.deepEqual(calls, []);
+    await act(() => { pending = run(); });
+    await act(() => [...document.querySelectorAll("button")].find(button => button.textContent === "SIGHUP").click());
+    await act(() => [...document.querySelectorAll('[role="dialog"] button')].find(button => button.textContent === "Kill").click());
+    await pending;
+    assert.deepEqual(calls, ["SIGHUP"]);
+    const controller = new AbortController();
+    await act(() => { pending = host.ui.confirm("Leaving tool", "Cancel pending operation", { signal: controller.signal }); });
+    await act(() => controller.abort());
+    assert.equal(await pending, false);
+    assert.equal(document.querySelector('[role="dialog"]'), null);
   });
   await t.test("workspace, active tab and theme transitions publish host events", async () => {
     const changes = []; const cleanups = [host.events.onDidChangeActiveTab(id => changes.push(["tab",id])),host.events.onDidChangeWorkspace(path => changes.push(["workspace",path])),host.events.onDidChangeTheme(theme => changes.push(["theme",theme]))];
@@ -140,6 +189,55 @@ test("plugin host services and workbench integration", async t => {
       await act(async()=>{await new Promise(resolve=>setTimeout(resolve,150));});
       assert.match(document.body.textContent,/Symbol foo/); await act(()=>[...document.querySelectorAll("button")].find(button=>button.textContent.includes("Symbol foo")).click()); assert.equal(window.fixtureSymbol,true);
     } finally { await act(()=>root.render(null)); dispose(); }
+  });
+  await t.test("tool manifests retain page contracts and remote desktop settings migrate and apply", async () => {
+    const { pageRegistry } = await load("pages/index.ts");
+    for (const id of ["port-manager", "process-monitor", "remote-control", "remote-desktop"]) {
+      const plugin = pageRegistry.getPlugin(id);
+      assert.equal(plugin.contributions.pages[0].id, id);
+      assert.equal(pageRegistry.get(id).singleton, true);
+      assert.equal(pageRegistry.get(id).category, "tool");
+    }
+    const properties = pageRegistry.getPlugin("remote-desktop").contributions.configuration.properties;
+    assert.deepEqual(properties["remoteDesktop.qualityPreset"].enum, ["smooth", "balanced", "sharp", "custom"]);
+    assert.deepEqual(properties["remoteDesktop.keyboardMode"].enum, ["legacy", "text"]);
+    const { default: Desktop } = await load("pages/tools/remote-desktop.tsx");
+    const { default: PluginSettings } = await load("components/settings/plugin-settings.tsx");
+    const { remoteDesktopApi } = await load("api/remote-desktop.ts");
+    const originalStatus = remoteDesktopApi.status, originalDisplays = remoteDesktopApi.displays;
+    remoteDesktopApi.status = async () => ({ available: true, warnings: [], defaultFps: 12, defaultQuality: 70 });
+    remoteDesktopApi.displays = async () => ({ displays: [] });
+    const storage = createPluginStorage("remote-desktop");
+    const legacy = { fitMode: "custom", scalePercent: 140, qualityPreset: "sharp", keyboardMode: "text", mobileInputMode: "mouse" };
+    localStorage.setItem("vibego_remote_desktop_view", JSON.stringify(legacy));
+    localStorage.setItem("vibego_remote_desktop_toolbar", JSON.stringify({ pinned: true, x: 0.25 }));
+    const renderDesktop = (showSettings = false) => act(() => root.render(React.createElement(DialogProvider, null,
+      React.createElement(PluginHostScope.Provider, { value: { pluginId: "remote-desktop", groupId: "a" } },
+        React.createElement(Desktop), showSettings && React.createElement(PluginSettings)))));
+    try {
+      await renderDesktop();
+      assert.equal(storage.get("view_config").scalePercent, 140);
+      assert.equal(storage.get("view_config").mobileInputMode, "mouse");
+      assert.equal(storage.get("toolbar").pinned, true);
+      assert.equal(storage.get("toolbar").x, 0.25);
+      await renderDesktop(true);
+      assert.equal(document.querySelector('select[aria-label="Quality Preset"]').value, "sharp");
+      assert.equal(document.querySelector('select[aria-label="Keyboard Mode"]').value, "text");
+      await act(() => {
+        const select = document.querySelector('select[aria-label="Quality Preset"]');
+        select.value = "smooth"; select.dispatchEvent(new window.Event("change", { bubbles: true }));
+      });
+      assert.equal(storage.get("view_config").qualityPreset, "smooth");
+      assert.equal(storage.get("remoteDesktop.qualityPreset"), "smooth");
+      await act(() => root.render(null));
+      await renderDesktop();
+      assert.equal(storage.get("view_config").qualityPreset, "smooth", "host preferences win over legacy values after remount");
+      assert.equal(storage.get("view_config").scalePercent, 140);
+      assert.deepEqual(JSON.parse(localStorage.getItem("vibego_remote_desktop_view")), legacy);
+    } finally {
+      await act(() => root.render(null));
+      remoteDesktopApi.status = originalStatus; remoteDesktopApi.displays = originalDisplays;
+    }
   });
   await t.test("task output and exit notifications replay for fast tasks and cancellation reaches the API", async () => {
     const { tasks }=await load("framework/host/task-service.ts"); const originalFetch=globalThis.fetch;

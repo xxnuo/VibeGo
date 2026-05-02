@@ -1,15 +1,17 @@
 import { Minus, Monitor, MonitorOff, Play, Plus, SkipBack, SkipForward, Volume1, Volume2, VolumeX } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { remoteApi } from "@/api/remote";
+import { PluginScaffold, PluginToolbar } from "@/components/common/plugin-kit";
+import { usePluginHost } from "@/framework/host";
 import { usePageTopBar } from "@/hooks/use-page-top-bar";
 import { useTranslation } from "@/lib/i18n";
 import type { PageViewProps } from "@/pages/types";
-import { useAppStore } from "@/stores/app-store";
 
 const POLL_INTERVAL = 3000;
 
 const RemoteControlView: React.FC<PageViewProps> = () => {
-  const locale = useAppStore((s) => s.locale);
+  const host = usePluginHost();
+  const locale = host.env.locale as "zh" | "en";
   const t = useTranslation(locale);
 
   const [volume, setVolume] = useState(50);
@@ -66,16 +68,16 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
   );
 
   return (
-    <div className="h-full flex flex-col bg-ide-bg overflow-auto">
+    <PluginScaffold className="overflow-auto">
       <div className="flex-1 flex flex-col items-center justify-start px-4 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] gap-5 max-w-lg mx-auto w-full">
         <div className="w-full bg-ide-panel rounded-xl border border-ide-border p-4 space-y-3">
-          <div className="flex items-center justify-between">
+          <PluginToolbar className="border-0 bg-transparent p-0">
             <div className="flex items-center gap-2">
               <Volume2 size={16} className="text-blue-500" />
               <span className="text-sm font-medium text-ide-text">{t("plugin.remoteControl.volume")}</span>
             </div>
             <span className="text-xs text-ide-mute font-mono tabular-nums">{volume}%</span>
-          </div>
+          </PluginToolbar>
 
           <div className="flex items-center gap-2">
             <button
@@ -133,10 +135,10 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
         </div>
 
         <div className="w-full bg-ide-panel rounded-xl border border-ide-border p-4 space-y-4">
-          <div className="flex items-center gap-2">
+          <PluginToolbar className="justify-start border-0 bg-transparent p-0">
             <Play size={16} className="text-green-500" />
             <span className="text-sm font-medium text-ide-text">{t("plugin.remoteControl.media")}</span>
-          </div>
+          </PluginToolbar>
 
           <div className="flex items-center justify-center gap-3">
             <button
@@ -170,10 +172,10 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
         </div>
 
         <div className="w-full bg-ide-panel rounded-xl border border-ide-border p-4 space-y-4">
-          <div className="flex items-center gap-2">
+          <PluginToolbar className="justify-start border-0 bg-transparent p-0">
             <Monitor size={16} className="text-purple-500" />
             <span className="text-sm font-medium text-ide-text">{t("plugin.remoteControl.screen")}</span>
-          </div>
+          </PluginToolbar>
 
           <div className="flex items-center justify-center gap-3">
             <button
@@ -235,7 +237,7 @@ const RemoteControlView: React.FC<PageViewProps> = () => {
           cursor: pointer;
         }
       `}</style>
-    </div>
+    </PluginScaffold>
   );
 };
 
