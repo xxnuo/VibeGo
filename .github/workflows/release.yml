@@ -100,12 +100,14 @@ jobs:
             goos: windows
             goarch: amd64
             cgo_enabled: 1
+            cc: gcc
             msystem: UCRT64
             msys_packages: mingw-w64-ucrt-x86_64-gcc
           - runner: windows-11-arm
             goos: windows
             goarch: arm64
             cgo_enabled: 1
+            cc: clang
             msystem: CLANGARM64
             msys_packages: mingw-w64-clang-aarch64-clang
 
@@ -165,6 +167,7 @@ jobs:
         shell: msys2 {0}
         env:
           CGO_ENABLED: ${{ matrix.cgo_enabled }}
+          CC: ${{ matrix.cc }}
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           VERSION_TAG: ${{ needs.meta.outputs.tag }}
