@@ -50,6 +50,7 @@ export interface RemoteDesktopRuntime {
   qos: RemoteDesktopQos | null;
   latencyMs: number | null;
   viewConfig: RemoteDesktopViewConfig;
+  remoteCursor: { x: number; y: number } | null;
 }
 
 export type ConfigPatch = Partial<RemoteDesktopConfig & RemoteDesktopViewConfig> & {

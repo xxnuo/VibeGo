@@ -111,6 +111,19 @@ func (s *Session) Pointer(displayID int, x, y float64, move bool) error {
 	return nil
 }
 
+func (s *Session) MoveRelative(displayID int, dx, dy int) error {
+	display, err := findDisplay(s.capture, displayID)
+	if err != nil {
+		return err
+	}
+	x, y, err := s.input.Position()
+	if err != nil {
+		return err
+	}
+	x, y = ClampPointToDisplay(display, x+dx, y+dy)
+	return s.input.Move(x, y)
+}
+
 func (s *Session) Button(button string, down *bool) error {
 	if down == nil {
 		return s.input.Click(button)
@@ -157,6 +170,10 @@ type ClientMessage struct {
 	ClipboardSync   *bool    `json:"clipboardSync,omitempty"`
 	X               float64  `json:"x,omitempty"`
 	Y               float64  `json:"y,omitempty"`
+	DX              int      `json:"dx,omitempty"`
+	DY              int      `json:"dy,omitempty"`
+	Move            *bool    `json:"move,omitempty"`
+	Relative        bool     `json:"relative,omitempty"`
 	Button          string   `json:"button,omitempty"`
 	Down            *bool    `json:"down,omitempty"`
 	DeltaX          int      `json:"deltaX,omitempty"`

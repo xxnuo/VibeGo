@@ -68,6 +68,7 @@ type CaptureProvider interface {
 type InputProvider interface {
 	Available() error
 	Move(x, y int) error
+	Position() (int, int, error)
 	Button(button string, down bool) error
 	Click(button string) error
 	Wheel(x, y int) error
@@ -180,6 +181,26 @@ func MapNormalizedPoint(display Display, nx, ny float64) (int, int) {
 	ny = math.Max(0, math.Min(1, ny))
 	x := display.X + int(math.Round(nx*float64(maxInt(display.Width-1, 0))))
 	y := display.Y + int(math.Round(ny*float64(maxInt(display.Height-1, 0))))
+	return x, y
+}
+
+func ClampPointToDisplay(display Display, x, y int) (int, int) {
+	minX := display.X
+	minY := display.Y
+	maxX := display.X + maxInt(display.Width-1, 0)
+	maxY := display.Y + maxInt(display.Height-1, 0)
+	if x < minX {
+		x = minX
+	}
+	if x > maxX {
+		x = maxX
+	}
+	if y < minY {
+		y = minY
+	}
+	if y > maxY {
+		y = maxY
+	}
 	return x, y
 }
 

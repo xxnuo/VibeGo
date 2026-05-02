@@ -147,6 +147,7 @@ type fakeInput struct{}
 
 func (f *fakeInput) Available() error                                    { return nil }
 func (f *fakeInput) Move(x, y int) error                                 { return nil }
+func (f *fakeInput) Position() (int, int, error)                         { return 0, 0, nil }
 func (f *fakeInput) Button(button string, down bool) error               { return nil }
 func (f *fakeInput) Click(button string) error                           { return nil }
 func (f *fakeInput) Wheel(x, y int) error                                { return nil }

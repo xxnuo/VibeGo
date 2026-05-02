@@ -330,8 +330,20 @@ func (h *RemoteDesktopHandler) handleClientMessage(session *remotedesktop.Sessio
 		if msg.DisplayID != nil {
 			displayID = *msg.DisplayID
 		}
-		if err := session.Pointer(displayID, msg.X, msg.Y, true); err != nil {
-			queueRemoteDesktopError(send, "pointer_failed", err.Error(), true)
+		shouldMove := msg.Button == ""
+		if msg.Move != nil {
+			shouldMove = *msg.Move
+		}
+		if shouldMove {
+			var err error
+			if msg.Relative {
+				err = session.MoveRelative(displayID, msg.DX, msg.DY)
+			} else {
+				err = session.Pointer(displayID, msg.X, msg.Y, true)
+			}
+			if err != nil {
+				queueRemoteDesktopError(send, "pointer_failed", err.Error(), true)
+			}
 		}
 		if msg.Button != "" {
 			if err := session.Button(msg.Button, msg.Down); err != nil {

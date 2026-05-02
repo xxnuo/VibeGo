@@ -80,6 +80,8 @@ export const RemoteDesktopStage: React.FC<StageProps> = ({
     return "";
   })();
 
+  const remoteCursor = runtime.controlEnabled && runtime.viewConfig.mobileInputMode === "mouse" && runtime.frameMeta ? runtime.remoteCursor : null;
+
   const handleEdgeMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
     onPointerMove(event);
     if (runtime.viewConfig.scrollMode !== "edge") return;
@@ -124,25 +126,40 @@ export const RemoteDesktopStage: React.FC<StageProps> = ({
         </div>
       ) : (
         <div className="grid min-h-full min-w-full place-items-center p-0">
-          <canvas
-            ref={canvasRef}
-            tabIndex={0}
-            className={`outline-none ${runtime.controlEnabled ? "cursor-crosshair" : "cursor-default"} ${
-              runtime.viewConfig.showLocalCursor ? "" : "cursor-none"
-            }`}
-            style={canvasStyle}
-            onPointerMove={handleEdgeMove}
-            onPointerDown={onPointerDown}
-            onPointerUp={onPointerUp}
-            onContextMenu={(event) => event.preventDefault()}
-            onWheel={onWheel}
-            onKeyDown={onKeyDown}
-            onKeyUp={onKeyUp}
-            onTouchStart={onTouchStart}
-            onTouchMove={onTouchMove}
-            onTouchEnd={onTouchEnd}
-            onBlur={onReleaseInput}
-          />
+          <div className="relative inline-block leading-none">
+            <canvas
+              ref={canvasRef}
+              tabIndex={0}
+              className={`block outline-none ${runtime.controlEnabled ? "cursor-crosshair" : "cursor-default"} ${
+                runtime.viewConfig.showLocalCursor ? "" : "cursor-none"
+              }`}
+              style={canvasStyle}
+              onPointerMove={handleEdgeMove}
+              onPointerDown={onPointerDown}
+              onPointerUp={onPointerUp}
+              onContextMenu={(event) => event.preventDefault()}
+              onWheel={onWheel}
+              onKeyDown={onKeyDown}
+              onKeyUp={onKeyUp}
+              onTouchStart={onTouchStart}
+              onTouchMove={onTouchMove}
+              onTouchEnd={onTouchEnd}
+              onBlur={onReleaseInput}
+            />
+            {remoteCursor && (
+              <div
+                className="pointer-events-none absolute z-10 h-6 w-6 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
+                style={{
+                  left: `calc(${remoteCursor.x * 100}% - 2px)`,
+                  top: `calc(${remoteCursor.y * 100}% - 2px)`,
+                }}
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M5 3l14 9-6.2 1.2 3.8 6.1-2.7 1.7-3.7-6-4.2 4V3z" />
+                </svg>
+              </div>
+            )}
+          </div>
         </div>
       )}
       {overlayText && (

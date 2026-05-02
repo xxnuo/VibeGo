@@ -73,6 +73,11 @@ func (p *RobotInputProvider) Move(x, y int) error {
 	return nil
 }
 
+func (p *RobotInputProvider) Position() (int, int, error) {
+	x, y := robotgo.Location()
+	return x, y, nil
+}
+
 func (p *RobotInputProvider) Button(button string, down bool) error {
 	button = normalizeButton(button)
 	if down {

@@ -31,6 +31,8 @@ import { useAppStore } from "@/stores/app-store";
 
 const toolbarStorageKey = "vibego_remote_desktop_toolbar";
 const viewStorageKey = "vibego_remote_desktop_view";
+const mouseModeCursorStep = 1.15;
+const mouseModeMoveThreshold = 0.002;
 
 const defaultToolbar: ToolbarState = {
   pinned: false,
@@ -72,6 +74,7 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
   const pointerThrottleRef = useRef<number | null>(null);
   const pendingPointerRef = useRef<{ x: number; y: number } | null>(null);
   const touchRef = useRef<{ lastX: number; lastY: number; lastDistance: number; moved: boolean } | null>(null);
+  const remoteCursorRef = useRef<{ x: number; y: number } | null>(null);
 
   const [status, setStatus] = useState<RemoteDesktopStatus | null>(null);
   const [displays, setDisplays] = useState<RemoteDesktopDisplay[]>([]);
@@ -87,6 +90,7 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
   const [qos, setQos] = useState<RemoteDesktopQos | null>(null);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [viewConfig, setViewConfig] = useState<RemoteDesktopViewConfig>(() => readStored(viewStorageKey, defaultViewConfig));
+  const [remoteCursor, setRemoteCursor] = useState<{ x: number; y: number } | null>(null);
   const [toolbar, setToolbar] = useState<ToolbarState>(() => readStored(toolbarStorageKey, defaultToolbar));
   const [activeMenu, setActiveMenu] = useState<ActiveMenu>(null);
 
@@ -135,6 +139,11 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     ws.send(JSON.stringify(payload));
+  }, []);
+
+  const setRemoteCursorPoint = useCallback((point: { x: number; y: number } | null) => {
+    remoteCursorRef.current = point;
+    setRemoteCursor(point);
   }, []);
 
   const configure = useCallback(
@@ -236,6 +245,10 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
       }
       lastFrameSeqRef.current = metadata.seq;
       setFrameMeta(metadata);
+      if (isMobile && viewConfig.mobileInputMode === "mouse" && !remoteCursorRef.current) {
+        setRemoteCursorPoint({ x: 0.5, y: 0.5 });
+        send({ type: "pointer", version: 2, displayId: metadata.displayId, x: 0.5, y: 0.5, move: true });
+      }
       const now = Date.now();
       if (metadata.sentAt > 0) setLatencyMs(Math.max(0, now - metadata.sentAt));
       send({
@@ -246,7 +259,7 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
         receivedAt: now,
       });
     },
-    [send]
+    [isMobile, send, setRemoteCursorPoint, viewConfig.mobileInputMode]
   );
 
   const releaseInput = useCallback(() => {
@@ -267,8 +280,9 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
     }
     lastFrameSeqRef.current = 0;
     setFrameMeta(null);
+    setRemoteCursorPoint(null);
     setState("idle");
-  }, [releaseInput]);
+  }, [releaseInput, setRemoteCursorPoint]);
 
   const connect = useCallback(() => {
     disconnect();
@@ -343,6 +357,46 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
     };
   }, []);
 
+  const canvasTouchPoint = useCallback((touch: React.Touch, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (touch.clientX - rect.left) / Math.max(rect.width, 1),
+      y: (touch.clientY - rect.top) / Math.max(rect.height, 1),
+    };
+  }, []);
+
+  const clampPoint = (point: { x: number; y: number }) => ({
+    x: Math.min(1, Math.max(0, point.x)),
+    y: Math.min(1, Math.max(0, point.y)),
+  });
+
+  const moveRemoteCursor = useCallback(
+    (dx: number, dy: number) => {
+      const canvas = canvasRef.current;
+      const rect = canvas?.getBoundingClientRect();
+      if (!rect) return;
+      const current = remoteCursorRef.current ?? { x: 0.5, y: 0.5 };
+      const next = clampPoint({
+        x: current.x + dx / Math.max(rect.width, 1) * mouseModeCursorStep,
+        y: current.y + dy / Math.max(rect.height, 1) * mouseModeCursorStep,
+      });
+      if (Math.abs(next.x - current.x) < mouseModeMoveThreshold && Math.abs(next.y - current.y) < mouseModeMoveThreshold) return;
+      setRemoteCursorPoint(next);
+      send({ type: "pointer", version: 2, displayId, x: next.x, y: next.y, move: true });
+      const stage = stageRef.current;
+      if (!stage || !canvas) return;
+      const canvasRect = canvas.getBoundingClientRect();
+      const cursorClientX = canvasRect.left + next.x * canvasRect.width;
+      const cursorClientY = canvasRect.top + next.y * canvasRect.height;
+      const stageRect = stage.getBoundingClientRect();
+      const edge = 36;
+      const scrollX = cursorClientX < stageRect.left + edge ? -18 : cursorClientX > stageRect.right - edge ? 18 : 0;
+      const scrollY = cursorClientY < stageRect.top + edge ? -18 : cursorClientY > stageRect.bottom - edge ? 18 : 0;
+      if (scrollX || scrollY) stage.scrollBy({ left: scrollX, top: scrollY });
+    },
+    [displayId, send, setRemoteCursorPoint]
+  );
+
   const pointerButton = (button: number) => {
     if (button === 1) return "middle";
     if (button === 2) return "right";
@@ -381,7 +435,7 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
 
   const sendButton = useCallback(
     (button: "left" | "middle" | "right", down: boolean) => {
-      send({ type: "pointer", version: 2, displayId, x: 0, y: 0, button, down });
+      send({ type: "pointer", version: 2, displayId, button, down, move: false });
     },
     [displayId, send]
   );
@@ -400,17 +454,19 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
       }
       touchRef.current = { lastX: first.clientX, lastY: first.clientY, lastDistance: 0, moved: false };
       if (viewConfig.mobileInputMode === "touch") {
-        const rect = event.currentTarget.getBoundingClientRect();
+        const point = canvasTouchPoint(first, event.currentTarget);
         send({
           type: "pointer",
           version: 2,
           displayId,
-          x: (first.clientX - rect.left) / Math.max(rect.width, 1),
-          y: (first.clientY - rect.top) / Math.max(rect.height, 1),
+          x: point.x,
+          y: point.y,
         });
+      } else if (!remoteCursorRef.current) {
+        setRemoteCursorPoint(canvasTouchPoint(first, event.currentTarget));
       }
     },
-    [controlEnabled, displayId, isMobile, send, viewConfig.mobileInputMode]
+    [canvasTouchPoint, controlEnabled, displayId, isMobile, send, setRemoteCursorPoint, viewConfig.mobileInputMode]
   );
 
   const handleTouchMove = useCallback(
@@ -439,20 +495,19 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
       touchRef.current.lastY = first.clientY;
       touchRef.current.moved = true;
       if (viewConfig.mobileInputMode === "mouse") {
-        const stage = stageRef.current;
-        if (stage) stage.scrollBy({ left: -dx, top: -dy });
+        moveRemoteCursor(dx, dy);
         return;
       }
-      const rect = event.currentTarget.getBoundingClientRect();
+      const point = canvasTouchPoint(first, event.currentTarget);
       send({
         type: "pointer",
         version: 2,
         displayId,
-        x: (first.clientX - rect.left) / Math.max(rect.width, 1),
-        y: (first.clientY - rect.top) / Math.max(rect.height, 1),
+        x: point.x,
+        y: point.y,
       });
     },
-    [configure, controlEnabled, displayId, isMobile, send, viewConfig.mobileInputMode, viewConfig.scalePercent]
+    [canvasTouchPoint, configure, controlEnabled, displayId, isMobile, moveRemoteCursor, send, viewConfig.mobileInputMode, viewConfig.scalePercent]
   );
 
   const handleTouchEnd = useCallback(
@@ -462,8 +517,8 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
       const last = touchRef.current;
       touchRef.current = null;
       if (last && !last.moved) {
-        send({ type: "pointer", version: 2, displayId, x: 0, y: 0, button: "left", down: true });
-        window.setTimeout(() => send({ type: "pointer", version: 2, displayId, x: 0, y: 0, button: "left", down: false }), 35);
+        send({ type: "pointer", version: 2, displayId, button: "left", down: true, move: false });
+        window.setTimeout(() => send({ type: "pointer", version: 2, displayId, button: "left", down: false, move: false }), 35);
       }
     },
     [controlEnabled, displayId, isMobile, send]
@@ -521,6 +576,7 @@ const RemoteDesktopView: React.FC<PageViewProps> = () => {
     qos,
     latencyMs,
     viewConfig,
+    remoteCursor,
   };
 
   return (

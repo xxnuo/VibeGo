@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -119,6 +120,67 @@ func TestRemoteDesktopWebSocketExtendedConfigAndInputRelease(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 }
 
+func TestRemoteDesktopPointerButtonDoesNotMove(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 100, 80))
+	input := &handlerFakeInput{x: 40, y: 30}
+	h := NewRemoteDesktopHandlerWithProviders(
+		&handlerFakeCapture{
+			displays: []remotedesktop.Display{{ID: 0, Width: 100, Height: 80}},
+			img:      img,
+		},
+		input,
+		&handlerFakeClipboard{},
+	)
+	session := remotedesktop.NewSession(h.capture, h.input, h.clip, remotedesktop.Config{DisplayID: 0})
+	paused := atomic.Bool{}
+	clipboardSync := atomic.Bool{}
+	send := make(chan wsOutbound, 4)
+	down := true
+
+	h.handleClientMessage(session, remotedesktop.NewQoS(session.Config()), &paused, &clipboardSync, remotedesktop.ClientMessage{
+		Type:   "pointer",
+		Button: "left",
+		Down:   &down,
+		X:      0,
+		Y:      0,
+	}, send)
+
+	require.Equal(t, 0, input.moveEvents)
+	require.Equal(t, 1, input.buttonEvents)
+	require.Equal(t, 40, input.x)
+	require.Equal(t, 30, input.y)
+}
+
+func TestRemoteDesktopPointerRelativeMove(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 100, 80))
+	input := &handlerFakeInput{x: 95, y: 75}
+	h := NewRemoteDesktopHandlerWithProviders(
+		&handlerFakeCapture{
+			displays: []remotedesktop.Display{{ID: 0, Width: 100, Height: 80}},
+			img:      img,
+		},
+		input,
+		&handlerFakeClipboard{},
+	)
+	session := remotedesktop.NewSession(h.capture, h.input, h.clip, remotedesktop.Config{DisplayID: 0})
+	paused := atomic.Bool{}
+	clipboardSync := atomic.Bool{}
+	send := make(chan wsOutbound, 4)
+	move := true
+
+	h.handleClientMessage(session, remotedesktop.NewQoS(session.Config()), &paused, &clipboardSync, remotedesktop.ClientMessage{
+		Type:     "pointer",
+		Move:     &move,
+		Relative: true,
+		DX:       20,
+		DY:       20,
+	}, send)
+
+	require.Equal(t, 1, input.moveEvents)
+	require.Equal(t, 99, input.x)
+	require.Equal(t, 79, input.y)
+}
+
 func timeNowMilli() int64 {
 	return time.Now().UnixMilli()
 }
@@ -157,10 +219,21 @@ func (f *handlerFakeCapture) Capture(displayID int) (image.Image, remotedesktop.
 type handlerFakeInput struct {
 	keyEvents    int
 	buttonEvents int
+	moveEvents   int
+	x            int
+	y            int
 }
 
-func (f *handlerFakeInput) Available() error    { return nil }
-func (f *handlerFakeInput) Move(x, y int) error { return nil }
+func (f *handlerFakeInput) Available() error { return nil }
+func (f *handlerFakeInput) Move(x, y int) error {
+	f.moveEvents++
+	f.x = x
+	f.y = y
+	return nil
+}
+func (f *handlerFakeInput) Position() (int, int, error) {
+	return f.x, f.y, nil
+}
 func (f *handlerFakeInput) Button(button string, down bool) error {
 	f.buttonEvents++
 	return nil
