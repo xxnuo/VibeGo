@@ -112,7 +112,7 @@ fi
 
 echo
 git --no-pager log --oneline --decorate -1
-printf "create tag %s on current HEAD and push? [y/N] " "${tag}"
+printf "create tag %s on current HEAD? [y/N] " "${tag}"
 read -r answer
 case "${answer}" in
 	y|Y|yes|YES)
@@ -128,6 +128,17 @@ if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
 fi
 
 git tag -a "${tag}" -m "${tag}" HEAD
+printf "push current branch and tag %s to origin? [y/N] " "${tag}"
+read -r answer
+case "${answer}" in
+	y|Y|yes|YES)
+		;;
+	*)
+		echo "push skipped"
+		exit 0
+		;;
+esac
+
 git push origin "${current_branch}"
 git push origin "${tag}"
 
