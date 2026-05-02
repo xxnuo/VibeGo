@@ -630,6 +630,33 @@
       "screenOff": "Screen Off",
       "screenOn": "Screen On"
     },
+    "remoteDesktop": {
+      "name": "Remote Desktop",
+      "description": "View and control this device's desktop in the browser.",
+      "title": "Remote Desktop",
+      "connect": "Connect",
+      "disconnect": "Disconnect",
+      "pause": "Pause",
+      "resume": "Resume",
+      "display": "Display",
+      "quality": "Quality",
+      "controlOn": "Control mode",
+      "viewOnly": "View only",
+      "fullscreen": "Fullscreen",
+      "refresh": "Refresh",
+      "clipboardPlaceholder": "Text clipboard",
+      "readClipboard": "Read clipboard",
+      "writeClipboard": "Write clipboard",
+      "connectionError": "Connection failed",
+      "waylandLimited": "Wayland may be limited",
+      "state": {
+        "idle": "Idle",
+        "connecting": "Connecting",
+        "connected": "Connected",
+        "paused": "Paused",
+        "error": "Error"
+      }
+    },
     "portManager": {
       "name": "Port Manager",
       "description": "Inspect listening ports, kill owning processes, and manage forwarding rules.",

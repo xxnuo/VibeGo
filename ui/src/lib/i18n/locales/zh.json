@@ -645,6 +645,33 @@
       "screenOff": "关闭屏幕",
       "screenOn": "开启屏幕"
     },
+    "remoteDesktop": {
+      "name": "远程桌面",
+      "description": "在浏览器中查看并控制当前设备桌面。",
+      "title": "远程桌面",
+      "connect": "连接",
+      "disconnect": "断开",
+      "pause": "暂停",
+      "resume": "恢复",
+      "display": "显示器",
+      "quality": "质量",
+      "controlOn": "控制模式",
+      "viewOnly": "只看模式",
+      "fullscreen": "全屏",
+      "refresh": "刷新",
+      "clipboardPlaceholder": "文本剪贴板",
+      "readClipboard": "读取剪贴板",
+      "writeClipboard": "写入剪贴板",
+      "connectionError": "连接失败",
+      "waylandLimited": "Wayland 可能受限",
+      "state": {
+        "idle": "未连接",
+        "connecting": "连接中",
+        "connected": "已连接",
+        "paused": "已暂停",
+        "error": "错误"
+      }
+    },
     "portManager": {
       "name": "端口管理器",
       "description": "查看监听端口、终止占用进程，并管理端口转发规则。",

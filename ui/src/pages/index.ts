@@ -11,4 +11,5 @@ import "@/pages/workspace/files";
 import "@/pages/workspace/git";
 import "@/pages/workspace/terminal";
 import "@/pages/tools/remote-control";
+import "@/pages/tools/remote-desktop";
 import "@/pages/tools/keyboard-test";

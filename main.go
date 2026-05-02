@@ -179,6 +179,7 @@ func runServer(ctx context.Context) error {
 	handler.NewProcessHandler().Register(api)
 	handler.NewPortHandler().Register(api)
 	handler.NewRemoteHandler().Register(api)
+	handler.NewRemoteDesktopHandler().Register(api)
 
 	distFS, distErr := ui.GetDistFS()
 
