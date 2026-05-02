@@ -1,0 +1,45 @@
+Local maintenance copy of github.com/charmbracelet/x/vt
+Upstream version: v0.0.0-20260913004009-c615ff2f7805
+Original license: MIT (see LICENSE).
+
+VibeGo changes: correct ED 1/3 semantics and provide independent screen
+scrollback configuration; erase complete wide glyphs with the active background.
+Saved cursor state also retains pending autowrap across restore/alternate-screen exit.
+ANSI CSI u restores the cursor saved by CSI s.
+Origin-mode changes home the cursor; HVP uses the same origin as CUP.
+Relative cursor movement respects the opposite margin when starting outside a region.
+DECSTR restores input defaults without erasing the screen or switching buffers.
+ANSI insert mode shifts existing cells before printable glyphs are written.
+Wide glyphs wrap before overflow and retain pending wrap when filling the right edge.
+Zero-width combining clusters in subsequent writes attach to the preceding glyph.
+Same-width emoji modifiers and ZWJ continuations rejoin across Write boundaries.
+Growing grapheme clusters update cell width and wrap position when later selectors arrive.
+Cell insertion preserves shifted wide glyphs and clears split push-off boundaries.
+Cell deletion moves intact wide glyphs without destructive per-cell rewrites.
+Pending grapheme buffers and projected cell graphemes are bounded to 256 bytes;
+excess combining content is dropped from the screen projection, not raw recording.
+Control strings exceeding 4 MiB are rejected as a whole rather than dispatched
+with silently truncated payloads; one sentinel byte detects parser overflow.
+Right-margin attachment is retained with autowrap disabled; growing selectors
+without room are rejected without erasing the narrow base or its neighbors.
+Saved cursors in both buffers are mapped and bounded when the screen resizes,
+including the logical position represented by a saved right-margin state.
+Legacy DEC mode 47 and mode 1047 switch buffers without implicitly saving,
+restoring or homing the cursor; repeated activation does not clear content.
+DECRQM for alternate-screen selectors reports the actual active buffer even
+when programs enter and leave using different selectors.
+An opaque in-memory checkpoint captures independent screen/continuation state
+at complete parser boundaries, preserving target I/O and handlers on restore.
+Versioned JSON checkpoint encoding retains typed colors and validates imported
+geometry, cells, modes and resource limits without modifying a live emulator.
+No Warp source code is included in this module.
+Saved cursors independently retain all four graphic character sets and shift
+selection. SI/SO and seven-bit single shifts dispatch through working handlers.
+Version 2 checkpoints persist saved character state; legacy version 1 imports
+retain explicitly unknown saved character state rather than inventing it.
+Graphic character mapping precedes grapheme joining and wrapping, preserving
+combining marks and repeat state across arbitrary Write boundaries.
+Version 3 checkpoints preserve explicit soft-wrap layout through row movement,
+scrollback and snapshots. Legacy or unsupported reflow layouts remain unknown.
+ED 2 erases the viewport in place with its erase background, matching the
+browser terminal rather than appending duplicate history.

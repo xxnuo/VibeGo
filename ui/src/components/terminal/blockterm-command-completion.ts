@@ -609,7 +609,7 @@ function findOption(options: readonly CommandOptionSpec[], token: string): Comma
   return undefined;
 }
 
-function commonPrefix(values: readonly string[]): string {
+export function commonPrefix(values: readonly string[]): string {
   if (values.length === 0) return "";
   let prefix = values[0];
   for (const value of values.slice(1)) {
@@ -619,7 +619,8 @@ function commonPrefix(values: readonly string[]): string {
     prefix = prefix.slice(0, index);
     if (!prefix) break;
   }
-  return prefix;
+  const last = prefix.charCodeAt(prefix.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? prefix.slice(0, -1) : prefix;
 }
 
 function resolveGhostText(

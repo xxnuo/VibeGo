@@ -1,0 +1,76 @@
+name: blockterm-core
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - internal/service/blockterm/**
+      - thirdparty/charm-vt/**
+      - ui/**
+      - go.mod
+      - go.sum
+      - .github/workflows/blockterm-core.yml
+  pull_request:
+    paths:
+      - internal/service/blockterm/**
+      - thirdparty/charm-vt/**
+      - ui/**
+      - go.mod
+      - go.sum
+      - .github/workflows/blockterm-core.yml
+
+permissions:
+  contents: read
+
+jobs:
+  browser-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run check
+      - run: pnpm run build
+      - run: node --test --test-concurrency=1 tests/*.test.mjs
+      - name: Isolated browser core regressions
+        run: node tests/run-blockterm-browser-smoke.mjs
+  native-shells:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            shells: bash,zsh,fish,pwsh
+          - os: macos-latest
+            shells: bash,zsh,fish,pwsh
+          - os: windows-latest
+            shells: powershell,pwsh
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh fish
+      - if: runner.os == 'macOS'
+        run: brew install bash fish
+      - name: Terminal parser regressions
+        working-directory: thirdparty/charm-vt
+        run: go test -race ./... -count=1 -timeout 180s
+      - name: Native PTY and shell lifecycle
+        env:
+          BLOCKTERM_TEST_SHELLS: ${{ matrix.shells }}
+        run: go test -race ./internal/service/blockterm -count=1 -timeout 180s

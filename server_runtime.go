@@ -12,6 +12,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -27,7 +28,7 @@ import (
 	"github.com/xxnuo/vibego/internal/middleware"
 	"github.com/xxnuo/vibego/internal/model"
 	"github.com/xxnuo/vibego/internal/service/asr"
-	"github.com/xxnuo/vibego/internal/service/blocktermmodel"
+	"github.com/xxnuo/vibego/internal/service/blockterm"
 	"github.com/xxnuo/vibego/internal/service/sshconnection"
 	"github.com/xxnuo/vibego/internal/service/terminal"
 	vibegoTls "github.com/xxnuo/vibego/internal/tls"
@@ -119,18 +120,11 @@ func runServerWithOptions(ctx context.Context, options serverOptions) error {
 		RuntimeFactory: sshService,
 	})
 	terminalManager.CleanupOnStart()
-	blockTermModelService := blocktermmodel.NewWithOptions(db, blocktermmodel.Options{
-		MutationGate:     terminalManager.BlockTermMutationGate(),
-		TerminalMutation: terminalManager.WithRunningTerminal,
-		TerminalRunning: func(id string) bool {
-			info, ok := terminalManager.Get(id)
-			return ok && info.Status == model.StatusRunning && !info.Readonly
-		},
-	})
-	if err := blockTermModelService.CleanupOnStart(); err != nil {
-		return fmt.Errorf("cleanup stale BlockTerm model runs: %w", err)
+	blockTermCore, err := blockterm.Open(filepath.Join(cfg.ConfigDir, "blockterm-v2.sqlite"), cfg.DefaultShell)
+	if err != nil {
+		return fmt.Errorf("open BlockTerm core: %w", err)
 	}
-	defer blockTermModelService.Close()
+	defer blockTermCore.Close()
 	fileViews, err := middleware.NewFileViewAuthorizer()
 	if err != nil {
 		return err
@@ -157,8 +151,7 @@ func runServerWithOptions(ctx context.Context, options serverOptions) error {
 	fileHandler.SetRemoteFileProvider(sshService)
 	fileHandler.Register(api)
 	handler.NewTerminalHandler(terminalManager).Register(api)
-	handler.NewBlockTermHandler(terminalManager).Register(api)
-	handler.NewBlockTermModelHandler(blockTermModelService).Register(api)
+	handler.RegisterBlockTermV2(api, blockTermCore)
 	handler.NewSSHHandler(sshService).Register(api)
 	githubHandler.RegisterProtectedRoutes(api)
 	gitHandler := handler.NewGitHandler(db)

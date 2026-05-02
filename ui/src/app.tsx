@@ -4,7 +4,6 @@ import { fileApi } from "@/api/file";
 import { DirectoryPicker, NewPageMenu, ProjectMenu } from "@/components/common";
 import { AppFrame, NewGroupMenu } from "@/components/frame";
 import { getStoredAuthKey, LoginPage, setStoredAuthKey } from "@/components/login-page";
-import BlockTermWorkspaceNavigator from "@/components/terminal/blockterm-workspace-navigator";
 import { Toaster } from "@/components/ui/sonner";
 import { isCustomFontValue, resolveFontFamily } from "@/lib/fonts";
 import { useTranslation } from "@/lib/i18n";
@@ -370,7 +369,6 @@ const App: React.FC = () => {
           {renderContent()}
         </Suspense>
       </AppFrame>
-      <BlockTermWorkspaceNavigator />
       <ProjectMenu
         isOpen={isMenuOpen}
         onClose={() => setMenuOpen(false)}

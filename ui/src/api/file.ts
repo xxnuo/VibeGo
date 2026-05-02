@@ -91,7 +91,8 @@ export const fileApi = {
       body: JSON.stringify(opts),
     }),
 
-  list: (path = ".") => request<{ path: string; files: FileInfo[] }>(`/file/list?path=${encodeURIComponent(path)}`),
+  list: (path = ".", signal?: AbortSignal) =>
+    request<{ path: string; files: FileInfo[] }>(`/file/list?path=${encodeURIComponent(path)}`, { signal }),
 
   read: (path: string) =>
     request<{ path: string; content: string; size: number }>(`/file/read?path=${encodeURIComponent(path)}`),

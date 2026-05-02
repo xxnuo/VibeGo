@@ -1,0 +1,724 @@
+{
+  "Version": 1,
+  "Cols": 8,
+  "Rows": 3,
+  "Active": 1,
+  "Phantom": false,
+  "Screens": [
+    {
+      "Cursor": {
+        "X": 6,
+        "Y": 0,
+        "Pen": {
+          "Fg": { "Kind": "rgba16", "Value": [3084, 8738, 14392, 65535] },
+          "Bg": null,
+          "UnderlineColor": null,
+          "Underline": 3,
+          "Attrs": 0
+        },
+        "Link": { "URL": "", "Params": "" },
+        "Style": 0,
+        "Steady": false,
+        "Hidden": false
+      },
+      "Saved": {
+        "X": 6,
+        "Y": 0,
+        "Pen": {
+          "Fg": { "Kind": "rgba16", "Value": [3084, 8738, 14392, 65535] },
+          "Bg": null,
+          "UnderlineColor": null,
+          "Underline": 3,
+          "Attrs": 0
+        },
+        "Link": { "URL": "", "Params": "" },
+        "Style": 0,
+        "Steady": false,
+        "Hidden": false
+      },
+      "SavedPhantom": false,
+      "Scroll": { "Min": { "X": 0, "Y": 0 }, "Max": { "X": 8, "Y": 3 } },
+      "Rows": [
+        [
+          {
+            "Content": "界",
+            "Width": 2,
+            "Style": {
+              "Fg": { "Kind": "basic", "Value": [1, 0, 0, 0] },
+              "Bg": null,
+              "UnderlineColor": null,
+              "Underline": 0,
+              "Attrs": 0
+            },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": "",
+            "Width": 0,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": "X",
+            "Width": 1,
+            "Style": {
+              "Fg": { "Kind": "basic", "Value": [1, 0, 0, 0] },
+              "Bg": null,
+              "UnderlineColor": null,
+              "Underline": 0,
+              "Attrs": 0
+            },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": "T",
+            "Width": 1,
+            "Style": {
+              "Fg": { "Kind": "rgba16", "Value": [3084, 8738, 14392, 65535] },
+              "Bg": null,
+              "UnderlineColor": null,
+              "Underline": 0,
+              "Attrs": 0
+            },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": "U",
+            "Width": 1,
+            "Style": {
+              "Fg": { "Kind": "rgba16", "Value": [3084, 8738, 14392, 65535] },
+              "Bg": null,
+              "UnderlineColor": null,
+              "Underline": 3,
+              "Attrs": 0
+            },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": "L",
+            "Width": 1,
+            "Style": {
+              "Fg": { "Kind": "rgba16", "Value": [3084, 8738, 14392, 65535] },
+              "Bg": null,
+              "UnderlineColor": null,
+              "Underline": 3,
+              "Attrs": 0
+            },
+            "Link": { "URL": "https://example.org/", "Params": "id=sample" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          }
+        ],
+        [
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          }
+        ],
+        [
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          }
+        ]
+      ],
+      "History": [],
+      "HistoryLimit": 10000
+    },
+    {
+      "Cursor": {
+        "X": 3,
+        "Y": 0,
+        "Pen": {
+          "Fg": { "Kind": "rgba16", "Value": [3084, 8738, 14392, 65535] },
+          "Bg": null,
+          "UnderlineColor": null,
+          "Underline": 3,
+          "Attrs": 0
+        },
+        "Link": { "URL": "", "Params": "" },
+        "Style": 0,
+        "Steady": false,
+        "Hidden": false
+      },
+      "Saved": {
+        "X": 0,
+        "Y": 0,
+        "Pen": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+        "Link": { "URL": "", "Params": "" },
+        "Style": 0,
+        "Steady": false,
+        "Hidden": false
+      },
+      "SavedPhantom": false,
+      "Scroll": { "Min": { "X": 0, "Y": 0 }, "Max": { "X": 8, "Y": 3 } },
+      "Rows": [
+        [
+          {
+            "Content": "A",
+            "Width": 1,
+            "Style": {
+              "Fg": { "Kind": "rgba16", "Value": [3084, 8738, 14392, 65535] },
+              "Bg": null,
+              "UnderlineColor": null,
+              "Underline": 3,
+              "Attrs": 0
+            },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": "L",
+            "Width": 1,
+            "Style": {
+              "Fg": { "Kind": "rgba16", "Value": [3084, 8738, 14392, 65535] },
+              "Bg": null,
+              "UnderlineColor": null,
+              "Underline": 3,
+              "Attrs": 0
+            },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": "T",
+            "Width": 1,
+            "Style": {
+              "Fg": { "Kind": "rgba16", "Value": [3084, 8738, 14392, 65535] },
+              "Bg": null,
+              "UnderlineColor": null,
+              "Underline": 3,
+              "Attrs": 0
+            },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          }
+        ],
+        [
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          }
+        ],
+        [
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          },
+          {
+            "Content": " ",
+            "Width": 1,
+            "Style": { "Fg": null, "Bg": null, "UnderlineColor": null, "Underline": 0, "Attrs": 0 },
+            "Link": { "URL": "", "Params": "" }
+          }
+        ]
+      ],
+      "History": [],
+      "HistoryLimit": 10000
+    }
+  ],
+  "Charsets": [null, null, null, null],
+  "GL": 0,
+  "GR": 0,
+  "Single": 0,
+  "Last": 84,
+  "Modes": [
+    { "Private": false, "Number": 4, "Setting": 2 },
+    { "Private": false, "Number": 20, "Setting": 2 },
+    { "Private": true, "Number": 1, "Setting": 2 },
+    { "Private": true, "Number": 6, "Setting": 2 },
+    { "Private": true, "Number": 7, "Setting": 1 },
+    { "Private": true, "Number": 9, "Setting": 2 },
+    { "Private": true, "Number": 25, "Setting": 1 },
+    { "Private": true, "Number": 47, "Setting": 2 },
+    { "Private": true, "Number": 66, "Setting": 2 },
+    { "Private": true, "Number": 69, "Setting": 2 },
+    { "Private": true, "Number": 1000, "Setting": 2 },
+    { "Private": true, "Number": 1001, "Setting": 2 },
+    { "Private": true, "Number": 1002, "Setting": 2 },
+    { "Private": true, "Number": 1003, "Setting": 2 },
+    { "Private": true, "Number": 1004, "Setting": 2 },
+    { "Private": true, "Number": 1006, "Setting": 2 },
+    { "Private": true, "Number": 1047, "Setting": 2 },
+    { "Private": true, "Number": 1048, "Setting": 2 },
+    { "Private": true, "Number": 1049, "Setting": 1 },
+    { "Private": true, "Number": 2004, "Setting": 2 }
+  ],
+  "Tabs": null,
+  "Palette": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+  ],
+  "Colors": [
+    { "Kind": "rgba16", "Value": [65535, 65535, 65535, 65535] },
+    { "Kind": "rgba16", "Value": [0, 0, 0, 65535] },
+    { "Kind": "rgba16", "Value": [65535, 65535, 65535, 65535] },
+    null,
+    null,
+    null
+  ],
+  "Title": "",
+  "Icon": "",
+  "Cwd": ""
+}
