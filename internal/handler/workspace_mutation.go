@@ -85,7 +85,7 @@ func (h *WorkspaceHandler) SubmitMutation(c *gin.Context) {
 			workspaceError(c, err)
 			return
 		}
-		if m.BaseRevision > snapshot.Workspace.Revision {
+		if m.BaseRevision > snapshot.Workspace.Revision || m.BaseRevision < snapshot.Workspace.CompactedRevision {
 			workspaceError(c, workspacesvc.ErrConflict)
 			return
 		}
@@ -184,12 +184,20 @@ func (h *WorkspaceHandler) HandleWebSocket(c *gin.Context) {
 	// Replay committed events (including transient plugin messages) before the
 	// authoritative snapshot. The client deduplicates revisions and mutation IDs.
 	if id != "*" && after > 0 {
+		earliest, err := h.service.EarliestRevision(id)
+		if err != nil {
+			return
+		}
+		if earliest > 0 && after < earliest-1 {
+			after = snapshot.Workspace.Revision
+		}
 		for after < snapshot.Workspace.Revision {
 			backlog, err := h.service.Events(id, after)
 			if err != nil {
 				return
 			}
-			if len(backlog) == 0 {
+			// Compaction may race the earliest-revision check. Never send a partial delta chain.
+			if len(backlog) == 0 || backlog[0].Revision != after+1 {
 				break
 			}
 			for _, event := range backlog {

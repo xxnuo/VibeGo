@@ -2,15 +2,16 @@ package model
 
 // Entity IDs are scoped to a workspace; built-in tool IDs are reused across sessions.
 type Workspace struct {
-	ID           string `gorm:"primaryKey" json:"id"`
-	UserID       string `gorm:"index" json:"user_id"`
-	Name         string `json:"name"`
-	Position     int64  `json:"position"`
-	Revision     int64  `json:"revision"`
-	Data         string `gorm:"type:text" json:"data"`
-	LastActiveAt int64  `json:"last_active_at"`
-	CreatedAt    int64  `json:"created_at"`
-	UpdatedAt    int64  `json:"updated_at"`
+	CompactedRevision int64  `gorm:"not null;default:0" json:"-"`
+	ID                string `gorm:"primaryKey" json:"id"`
+	UserID            string `gorm:"index" json:"user_id"`
+	Name              string `json:"name"`
+	Position          int64  `json:"position"`
+	Revision          int64  `json:"revision"`
+	Data              string `gorm:"type:text" json:"data"`
+	LastActiveAt      int64  `json:"last_active_at"`
+	CreatedAt         int64  `json:"created_at"`
+	UpdatedAt         int64  `json:"updated_at"`
 }
 
 type WorkspaceFolder struct {

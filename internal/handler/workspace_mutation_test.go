@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -353,6 +354,23 @@ func TestWorkspaceTerminalLifecycleAndCatalog(t *testing.T) {
 		t.Fatalf("invalid close: %d", response.Code)
 	}
 	check("Renamed", 1)
+	if err := db.Model(&model.Workspace{}).Where("id = ?", "ws").Update("compacted_revision", 2).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"terminal/close", "workspace/delete"} {
+		id := info.ID
+		if kind == "workspace/delete" {
+			id = "ws"
+		}
+		stale := mutation(t, "stale-"+kind, kind, map[string]any{"id": id})
+		if response := workspaceRequest(lifecycleRouter, "/api/workspace/mutations", stale); response.Code != 409 {
+			t.Fatalf("stale lifecycle %s: %d", kind, response.Code)
+		}
+		check("Renamed", 1)
+	}
+	if err := db.Model(&model.Workspace{}).Where("id = ?", "ws").Update("compacted_revision", 0).Error; err != nil {
+		t.Fatal(err)
+	}
 	closeMutation := mutation(t, "close", "terminal/close", map[string]any{"id": info.ID})
 	for i := 0; i < 2; i++ {
 		if response := workspaceRequest(lifecycleRouter, "/api/workspace/mutations", closeMutation); response.Code != 200 {
@@ -414,5 +432,59 @@ func TestWorkspaceTerminalLifecycleAndCatalog(t *testing.T) {
 	}
 	if _, err := service.Snapshot("other"); err == nil {
 		t.Fatal("workspace remains after deletion")
+	}
+}
+
+func TestWorkspaceCompactedCursorStartsWithSnapshot(t *testing.T) {
+	db, service, router := workspaceFixture(t)
+	if err := db.Create(&model.Workspace{ID: "ws", Revision: 600, Name: "Compacted"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	rows := make([]model.WorkspaceMutation, 600)
+	for i := range rows {
+		m := mutation(t, fmt.Sprint(i+1), "workspace/rename", map[string]any{"name": "Compacted"})
+		raw, _ := json.Marshal(m)
+		rows[i] = model.WorkspaceMutation{WorkspaceID: "ws", ID: m.ID, Revision: int64(i + 1), Mutation: string(raw), Request: string(raw)}
+	}
+	if err := db.CreateInBatches(rows, 100).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.CompactWorkspaceMutations("ws"); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(router)
+	defer server.Close()
+	endpoint := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/workspace/events?workspace_id=ws&key=test-key&after="
+	for _, cursor := range []string{"1", "99", "100", "599", "600"} {
+		t.Run(cursor, func(t *testing.T) {
+			conn, _, err := websocket.DefaultDialer.Dial(endpoint+cursor, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close()
+			_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+			after, _ := strconv.ParseInt(cursor, 10, 64)
+			if after >= 100 && after < 600 {
+				for revision := after + 1; revision <= 600; revision++ {
+					var event workspacesvc.MutationEvent
+					if err := conn.ReadJSON(&event); err != nil {
+						t.Fatal(err)
+					}
+					if event.Type != "mutation:committed" || event.Revision != revision {
+						t.Fatalf("noncontiguous replay: %+v", event)
+					}
+				}
+			}
+			var event struct {
+				Type     string                `json:"type"`
+				Snapshot workspacesvc.Snapshot `json:"snapshot"`
+			}
+			if err := conn.ReadJSON(&event); err != nil {
+				t.Fatal(err)
+			}
+			if event.Type != "workspace:snapshot" || event.Snapshot.Workspace.Revision != 600 {
+				t.Fatalf("expected direct authority: %+v", event)
+			}
+		})
 	}
 }

@@ -2,6 +2,43 @@ import type { ReactNode } from "react";
 import { create } from "zustand";
 import { pageRegistry } from "@/pages/registry";
 import { randomUUID } from "@/lib/uuid";
+import { groupPayload, tabPayload } from "./workspace-inventory";
+
+export type FrameMutationAction = { type: string; payload: Record<string, unknown> };
+export type FrameActionDispatcher = (action: FrameMutationAction) => void;
+let frameActionDispatcher: FrameActionDispatcher | null = null;
+export function setFrameActionDispatcher(dispatcher: FrameActionDispatcher | null) {
+  frameActionDispatcher = dispatcher;
+}
+function dispatchFrame(type: string, payload: Record<string, unknown>) {
+  frameActionDispatcher?.({ type, payload });
+}
+function dispatchGroup(type: string, groupId: string) {
+  if (!frameActionDispatcher) return;
+  const groups = useFrameStore.getState().groups;
+  const group = groups.find((item) => item.id === groupId);
+  if (group) dispatchFrame(type, groupPayload(group, groups.indexOf(group)));
+}
+function dispatchTab(type: string, groupId: string, tabId: string, pageId?: string) {
+  if (!frameActionDispatcher) return;
+  const group = useFrameStore.getState().groups.find((item) => item.id === groupId);
+  if (!group || (group.type !== "group" && group.type !== "tool")) return;
+  const tabs = getGroupTabs(group, pageId);
+  const tab = tabs.find((item) => item.id === tabId);
+  if (tab)
+    dispatchFrame(
+      type,
+      tabPayload(groupId, group.type === "group" ? pageId || group.activePageId || "" : "", tab, tabs.indexOf(tab))
+    );
+}
+function dispatchFolderOrder() {
+  dispatchFrame("folder/reorder", {
+    folder_ids: useFrameStore
+      .getState()
+      .groups.filter((group) => group.type === "group")
+      .map((group) => group.id),
+  });
+}
 
 export type GroupType = "home" | "group" | "tool" | "settings";
 
@@ -61,6 +98,7 @@ export interface TabItem {
   data?: Record<string, unknown>;
   closable?: boolean;
   pinned?: boolean;
+  position?: number;
 }
 
 const EMPTY_TABS: TabItem[] = [];
@@ -134,6 +172,7 @@ interface FrameState {
   ) => void;
   addToolGroup: (pageId: string, name?: string, id?: string) => void;
   addTerminalGroup: () => void;
+  updateGroupData: (groupId: string, data: Record<string, unknown>) => void;
   addSettingsGroup: () => void;
   openSettingsCategory: (category: string) => void;
   setSettingsActiveCategory: (category: string | undefined) => void;
@@ -316,10 +355,15 @@ export const useFrameStore = create<FrameState>((set, get) => ({
         activeGroupId: group.id,
       };
     });
+    dispatchGroup("folder/add", group.id);
     return group.id;
   },
 
-  replaceGroupState: (groupId, payload) =>
+  replaceGroupState: (groupId, payload) => {
+    const group = get().groups.find((group) => group.id === groupId);
+    if (group?.type === "group")
+      for (const page of group.pages)
+        for (const tab of page.tabs) dispatchFrame("tab/close", { id: tab.id, folder_id: groupId, page_id: page.id });
     set((s) => ({
       groups: s.groups.map((g) => {
         if (g.type !== "group" || g.id !== groupId) return g;
@@ -348,7 +392,10 @@ export const useFrameStore = create<FrameState>((set, get) => ({
           activePageId: activePageExists ? payload.activePageId : fallbackActivePageId,
         };
       }),
-    })),
+    }));
+    dispatchGroup("folder/update-data", groupId);
+    for (const page of payload.pages) for (const tab of page.tabs) dispatchTab("tab/open", groupId, tab.id, page.id);
+  },
 
   addToolGroup: (pageId, name, id) => {
     const { groups } = get();
@@ -362,6 +409,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     }
     const group = createToolGroup(pageId, name, id || (pageDef?.singleton ? `tool-${pageId}` : undefined));
     set((s) => ({ groups: [...s.groups, group], activeGroupId: group.id }));
+    dispatchGroup("tool/open", group.id);
   },
 
   addTerminalGroup: () => {
@@ -374,6 +422,18 @@ export const useFrameStore = create<FrameState>((set, get) => ({
       activePageId: `${groupId}-terminal`,
     };
     set((s) => ({ groups: [...s.groups, group], activeGroupId: group.id }));
+    dispatchGroup("folder/add", group.id);
+  },
+
+  updateGroupData: (groupId, data) => {
+    set((state) => ({
+      groups: state.groups.map((group) =>
+        group.id === groupId && (group.type === "group" || group.type === "tool") ? { ...group, data } : group
+      ),
+    }));
+    const group = get().groups.find((group) => group.id === groupId);
+    if (group?.type === "group" || group?.type === "tool")
+      dispatchGroup(group.type === "group" ? "folder/update-data" : "tool/update-data", groupId);
   },
 
   addSettingsGroup: () => {
@@ -405,7 +465,8 @@ export const useFrameStore = create<FrameState>((set, get) => ({
       groups: s.groups.map((g) => (g.type === "settings" ? { ...g, activeCategory: category } : g)),
     })),
 
-  removeGroup: (id) =>
+  removeGroup: (id) => {
+    const group = get().groups.find((group) => group.id === id);
     set((s) => {
       const remainingGroups = s.groups.filter((g) => g.id !== id);
       if (id === "home" && remainingGroups.length === 0) return s;
@@ -425,16 +486,21 @@ export const useFrameStore = create<FrameState>((set, get) => ({
         activeGroupId,
         taskbarOrder: s.taskbarOrder.filter((itemId) => itemId !== `group:${id}`),
       };
-    }),
+    });
+    if (group?.type === "group" || group?.type === "tool")
+      dispatchFrame(group.type === "group" ? "folder/remove" : "tool/close", { id });
+  },
 
-  reorderGroups: (fromId, toId) =>
+  reorderGroups: (fromId, toId) => {
     set((s) => ({
       groups: reorderById(s.groups, fromId, toId),
-    })),
+    }));
+    if (fromId !== toId) dispatchFolderOrder();
+  },
 
   setTaskbarOrder: (order) => set({ taskbarOrder: order }),
 
-  reorderTaskbarItems: (fromId, toId, visibleIds) =>
+  reorderTaskbarItems: (fromId, toId, visibleIds) => {
     set((s) => {
       const current = s.taskbarOrder.length > 0 ? s.taskbarOrder : visibleIds;
       const known = current.filter((id) => visibleIds.includes(id));
@@ -446,7 +512,9 @@ export const useFrameStore = create<FrameState>((set, get) => ({
         taskbarOrder,
         groups: fromGroup && toGroup ? reorderById(s.groups, fromGroup, toGroup) : s.groups,
       };
-    }),
+    });
+    if (fromId !== toId && fromId.startsWith("group:") && toId.startsWith("group:")) dispatchFolderOrder();
+  },
 
   setActiveGroup: (id) => set({ activeGroupId: id }),
 
@@ -476,7 +544,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     return null;
   },
 
-  addPageToGroup: (groupId, page) =>
+  addPageToGroup: (groupId, page) => {
     set((s) => ({
       groups: s.groups.map((g) => {
         if (g.type !== "group" || g.id !== groupId) return g;
@@ -488,9 +556,15 @@ export const useFrameStore = create<FrameState>((set, get) => ({
           activePageId: page.id,
         };
       }),
-    })),
+    }));
+    dispatchGroup("folder/update-data", groupId);
+  },
 
-  removePageFromGroup: (groupId, pageId) =>
+  removePageFromGroup: (groupId, pageId) => {
+    const group = get().groups.find((group) => group.id === groupId);
+    if (group?.type === "group")
+      for (const tab of getGroupTabs(group, pageId))
+        dispatchFrame("tab/close", { id: tab.id, folder_id: groupId, page_id: pageId });
     set((s) => ({
       groups: s.groups.map((g) => {
         if (g.type !== "group" || g.id !== groupId) return g;
@@ -498,7 +572,9 @@ export const useFrameStore = create<FrameState>((set, get) => ({
         const activePageId = g.activePageId === pageId ? (pages.length > 0 ? pages[0].id : null) : g.activePageId;
         return { ...g, pages, activePageId };
       }),
-    })),
+    }));
+    dispatchGroup("folder/update-data", groupId);
+  },
 
   setFolderView: (groupId, view) =>
     set((s) => ({
@@ -528,7 +604,14 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     }
   },
 
-  addTab: (groupId, tab, pageId) =>
+  addTab: (groupId, tab, pageId) => {
+    const group = get().groups.find((group) => group.id === groupId);
+    const existingTabs = group ? getGroupTabs(group, pageId) : [];
+    const exists = existingTabs.some((item) => item.id === tab.id);
+    tab = {
+      ...tab,
+      position: tab.position ?? Math.min(0, ...existingTabs.map((item, index) => item.position ?? index)) - 1,
+    };
     set((s) => ({
       groups: s.groups.map((g) => {
         if (g.id !== groupId) return g;
@@ -549,9 +632,11 @@ export const useFrameStore = create<FrameState>((set, get) => ({
         if (exists) return { ...g, activeTabId: tab.id };
         return { ...g, tabs: [tab, ...g.tabs], activeTabId: tab.id };
       }),
-    })),
+    }));
+    if (!exists) dispatchTab("tab/open", groupId, tab.id, pageId);
+  },
 
-  updateTab: (groupId, tabId, updates, pageId) =>
+  updateTab: (groupId, tabId, updates, pageId) => {
     set((state) => ({
       groups: state.groups.map((group) => {
         if (group.id !== groupId) return group;
@@ -566,9 +651,17 @@ export const useFrameStore = create<FrameState>((set, get) => ({
           };
         return group.type === "tool" ? { ...group, tabs: update(group.tabs) } : group;
       }),
-    })),
+    }));
+    const keys = Object.keys(updates);
+    const sharedData = Object.keys(updates.data || {}).some((key) => !["isDirty", "line", "column"].includes(key));
+    if (keys.length === 1 && keys[0] === "pinned") dispatchTab("tab/pin", groupId, tabId, pageId);
+    else if (keys.some((key) => key !== "data") || sharedData) dispatchTab("tab/update", groupId, tabId, pageId);
+  },
 
-  removeTab: (groupId, tabId, pageId) =>
+  removeTab: (groupId, tabId, pageId) => {
+    const group = get().groups.find((group) => group.id === groupId);
+    const targetPage = group?.type === "group" ? pageId || group.activePageId || "" : "";
+    const exists = group && getGroupTabs(group, pageId).some((tab) => tab.id === tabId);
     set((s) => ({
       groups: s.groups.map((g) => {
         if (g.id !== groupId) return g;
@@ -601,7 +694,9 @@ export const useFrameStore = create<FrameState>((set, get) => ({
             : g.activeTabId;
         return { ...g, tabs, activeTabId };
       }),
-    })),
+    }));
+    if (exists) dispatchFrame("tab/close", { id: tabId, folder_id: groupId, page_id: targetPage });
+  },
 
   setActiveTab: (groupId, tabId, pageId) =>
     set((s) => ({
@@ -646,7 +741,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     if (activeGroupId) removeTab(activeGroupId, tabId);
   },
 
-  reorderCurrentTabs: (fromId, toId) =>
+  reorderCurrentTabs: (fromId, toId) => {
     set((s) => ({
       groups: s.groups.map((g) => {
         if (g.id !== s.activeGroupId) return g;
@@ -654,85 +749,66 @@ export const useFrameStore = create<FrameState>((set, get) => ({
           return {
             ...g,
             pages: g.pages.map((p) =>
-              p.id === g.activePageId ? { ...p, tabs: reorderById(p.tabs, fromId, toId) } : p
+              p.id === g.activePageId
+                ? { ...p, tabs: reorderById(p.tabs, fromId, toId).map((tab, position) => ({ ...tab, position })) }
+                : p
             ),
           };
         }
         if (g.type === "settings" || g.type === "home") return g;
-        return { ...g, tabs: reorderById(g.tabs, fromId, toId) };
-      }),
-    })),
-
-  pinTab: (tabId) =>
-    set((s) => ({
-      groups: s.groups.map((g) => {
-        if (g.id !== s.activeGroupId) return g;
-        if (g.type === "group") {
-          return {
-            ...g,
-            pages: g.pages.map((p) =>
-              p.id !== g.activePageId
-                ? p
-                : { ...p, tabs: p.tabs.map((t) => (t.id === tabId ? { ...t, pinned: true } : t)) }
-            ),
-          };
-        }
-        if (g.type === "settings" || g.type === "home") return g;
-        return {
-          ...g,
-          tabs: g.tabs.map((t: TabItem) => (t.id === tabId ? { ...t, pinned: true } : t)),
-        };
-      }),
-    })),
-
-  openPreviewTab: (tab) => {
-    const { activeGroupId } = get();
-    if (!activeGroupId) return;
-
-    set((s) => ({
-      groups: s.groups.map((g) => {
-        if (g.id !== activeGroupId) return g;
-
-        if (g.type === "group") {
-          return {
-            ...g,
-            pages: g.pages.map((p) => {
-              if (p.id !== g.activePageId) return p;
-              const existingTab = p.tabs.find((t) => t.id === tab.id);
-              if (existingTab) return { ...p, activeTabId: tab.id };
-              const previewTabIndex = p.tabs.findIndex((t) => !t.pinned);
-              let newTabs: TabItem[];
-              if (previewTabIndex !== -1) {
-                newTabs = p.tabs.map((t, i) => (i === previewTabIndex ? { ...tab, pinned: false } : t));
-              } else {
-                newTabs = [{ ...tab, pinned: false }, ...p.tabs];
-              }
-              return { ...p, tabs: newTabs, activeTabId: tab.id };
-            }),
-          };
-        }
-
-        if (g.type === "settings" || g.type === "home") return g;
-
-        const existingTab = g.tabs.find((t: TabItem) => t.id === tab.id);
-        if (existingTab) {
-          return { ...g, activeTabId: tab.id };
-        }
-        const previewTabIndex = g.tabs.findIndex((t: TabItem) => !t.pinned);
-        let newTabs: TabItem[];
-        if (previewTabIndex !== -1) {
-          newTabs = g.tabs.map((t: TabItem, i: number) => (i === previewTabIndex ? { ...tab, pinned: false } : t));
-        } else {
-          newTabs = [{ ...tab, pinned: false }, ...g.tabs];
-        }
-        return { ...g, tabs: newTabs, activeTabId: tab.id };
+        return { ...g, tabs: reorderById(g.tabs, fromId, toId).map((tab, position) => ({ ...tab, position })) };
       }),
     }));
+    const group = get().getActiveGroup();
+    if (group && fromId !== toId) for (const tab of getGroupTabs(group)) dispatchTab("tab/update", group.id, tab.id);
+  },
+
+  pinTab: (tabId) => {
+    const group = get().getActiveGroup();
+    if (group) get().updateTab(group.id, tabId, { pinned: true });
+  },
+
+  openPreviewTab: (tab) => {
+    const group = get().getActiveGroup();
+    if (!group || (group.type !== "group" && group.type !== "tool")) return;
+    const tabs = getGroupTabs(group);
+    if (tabs.some((item) => item.id === tab.id)) {
+      get().setActiveTab(group.id, tab.id);
+      return;
+    }
+    const preview = tabs.find((item) => !item.pinned);
+    const position = preview
+      ? (preview.position ?? tabs.indexOf(preview))
+      : Math.min(0, ...tabs.map((item, index) => item.position ?? index)) - 1;
+    const nextTab = { ...tab, pinned: false, position };
+    const nextTabs = preview ? tabs.map((item) => (item.id === preview.id ? nextTab : item)) : [nextTab, ...tabs];
+    set((state) => ({
+      groups: state.groups.map((item) => {
+        if (item.id !== group.id) return item;
+        if (item.type === "tool") return { ...item, tabs: nextTabs, activeTabId: tab.id };
+        if (item.type === "group")
+          return {
+            ...item,
+            pages: item.pages.map((page) =>
+              page.id === item.activePageId ? { ...page, tabs: nextTabs, activeTabId: tab.id } : page
+            ),
+          };
+        return item;
+      }),
+    }));
+    if (preview)
+      dispatchFrame("tab/close", {
+        id: preview.id,
+        folder_id: group.id,
+        page_id: group.type === "group" ? group.activePageId || "" : "",
+      });
+    dispatchTab("tab/open", group.id, tab.id);
   },
 }));
 
 // Add newly registered views without replacing persisted tabs or terminal owners.
 pageRegistry.subscribe(() => {
+  const extended: string[] = [];
   useFrameStore.setState((state) => ({
     groups: state.groups.map((group) => {
       if (group.type !== "group") return group;
@@ -740,6 +816,7 @@ pageRegistry.subscribe(() => {
       if (!path) return group;
       const added = getWorkspaceViews().filter((view) => !group.pages.some((page) => page.type === view.id));
       if (!added.length) return group;
+      extended.push(group.id);
       return {
         ...group,
         pages: [
@@ -756,4 +833,5 @@ pageRegistry.subscribe(() => {
       };
     }),
   }));
+  for (const id of extended) dispatchGroup("folder/update-data", id);
 });

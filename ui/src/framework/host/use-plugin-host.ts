@@ -77,11 +77,7 @@ export function usePluginHost(pluginId?: string): PluginHostContextValue {
         groupId,
         data: group?.type === "group" || group?.type === "tool" ? group.data || {} : {},
         updateData: async (data) => {
-          useFrameStore.setState((state) => ({
-            groups: state.groups.map((group) =>
-              group.id === groupId && (group.type === "group" || group.type === "tool") ? { ...group, data } : group
-            ),
-          }));
+          useFrameStore.getState().updateGroupData(groupId, data);
         },
         dispatchMutation: (action, payload) =>
           useWorkspaceSyncStore

@@ -97,7 +97,7 @@ func runServerWithOptions(ctx context.Context, options serverOptions) error {
 		ExtraSourcesJSON: cfg.AsrSources,
 	})
 
-	db := config.GetDB(
+	dbPair := config.GetDBPair(
 		&model.User{},
 		&model.UserSession{},
 		&model.AISessionIndex{},
@@ -106,13 +106,17 @@ func runServerWithOptions(ctx context.Context, options serverOptions) error {
 		&model.TerminalSession{},
 		&model.TerminalHistory{},
 	)
+	db := dbPair.Writer
 	if err := config.MigrateWorkspaceSettings(db); err != nil {
 		return fmt.Errorf("migrate workspace settings: %w", err)
 	}
 	if err := config.MigrateLegacySessionsToWorkspaces(db); err != nil {
 		return fmt.Errorf("migrate workspace inventory: %w", err)
 	}
-	workspaceSync := workspace.New(db)
+	workspaceSync := workspace.New(db, dbPair.Reader)
+	if err := workspaceSync.CompactExistingMutations(); err != nil {
+		return fmt.Errorf("compact workspace mutations: %w", err)
+	}
 	terminalManager := terminal.NewManager(db, &terminal.ManagerConfig{
 		Shell:            cfg.DefaultShell,
 		WorkspaceChanged: workspaceSync.TerminalsChanged,

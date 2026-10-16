@@ -28,13 +28,20 @@ type Snapshot struct {
 }
 
 type Service struct {
-	db *gorm.DB
+	writerDB *gorm.DB
+	readerDB *gorm.DB
 	// Commit and fan-out share one lock so peers never observe reversed revisions.
 	mu      sync.Mutex
 	clients map[*subscriber]struct{}
 }
 
-func New(db *gorm.DB) *Service { return &Service{db: db, clients: make(map[*subscriber]struct{})} }
+func New(writerDB *gorm.DB, readers ...*gorm.DB) *Service {
+	readerDB := writerDB
+	if len(readers) > 0 && readers[0] != nil {
+		readerDB = readers[0]
+	}
+	return &Service{writerDB: writerDB, readerDB: readerDB, clients: make(map[*subscriber]struct{})}
+}
 
 func (s *Service) TerminalsChanged(id, terminalID, action string) {
 	if id == "" {
@@ -48,7 +55,7 @@ func (s *Service) TerminalsChanged(id, terminalID, action string) {
 
 func (s *Service) Snapshot(id string) (Snapshot, error) {
 	result := Snapshot{Folders: []model.WorkspaceFolder{}, Tools: []model.WorkspaceTool{}, Tabs: []model.WorkspaceTab{}, Storage: []model.WorkspacePluginStorage{}, Terminals: []model.TerminalSession{}}
-	err := s.db.Transaction(func(tx *gorm.DB) error {
+	err := s.readerDB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.First(&result.Workspace, "id = ?", id).Error; err != nil {
 			return err
 		}
@@ -72,7 +79,7 @@ func (s *Service) Snapshot(id string) (Snapshot, error) {
 
 func (s *Service) Events(id string, after int64) ([]MutationEvent, error) {
 	var rows []model.WorkspaceMutation
-	if err := s.db.Where("workspace_id = ? AND revision > ?", id, after).Order("revision").Limit(1000).Find(&rows).Error; err != nil {
+	if err := s.readerDB.Where("workspace_id = ? AND revision > ?", id, after).Order("revision").Limit(1000).Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	result := make([]MutationEvent, 0, len(rows))
@@ -98,7 +105,7 @@ func ValidateEnvelope(m ClientMutation) error {
 
 func (s *Service) HasMutation(workspaceID, id string) (bool, error) {
 	var n int64
-	err := s.db.Model(&model.WorkspaceMutation{}).Where("workspace_id = ? AND id = ?", workspaceID, id).Count(&n).Error
+	err := s.readerDB.Model(&model.WorkspaceMutation{}).Where("workspace_id = ? AND id = ?", workspaceID, id).Count(&n).Error
 	return n > 0, err
 }
 
@@ -106,7 +113,7 @@ func (s *Service) ReorderWorkspaces(ids []string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var events []MutationEvent
-	err := s.db.Transaction(func(tx *gorm.DB) error {
+	err := s.writerDB.Transaction(func(tx *gorm.DB) error {
 		var rows []model.Workspace
 		if err := tx.Order("position, id").Find(&rows).Error; err != nil {
 			return err
@@ -148,6 +155,9 @@ func (s *Service) ReorderWorkspaces(ids []string) error {
 			if err := tx.Create(&model.WorkspaceMutation{WorkspaceID: row.ID, ID: m.ID, Revision: row.Revision, Mutation: string(raw), Request: string(raw)}).Error; err != nil {
 				return err
 			}
+			if _, err := compactMutations(tx, row.ID, row.Revision, KeepRecentRevisions); err != nil {
+				return err
+			}
 			events = append(events, MutationEvent{Type: "mutation:committed", Revision: row.Revision, ClientID: "server", Mutation: &m})
 		}
 		return nil
@@ -172,7 +182,7 @@ func (s *Service) Commit(m ClientMutation) (MutationEvent, error) {
 	if err != nil {
 		return event, err
 	}
-	err = s.db.Transaction(func(tx *gorm.DB) error {
+	err = s.writerDB.Transaction(func(tx *gorm.DB) error {
 		var previous model.WorkspaceMutation
 		err := tx.First(&previous, "workspace_id = ? AND id = ?", m.WorkspaceID, m.ID).Error
 		if err == nil {
@@ -204,6 +214,11 @@ func (s *Service) Commit(m ClientMutation) (MutationEvent, error) {
 			ws = model.Workspace{ID: m.WorkspaceID, Revision: 0, Data: "{}", CreatedAt: time.Now().Unix()}
 		} else if err := tx.First(&ws, "id = ?", m.WorkspaceID).Error; err != nil {
 			return err
+		}
+		// Once an ID receipt has been pruned, an ancient retry must not replay
+		// destructive operations or resurrect previously closed assets.
+		if m.ClientID != "server" && m.BaseRevision < ws.CompactedRevision {
+			return fmt.Errorf("%w: mutation base was compacted", ErrConflict)
 		}
 		if m.BaseRevision > ws.Revision {
 			return fmt.Errorf("%w: future base revision", ErrConflict)
@@ -253,11 +268,21 @@ func (s *Service) Commit(m ClientMutation) (MutationEvent, error) {
 		if err := tx.Create(&model.WorkspaceMutation{WorkspaceID: m.WorkspaceID, ID: m.ID, Revision: ws.Revision, Mutation: string(raw), Request: string(requestRaw)}).Error; err != nil {
 			return err
 		}
+		if _, err := compactMutations(tx, ws.ID, ws.Revision, KeepRecentRevisions); err != nil {
+			return err
+		}
 		event = MutationEvent{Type: "mutation:committed", Revision: ws.Revision, ClientID: m.ClientID, Mutation: &m}
 		return nil
 	})
 	if err == nil && !duplicate {
 		s.broadcast(event)
+		if event.Revision > KeepRecentRevisions && event.Revision%50 == 0 {
+			go func() {
+				if _, err := s.CompactWorkspaceMutations(m.WorkspaceID); err != nil {
+					fmt.Printf("workspace compaction failed: %v\n", err)
+				}
+			}()
+		}
 	}
 	return event, err
 }
@@ -637,7 +662,7 @@ func reduce(tx *gorm.DB, ws *model.Workspace, m ClientMutation) error {
 }
 
 func DeleteInventory(tx *gorm.DB, id string) error {
-	for _, dest := range []any{&model.WorkspaceFolder{}, &model.WorkspaceTool{}, &model.WorkspaceTab{}, &model.WorkspacePluginStorage{}} {
+	for _, dest := range []any{&model.WorkspaceFolder{}, &model.WorkspaceTool{}, &model.WorkspaceTab{}, &model.WorkspacePluginStorage{}, &model.WorkspaceMutation{}} {
 		if err := tx.Where("workspace_id = ?", id).Delete(dest).Error; err != nil {
 			return err
 		}
