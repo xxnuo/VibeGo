@@ -129,7 +129,9 @@ test("workspace mutation engine preserves inventory, viewport and durable intent
     await reset();
     const {useSessionStore:sessions}=await load("stores/session-store.ts");
     const {sessionApi}=await load("api/session.ts");const {terminalApi}=await load("api/terminal.ts");
-    const list=sessionApi.list,terminalList=terminalApi.list;
+    const {settingsApi}=await load("api/settings.ts");
+    const list=sessionApi.list,terminalList=terminalApi.list,settingsSet=settingsApi.set;
+    settingsApi.set=async()=>({ok:true});
     let resolve;sessionApi.list=()=>new Promise(done=>{resolve=done;});terminalApi.list=async()=>({terminals:[]});
     sessionStorage.setItem("workspaceCurrentSessionId",workspaceId);
     sessions.setState({currentSessionId:null,sessions:[],loading:false,sessionInitialized:false});
@@ -139,6 +141,6 @@ test("workspace mutation engine preserves inventory, viewport and durable intent
       resolve({sessions:[{id:workspaceId,name:"Workspace"}],page:1,page_size:50,total:1});
       assert.equal(await pending,true);assert.equal(sessions.getState().currentSessionId,workspaceId);
       assert.ok(Socket.instances.some(socket=>new URL(socket.url).searchParams.get("workspace_id")==="*"));
-    } finally {sessionApi.list=list;terminalApi.list=terminalList;}
+    } finally {sessionApi.list=list;terminalApi.list=terminalList;settingsApi.set=settingsSet;}
   });
 });

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { fileApi } from "@/api/file";
 import { type SessionInfo, sessionApi, type WorkspaceState } from "@/api/session";
+import { settingsApi } from "@/api/settings";
 import { workspaceApi, type WorkspaceSnapshot } from "@/api/workspace-sync";
 import { useWorkspaceSyncStore, subscribeWorkspaceMutation } from "@/stores/workspace-sync-store";
 import { saveWorkspaceViewport, workspaceSnapshotState } from "@/stores/workspace-viewport";
@@ -31,9 +32,10 @@ import { enqueueWorkspaceMutation } from "@/stores/workspace-mutation-queue";
 export { enqueueWorkspaceMutation } from "@/stores/workspace-mutation-queue";
 
 const CURRENT_SESSION_SETTING_KEY = "workspaceCurrentSessionId";
+const LAST_ACTIVE_SESSION_SETTING_KEY = "workspaceLastActiveSessionId";
 
 let autoSaveUnsub: (() => void) | null = null;
-let storedSessionWriteChain: Promise<void> = Promise.resolve();
+let lastActiveSessionWriteChain: Promise<void> = Promise.resolve();
 let workspaceContentMutationRevision = 0;
 let pendingWorkspaceTransitionSave: WorkspaceSaveLatch | null = null;
 let sessionListRequestSequence = 0;
@@ -135,8 +137,15 @@ export function isCurrentWorkspaceTransition(
   return !requireIdle || !state.loading;
 }
 
-async function getStoredSessionId(): Promise<string | null> {
-  return window.sessionStorage.getItem(CURRENT_SESSION_SETTING_KEY);
+async function getStoredSessionId(sessions: SessionInfo[]): Promise<string | null> {
+  const localId = window.sessionStorage.getItem(CURRENT_SESSION_SETTING_KEY);
+  if (sessions.some((session) => session.id === localId)) return localId;
+  if (sessions.length === 0) return null;
+  try {
+    const { value } = await settingsApi.get(LAST_ACTIVE_SESSION_SETTING_KEY);
+    if (sessions.some((session) => session.id === value)) return value;
+  } catch {}
+  return sessions.reduce((latest, session) => (session.updated_at > latest.updated_at ? session : latest)).id;
 }
 
 function isWorkspaceOperationCurrent(guard?: WorkspaceOperationGuard): boolean {
@@ -159,15 +168,23 @@ function clearPendingWorkspaceTransitionSave(latch: WorkspaceSaveLatch | null): 
 }
 
 async function setStoredSessionId(id: string | null, guard?: WorkspaceOperationGuard): Promise<void> {
-  const write = storedSessionWriteChain
+  if (!isWorkspaceOperationCurrent(guard)) return;
+  if (!id) {
+    window.sessionStorage.removeItem(CURRENT_SESSION_SETTING_KEY);
+    return;
+  }
+  window.sessionStorage.setItem(CURRENT_SESSION_SETTING_KEY, id);
+  // Publish startup history in order without holding up this device's navigation.
+  lastActiveSessionWriteChain = lastActiveSessionWriteChain
     .catch(() => {})
-    .then(() => {
+    .then(async () => {
       if (!isWorkspaceOperationCurrent(guard)) return;
-      if (id) window.sessionStorage.setItem(CURRENT_SESSION_SETTING_KEY, id);
-      else window.sessionStorage.removeItem(CURRENT_SESSION_SETTING_KEY);
+      try {
+        await settingsApi.set(LAST_ACTIVE_SESSION_SETTING_KEY, id);
+      } catch (error) {
+        console.error("Failed to remember the last active workspace", error);
+      }
     });
-  storedSessionWriteChain = write;
-  await write;
 }
 
 function createEmptySessionState(): SessionState {
@@ -783,7 +800,9 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     set({ loading: true, sessionInitialized: false, error: null });
     get().initAutoSave();
     try {
-      const [, storedSessionId] = await Promise.all([get().loadSessions(), getStoredSessionId()]);
+      await get().loadSessions();
+      if (!isCurrentWorkspaceTransition(requestRevision)) return false;
+      const storedSessionId = await getStoredSessionId(get().sessions);
       if (!isCurrentWorkspaceTransition(requestRevision)) {
         return false;
       }
@@ -793,13 +812,11 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         const state = get();
         return state.currentSessionId === storedSessionId && state.sessionInitialized && !state.loading;
       }
-      if (storedSessionId) {
-        await setStoredSessionId(null, {
-          revision: requestRevision,
-          expectedSessionId: get().currentSessionId,
-          allowLoading: true,
-        });
-      }
+      await setStoredSessionId(null, {
+        revision: requestRevision,
+        expectedSessionId: get().currentSessionId,
+        allowLoading: true,
+      });
       if (!isCurrentWorkspaceTransition(requestRevision)) {
         return false;
       }
@@ -1046,9 +1063,11 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     if (deletedWorkspaceSessionIds.has(id)) return;
     if (!initialState.loading && previousSessionId === id) {
       await useWorkspaceSyncStore.getState().refresh();
+      if (!isCurrentWorkspaceTransition(initialState.workspaceRevision, id, true)) return;
       const frame = useFrameStore.getState();
       const target = frame.groups.find((group) => group.type === "group" || group.type === "tool");
       if (target) frame.setActiveGroup(target.id);
+      await setStoredSessionId(id, { revision: initialState.workspaceRevision, expectedSessionId: id });
       return;
     }
 
