@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { commands } from "@/framework/host/command-service";
 import { contextKeys, useContextKeyStore } from "@/framework/host/context-key-service";
@@ -25,6 +25,7 @@ const NewPageMenu: React.FC<NewPageMenuProps> = ({
   onNewTerminal,
   onNewTool,
 }) => {
+  const [query, setQuery] = useState("");
   const t = useTranslation(locale);
   const settings = useSettingsStore((s) => s.settings);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -45,6 +46,7 @@ const NewPageMenu: React.FC<NewPageMenuProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
+    setQuery("");
     restorePreviousFocusRef.current = true;
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
@@ -128,44 +130,77 @@ const NewPageMenu: React.FC<NewPageMenuProps> = ({
             <X size={18} />
           </button>
         </div>
+        <div className="shrink-0 px-3 py-2 border-b border-ide-border">
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label={t("common.search")}
+            placeholder={t("common.search")}
+            className="w-full h-10 px-2 bg-ide-bg border border-ide-border rounded text-sm text-ide-text outline-none focus:border-ide-accent"
+          />
+        </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          {items.map((item) => {
-            const Icon = item.icon;
-            const page = item.command.startsWith("page:") ? registry.get(item.command.slice(5)) : undefined;
+          {(["workspace", "tool", "system"] as const).map((category) => {
+            const categoryItems = items.filter((item) => {
+              const page = registry.get(
+                item.command === "open-folder"
+                  ? "files"
+                  : item.command === "new-terminal"
+                    ? "terminal"
+                    : item.command.slice(5)
+              );
+              return (
+                (page?.category || "tool") === category &&
+                `${getToolName({ name: item.title, nameKey: item.titleKey })} ${item.title}`
+                  .toLowerCase()
+                  .includes(query.trim().toLowerCase())
+              );
+            });
             return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  if (item.command === "open-folder") {
-                    restorePreviousFocusRef.current = false;
-                    onOpenDirectory(previousFocusRef.current);
-                  } else if (item.command === "new-terminal") onNewTerminal();
-                  else if (page) onNewTool(page.id);
-                  else void commands.execute(item.command).catch((error) => toast.error(String(error)));
-                  onClose();
-                }}
-                className="w-full px-4 py-3 flex items-center gap-4 hover:bg-ide-bg rounded-lg transition-colors"
-              >
-                <div className="w-10 h-10 shrink-0 rounded-full bg-ide-accent/10 flex items-center justify-center">
-                  {Icon && <Icon size={20} className="text-ide-accent" />}
-                </div>
-                <div className="min-w-0 flex-1 text-left">
-                  <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-ide-text">
-                    <span className="min-w-0 truncate">
-                      {getToolName({ name: item.title, nameKey: item.titleKey })}
-                    </span>
-                    {page?.tags?.map((tag) => (
-                      <span
-                        key={tag.labelKey}
-                        className="px-1.5 py-0.5 text-[10px] leading-none border border-ide-border text-ide-mute bg-ide-bg rounded"
+              categoryItems.length > 0 && (
+                <div key={category}>
+                  <div className="px-3 py-2 text-xs text-ide-mute">{t(`home.category.${category}`)}</div>
+                  {categoryItems.map((item) => {
+                    const Icon = item.icon;
+                    const page = item.command.startsWith("page:") ? registry.get(item.command.slice(5)) : undefined;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          if (item.command === "open-folder") {
+                            restorePreviousFocusRef.current = false;
+                            onOpenDirectory(previousFocusRef.current);
+                          } else if (item.command === "new-terminal") onNewTerminal();
+                          else if (page) onNewTool(page.id);
+                          else void commands.execute(item.command).catch((error) => toast.error(String(error)));
+                          onClose();
+                        }}
+                        className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-ide-bg rounded transition-colors"
                       >
-                        {t(tag.labelKey)}
-                      </span>
-                    ))}
-                  </div>
+                        <div className="w-7 h-7 shrink-0 flex items-center justify-center">
+                          {Icon && <Icon size={20} className="text-ide-accent" />}
+                        </div>
+                        <div className="min-w-0 flex-1 text-left">
+                          <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-ide-text">
+                            <span className="min-w-0 truncate">
+                              {getToolName({ name: item.title, nameKey: item.titleKey })}
+                            </span>
+                            {page?.tags?.map((tag) => (
+                              <span
+                                key={tag.labelKey}
+                                className="px-1.5 py-0.5 text-[10px] leading-none border border-ide-border text-ide-mute bg-ide-bg rounded"
+                              >
+                                {t(tag.labelKey)}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
-              </button>
+              )
             );
           })}
         </div>

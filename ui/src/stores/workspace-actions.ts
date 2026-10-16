@@ -29,6 +29,11 @@ export const workspaceActions = {
   openFolder: async (path: string, name: string, folderId?: string) => {
     useFrameStore.getState().addFolderGroup(path, name, folderId);
   },
+  addFolderPage: (path: string, name?: string) => useFrameStore.getState().addFolderGroup(path, name),
+  addTerminalPage: (cwd?: string, name?: string, associatedFolderId?: string) =>
+    useFrameStore.getState().addTerminalGroup(cwd, name, associatedFolderId),
+  addGitPage: (repoPath?: string, name?: string, associatedFolderId?: string) =>
+    useFrameStore.getState().addGitGroup(repoPath, name, associatedFolderId),
   closeFolder: async (folderId: string) => {
     useFrameStore.getState().removeGroup(folderId);
   },

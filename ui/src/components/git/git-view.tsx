@@ -1,3 +1,5 @@
+import DirectoryPicker from "@/components/common/directory-picker";
+import { useFrameStore } from "@/stores/frame-store";
 import {
   AlertCircle,
   ArrowDown,
@@ -150,6 +152,7 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
   const t = (key: string) => getTranslation(locale, key);
   const dialog = useDialog();
   const isMobile = useIsMobile();
+  const [repositoryPickerOpen, setRepositoryPickerOpen] = useState(false);
   const [showBranchSelector, setShowBranchSelector] = useState(false);
   const [repositoryDialogMode, setRepositoryDialogMode] = useState<"create" | "clone" | null>(null);
   const [repositorySettingsOpen, setRepositorySettingsOpen] = useState(false);
@@ -952,9 +955,13 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
 
   const handleOpenCreatedRepository = useCallback(
     async (repositoryPath: string) => {
-      await openFolder(repositoryPath);
+      const frame = useFrameStore.getState();
+      const group = frame.groups.find((group) => group.id === groupId);
+      if (group?.type === "tool" && group.pageId === "git")
+        frame.updateGroupData(groupId, { ...group.data, repoPath: repositoryPath });
+      else frame.addGitGroup(repositoryPath);
     },
-    [openFolder]
+    [groupId]
   );
 
   const handleStashPop = useCallback(
@@ -1211,8 +1218,16 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
           <div className="flex w-full max-w-sm flex-col items-stretch justify-center gap-2 sm:w-auto sm:max-w-none sm:flex-row sm:flex-wrap sm:items-center">
             <button
               type="button"
+              onClick={() => setRepositoryPickerOpen(true)}
+              className="flex min-h-11 items-center justify-center gap-2 rounded-md border border-ide-border bg-ide-panel px-3 py-2 text-sm text-ide-text hover:bg-ide-bg"
+            >
+              <FolderGit2 size={16} />
+              {t("common.openFolder")}
+            </button>
+            <button
+              type="button"
               onClick={handleInitRepo}
-              disabled={isLoading}
+              disabled={isLoading || !path}
               className="flex min-h-11 items-center justify-center gap-2 rounded-md bg-ide-accent px-3 py-2 text-sm font-medium text-ide-bg transition-colors hover:bg-ide-accent/80 disabled:opacity-50"
             >
               <GitGraph size={16} />
@@ -1238,6 +1253,16 @@ const GitView: React.FC<GitViewProps> = ({ groupId, path, locale, onFileDiff, on
             </button>
           </div>
         </div>
+        <DirectoryPicker
+          isOpen={repositoryPickerOpen}
+          onClose={() => setRepositoryPickerOpen(false)}
+          initialPath={path || "."}
+          locale={locale}
+          onSelect={async (repositoryPath) => {
+            await handleOpenCreatedRepository(repositoryPath);
+            setRepositoryPickerOpen(false);
+          }}
+        />
         {repositoryDialogMode && (
           <GitRepositoryDialog
             open

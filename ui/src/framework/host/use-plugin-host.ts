@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { fileApi } from "@/api/file";
+import { getWorkspacePath } from "@/components/frame/workspace-hint-bubble";
 import { terminalApi } from "@/api/terminal";
 import { useDialog } from "@/components/common/dialog-provider";
 import { workbenchRegistry } from "@/framework/workbench/registry";
@@ -8,7 +9,7 @@ import { useContributedViewActions } from "@/framework/workbench/use-workbench-a
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAppStore } from "@/stores/app-store";
 import { getOrCreateFileManagerStore } from "@/stores/file-manager-store";
-import { useFrameStore } from "@/stores/frame-store";
+import { consumeTerminalStartRequest, useFrameStore } from "@/stores/frame-store";
 import { usePreviewStore } from "@/stores/preview-store";
 import { useSessionStore } from "@/stores/session-store";
 import { getTerminalWorkspaceGroupIds } from "@/stores/session-workspace-guard";
@@ -40,8 +41,7 @@ export function usePluginHost(pluginId?: string): PluginHostContextValue {
   const plugin = pluginId || scope?.pluginId || "workbench";
   const groupId = scope?.groupId || frame.activeGroupId || "home";
   const group = frame.groups.find((group) => group.id === groupId);
-  const path =
-    scope?.path || (group?.type === "group" ? group.pages.find((page) => page.type === "files")?.path : undefined);
+  const path = scope?.path || (group ? getWorkspacePath(group) || undefined : undefined);
   const sessionId = useSessionStore((state) => state.currentSessionId);
   const workspaceId = `${sessionId || "local"}:${groupId}`;
   useWorkspaceSyncStore((state) => state.snapshot);
@@ -190,11 +190,12 @@ export function usePluginHost(pluginId?: string): PluginHostContextValue {
       terminal: {
         async create(options) {
           let owner = useFrameStore.getState().groups.find((group) => group.id === groupId);
-          if (owner?.type !== "group" || !owner.pages.some((page) => page.type === "terminal")) {
-            useFrameStore.getState().addTerminalGroup();
+          if (!owner || !getTerminalWorkspaceGroupIds([owner]).has(owner.id)) {
+            useFrameStore.getState().addTerminalGroup(options?.cwd || path, undefined, groupId);
             owner = useFrameStore.getState().getActiveGroup();
           }
-          if (!owner || owner.type !== "group") throw new Error("Terminal workspace unavailable");
+          if (!owner) throw new Error("Terminal workspace unavailable");
+          consumeTerminalStartRequest(owner.id);
           const sessionId = useSessionStore.getState().currentSessionId;
           const result = await terminalApi.create({
             ...options,

@@ -77,12 +77,12 @@ test("plugin host services and workbench integration", async t => {
   await t.test("declarative services, commands, editors, and workspace views share a registry", async () => {
     frame.getState().initDefaultGroups(); frame.getState().addFolderGroup("/a","A","a");
     const dispose = registerPlugin(definePlugin({ id: "fixture-a",name: "A",exports: { double: value => value*2 },contributions: { workspaceViews: [{ id: "data",name: "Data",category: "workspace",View: () => null }],commands: [{ id: "data.double",title: "Double",handler: value => value*2 }],customEditors: [{ id: "grid",fileExtensions: [".csv"],Component: () => React.createElement("div",null,"CSV Grid") }],configuration: { properties: { enabled: { type: "boolean", default: true } } },menu: [{ id: "double",title: "Double",location: "project",command: "data.double" }] } }));
-    assert.deepEqual(frame.getState().groups[0].pages.map(page => page.type),["files","git","terminal","data"]);
-    frame.getState().addFolderGroup("/b","B","b"); assert.equal(frame.getState().groups[1].pages[3].type,"data");
+    assert.deepEqual(frame.getState().groups[0].pages.map(page => page.type),["files"]);
+    frame.getState().addFolderGroup("/b","B","b"); assert.equal(frame.getState().groups[1].pages[0].type,"files");
     await render("a");assert.equal(taskbar.getPageTitle("data"),"Data"); assert.equal(host.extensions.getExtension("fixture-a").exports.double(3),6); assert.equal(await host.commands.execute("data.double",4),8);
     assert.equal(registry.getCustomEditors(".CSV")[0].id,"grid"); assert.ok(registry.getMenus("project").some(item => item.id === "fixture-a:double"));
     await act(() => dispose()); assert.equal(host.extensions.getExtension("fixture-a"),undefined); assert.equal(registry.getCustomEditors(".csv").length,0); await assert.rejects(commands.execute("data.double",2));
-    assert.equal(frame.getState().groups[0].pages[3].type,"data","disabled plugin retains saved page state");
+    assert.deepEqual(frame.getState().groups[0].pages.map(page => page.type),["files"],"plugin registration never adds unrequested pages");
   });
   await t.test("host storage follows workspace switches and scoped editor updates", async () => {
     await act(()=>sync.setState({snapshot:snapshot()}));
@@ -282,7 +282,7 @@ test("plugin host services and workbench integration", async t => {
     await act(()=>frame.getState().addFolderGroup("/late","Late","late"));await render("late");
     const create=terminalApi.create;const del=terminalApi.delete;let resolve;let deleted;
     terminalApi.create=()=>new Promise(done=>{resolve=done;});terminalApi.delete=async id=>{deleted=id;return{ok:true};};
-    try{const creation=host.terminal.create();await act(()=>frame.getState().removeGroup("late"));resolve({id:"late-terminal",name:"Late"});await assert.rejects(creation,/Workspace changed/);assert.equal(deleted,"late-terminal");assert.equal(useTerminalStore.getState().terminalsByGroup.late,undefined);}finally{terminalApi.create=create;terminalApi.delete=del;}
+    try{let creation;await act(()=>{creation=host.terminal.create();});await act(()=>frame.getState().removeGroup(frame.getState().activeGroupId));resolve({id:"late-terminal",name:"Late"});await assert.rejects(creation,/Workspace changed/);assert.equal(deleted,"late-terminal");assert.equal(useTerminalStore.getState().terminalsByGroup.late,undefined);}finally{terminalApi.create=create;terminalApi.delete=del;}
   });
   await t.test("workspace extension tabs survive the existing session round-trip", async () => {
     await act(() => root.render(null));
@@ -291,6 +291,6 @@ test("plugin host services and workbench integration", async t => {
     mock(sessionApi,"update",async()=>({ok:true})); mock(sessionApi,"patchWorkspace",async(_id,state)=>{saved=structuredClone(state);return {ok:true};}); mock(sessionApi,"get",async()=>({id:"fixture",workspace_state:saved})); mock(settingsApi,"set",async()=>({ok:true})); mock(terminalApi,"syncWorkspace",async()=>({ok:true})); mock(terminalApi,"list",async()=>({terminals:[]}));
     mock(workspaceApi,"getSnapshot",async()=>saved); mock(sync.getState(),"connect",async()=>{});
     const initAutoSave=sessions.getState().initAutoSave; sessions.setState({currentSessionId:"fixture",workspaceRevision:0,loading:false,sessionInitialized:true,initAutoSave(){}});
-    try { frame.getState().setActiveGroup("a"); frame.getState().setFolderView("a","data"); frame.getState().addCurrentTab({id:"database",title:"Data",data:{query:"select 1"}}); saved=snapshot(); await sessions.getState().saveCurrentSession(); sessions.setState({currentSessionId:null}); frame.getState().initDefaultGroups(); await sessions.getState().switchSession("fixture"); assert.equal(sessions.getState().error,null); assert.equal(frame.getState().getCurrentPageType(),"data"); assert.equal(frame.getState().getCurrentTabs()[0].data.query,"select 1"); assert.deepEqual([...getTerminalWorkspaceGroupIds(frame.getState().groups)],["a","b"]); } finally { for (const [object,key,value] of patches) object[key]=value; sessions.setState({initAutoSave,currentSessionId:null}); }
+    try { frame.getState().setActiveGroup("a"); frame.getState().setFolderView("a","data"); frame.getState().addCurrentTab({id:"database",title:"Data",data:{query:"select 1"}}); saved=snapshot(); await sessions.getState().saveCurrentSession(); sessions.setState({currentSessionId:null}); frame.getState().initDefaultGroups(); await sessions.getState().switchSession("fixture"); assert.equal(sessions.getState().error,null); assert.equal(frame.getState().getCurrentPageType(),"data"); assert.equal(frame.getState().getCurrentTabs()[0].data.query,"select 1"); assert.deepEqual([...getTerminalWorkspaceGroupIds(frame.getState().groups)],[]); } finally { for (const [object,key,value] of patches) object[key]=value; sessions.setState({initAutoSave,currentSessionId:null}); }
   });
 });

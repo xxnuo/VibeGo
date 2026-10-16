@@ -61,6 +61,50 @@ test("workspace mutation engine preserves inventory, viewport and durable intent
     remote("tab/close",{id:"peer-tab",folder_id:"folder",page_id:"folder-files"});remote("folder/remove",{id:"peer-folder"});
     assert.equal(frame.getState().activeGroupId,"folder");assert.equal(frame.getState().getCurrentActiveTabId(),"file-a");
   });
+  await t.test("terminal creation stays unique regardless of broadcast and response order", async () => {
+    for (const broadcastFirst of [true, false]) {
+      await reset();
+      const existing = { id: "existing", name: "Terminal 1", group_id: "folder", status: "running" };
+      remote("terminal/open", { terminals: [existing] });
+      terminals.getState().setActiveId("folder", existing.id);
+
+      const root = {
+        id: "created", name: "Terminal 2", group_id: "folder", status: "running",
+        cwd: "/repo", current_cwd: "/repo/subdir", readonly: true, runtime_type: "local",
+      };
+      const complete = terminal => terminals.getState().addTerminal("folder", {
+        id: terminal.id, name: terminal.name, cwd: "/repo", parentId: terminal.parent_id,
+      });
+      if (!broadcastFirst) complete(root);
+      remote("terminal/open", { terminals: [existing, root] });
+      if (broadcastFirst) {
+        assert.equal(terminals.getState().activeIdByGroup.folder, existing.id);
+        complete(root);
+      }
+      const state = terminals.getState();
+      assert.deepEqual(state.getTerminals("folder").map(terminal => terminal.id), [existing.id, root.id]);
+      assert.equal(state.activeIdByGroup.folder, root.id);
+      assert.equal(state.focusedIdByGroup.folder, root.id);
+      assert.equal(state.listManagerOpenByGroup.folder, false);
+      assert.deepEqual(state.terminalLayouts[root.id], { type: "terminal", terminalId: root.id });
+      assert.equal(state.getTerminals("folder")[1].currentCwd, root.current_cwd);
+      assert.equal(state.getTerminals("folder")[1].readonly, true);
+
+      const child = { id: "child", name: "Terminal 3", group_id: "folder", parent_id: root.id, status: "running" };
+      if (!broadcastFirst) complete(child);
+      remote("terminal/open", { terminals: [existing, root, child] });
+      if (broadcastFirst) complete(child);
+      terminals.getState().splitTerminal(root.id, root.id, child.id, "horizontal");
+      assert.deepEqual(terminals.getState().getTerminals("folder").map(terminal => terminal.id), [existing.id, root.id, child.id]);
+      assert.deepEqual(terminals.getState().getRootTerminals("folder").map(terminal => terminal.id), [existing.id, root.id]);
+      assert.equal(terminals.getState().activeIdByGroup.folder, root.id);
+      assert.equal(terminals.getState().terminalLayouts[root.id].second.terminalId, child.id);
+
+      remote("terminal/close", { terminals: [existing, root, { ...child, status: "exited" }] });
+      complete(child);
+      assert.equal(terminals.getState().getTerminals("folder").find(terminal => terminal.id === child.id).status, "exited");
+    }
+  });
   await t.test("all local asset entry points emit atomic actions without viewport or dirty data",async()=>{
     await reset();
     frame.getState().setActiveGroup("folder");frame.getState().showHomePage();frame.getState().setActiveGroup("folder");

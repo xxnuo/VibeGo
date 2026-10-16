@@ -169,6 +169,6 @@ func MigrateLegacySessionsToWorkspaces(db *gorm.DB) error {
 				return fmt.Errorf("migrate workspace %s: %w", session.ID, err)
 			}
 		}
-		return nil
+		return migratePageTasks(tx)
 	})
 }

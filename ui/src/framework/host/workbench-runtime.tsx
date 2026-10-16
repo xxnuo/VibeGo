@@ -1,3 +1,4 @@
+import { getWorkspacePath } from "@/components/frame/workspace-hint-bubble";
 import { GitBranch, Loader2, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -20,7 +21,7 @@ import { usePluginHost } from "./use-plugin-host";
 function snapshot() {
   const frame = useFrameStore.getState();
   const group = frame.getActiveGroup();
-  const path = group?.type === "group" ? group.pages.find((page) => page.type === "files")?.path : undefined;
+  const path = group ? getWorkspacePath(group) || undefined : undefined;
   return {
     tab: frame.getCurrentActiveTabId(),
     groupId: frame.activeGroupId,
@@ -62,7 +63,16 @@ export function PluginWorkbenchRuntime() {
     const store = getOrCreateGitStore(host.workspace.groupId);
     const item = createStatusBarItem("git", { id: "branch", priority: 10 }, host.workspace.groupId);
     item.icon = GitBranch;
-    item.onClick = () => useFrameStore.getState().setFolderView(host.workspace.groupId, "git");
+    item.onClick = () => {
+      const frame = useFrameStore.getState();
+      if (
+        frame.groups.some(
+          (group) => group.id === host.workspace.groupId && group.type === "tool" && group.pageId === "git"
+        )
+      )
+        frame.setActiveGroup(host.workspace.groupId);
+      else frame.addGitGroup(path, undefined, host.workspace.groupId);
+    };
     const update = () => {
       const state = store.getState();
       const available = state.isRepo === true && state.currentPath === path;

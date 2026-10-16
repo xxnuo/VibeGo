@@ -1,4 +1,18 @@
-import { Calendar, Copy, Download, Edit3, File, Folder, HardDrive, Link2, Shield, Trash2, X } from "lucide-react";
+import {
+  Terminal,
+  GitGraph,
+  Calendar,
+  Copy,
+  Download,
+  Edit3,
+  File,
+  Folder,
+  HardDrive,
+  Link2,
+  Shield,
+  Trash2,
+  X,
+} from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { fileApi } from "@/api/file";
 import { ActionButton } from "@/components/common/action-button";
@@ -11,6 +25,8 @@ interface FileDetailSheetProps {
   file: FileItem | null;
   open: boolean;
   onClose: () => void;
+  onOpenTerminal?: (path: string) => void;
+  onOpenGit?: (path: string) => void;
   onDelete?: (file: FileItem) => void;
   onRename?: (file: FileItem) => void | Promise<void>;
 }
@@ -37,7 +53,15 @@ function formatPermissions(mode: string): string {
   return `${owner}${group}${other}`;
 }
 
-const FileDetailSheet: React.FC<FileDetailSheetProps> = ({ file, open, onClose, onDelete, onRename }) => {
+const FileDetailSheet: React.FC<FileDetailSheetProps> = ({
+  file,
+  open,
+  onClose,
+  onDelete,
+  onRename,
+  onOpenTerminal,
+  onOpenGit,
+}) => {
   const locale = (useSettingsStore((s) => s.settings.locale) || "zh") as Locale;
   const t = useTranslation(locale);
   const renamingRef = useRef(false);
@@ -224,6 +248,26 @@ const FileDetailSheet: React.FC<FileDetailSheetProps> = ({ file, open, onClose, 
                 onClick={handleDownload}
                 icon={<Download size={20} className="text-ide-mute" />}
                 label={t("fileDetail.download")}
+              />
+            )}
+            {file.isDir && onOpenTerminal && (
+              <ActionButton
+                icon={<Terminal size={20} />}
+                label={t("fileManager.openTerminalHere")}
+                onClick={() => {
+                  onClose();
+                  onOpenTerminal(file.path);
+                }}
+              />
+            )}
+            {file.isDir && onOpenGit && (
+              <ActionButton
+                icon={<GitGraph size={20} />}
+                label={t("fileManager.openGitHere")}
+                onClick={() => {
+                  onClose();
+                  onOpenGit(file.path);
+                }}
               />
             )}
             {onDelete && (

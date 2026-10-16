@@ -1,7 +1,7 @@
 import {
   Activity,
   Bot,
-  Files,
+  FolderOpen,
   GitGraph,
   Home,
   Keyboard as KeyboardIcon,
@@ -111,7 +111,7 @@ registerPage({
   id: "files",
   name: "Files",
   nameKey: "sidebar.files",
-  icon: Files,
+  icon: FolderOpen,
   category: "workspace",
   order: 10,
   View: lazy(() => import("@/pages/workspace/files")),

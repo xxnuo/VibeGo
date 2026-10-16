@@ -1,3 +1,4 @@
+import { workspaceActions } from "@/stores/workspace-actions";
 import {
   AlertCircle,
   Archive,
@@ -367,10 +368,20 @@ const FileManager: React.FC<FileManagerProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [focusIndex, handleFileClick, setFocusIndex, storeApi, visibleFiles]);
 
+  const openTerminalHere = (path = storeApi.getState().currentPath) =>
+    workspaceActions.addTerminalPage(path, undefined, groupId);
+  const openGitHere = (path = storeApi.getState().currentPath) => workspaceActions.addGitPage(path, undefined, groupId);
+
   return (
     <div className="h-full flex flex-col bg-ide-bg">
-      <FileManagerBreadcrumb store={storeApi} />
+      <FileManagerBreadcrumb
+        store={storeApi}
+        onOpenTerminal={mode === "default" ? () => openTerminalHere() : undefined}
+        onOpenGit={mode === "default" ? () => openGitHere() : undefined}
+      />
       <FileManagerToolbar
+        onOpenTerminal={() => openTerminalHere()}
+        onOpenGit={() => openGitHere()}
         onRefresh={handleRefresh}
         onNewFile={handleShowNewFileDialog}
         onNewFolder={handleShowNewFolderDialog}
@@ -445,6 +456,8 @@ const FileManager: React.FC<FileManagerProps> = ({
             onClose={() => setDetailFile(null)}
             onDelete={handleDelete}
             onRename={handleShowRenameDialog}
+            onOpenTerminal={openTerminalHere}
+            onOpenGit={openGitHere}
           />
         </>
       )}

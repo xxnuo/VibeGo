@@ -854,6 +854,8 @@
     "connected": "Connected"
   },
   "fileManager": {
+    "openTerminalHere": "Open Terminal Here",
+    "openGitHere": "Open Git Here",
     "newFile": "New File",
     "newFolder": "New Folder",
     "enterName": "Enter name...",
@@ -884,6 +886,14 @@
     "closeGroup": "Close Group"
   },
   "home": {
+    "recentFolders": "Recent Folders",
+    "quickActions": "Quick Actions",
+    "activeTasks": "Active Tasks",
+    "category": {
+      "workspace": "Development",
+      "tool": "Utilities",
+      "system": "System"
+    },
     "welcome": "Select a folder to get started",
     "openDirectory": "Open Directory",
     "enterPath": "Enter server path...",

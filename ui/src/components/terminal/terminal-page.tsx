@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Columns, Edit2, Plus, Rows, Terminal, X, XCircle } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getTerminalWorkspaceGroupIds } from "@/stores/session-workspace-guard";
 import { terminalApi } from "@/api/terminal";
 import { useDialog } from "@/components/common";
 import type { KeyEvent } from "@/components/keyboard";
@@ -16,7 +17,7 @@ import { terminalKeys, useTerminalCreate, useTerminalRename } from "@/hooks/use-
 import { useTranslation } from "@/lib/i18n";
 import { cleanupSpeculativeTerminal } from "@/services/speculative-terminal-cleanup";
 import { useAppStore } from "@/stores";
-import { useFrameStore } from "@/stores/frame-store";
+import { consumeTerminalStartRequest, useFrameStore } from "@/stores/frame-store";
 import { useKeyboardStore } from "@/stores/keyboard-store";
 import {
   enqueueWorkspaceMutation,
@@ -34,11 +35,7 @@ interface TerminalPageProps {
 const EMPTY_TERMINALS: TerminalSession[] = [];
 
 function isTerminalGroupCurrent(groupId: string): boolean {
-  return useFrameStore
-    .getState()
-    .groups.some(
-      (group) => group.type === "group" && group.id === groupId && group.pages.some((page) => page.type === "terminal")
-    );
+  return getTerminalWorkspaceGroupIds(useFrameStore.getState().groups).has(groupId);
 }
 
 function isTerminalWorkspaceScopeCurrent(groupId: string, sessionId: string | null, revision: number): boolean {
@@ -100,6 +97,11 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
 
   const createTerminalMutation = useTerminalCreate(groupId);
   const renameTerminalMutation = useTerminalRename(groupId);
+
+  useEffect(() => {
+    if (!sessionInitialized || sessionLoading || !currentSessionId || !isTerminalGroupCurrent(groupId)) return;
+    if (consumeTerminalStartRequest(groupId) && terminals.length === 0) createTerminalMutation.mutate({ cwd });
+  }, [groupId, cwd, currentSessionId, sessionInitialized, sessionLoading, terminals.length, createTerminalMutation]);
 
   const rootTerminals = useMemo(() => terminals.filter((t) => !t.parentId), [terminals]);
   const displayTerminals = useMemo(() => [...rootTerminals].reverse(), [rootTerminals]);

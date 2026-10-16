@@ -2,6 +2,7 @@ import React, { Suspense, useCallback, useEffect, useRef, useState } from "react
 import { authApi } from "@/api/auth";
 import { fileApi } from "@/api/file";
 import { DirectoryPicker, NewPageMenu, ProjectMenu } from "@/components/common";
+import { getWorkspacePath } from "@/components/frame/workspace-hint-bubble";
 import { PluginErrorBoundary } from "@/components/common/plugin-kit";
 import { AppFrame, NewGroupMenu } from "@/components/frame";
 import { getStoredAuthKey, LoginPage, setStoredAuthKey } from "@/components/login-page";
@@ -45,6 +46,7 @@ const App: React.FC = () => {
   const activeTabId = useFrameStore((s) => s.getCurrentActiveTabId());
   const addToolGroup = useFrameStore((s) => s.addToolGroup);
   const addTerminalGroup = useFrameStore((s) => s.addTerminalGroup);
+  const addGitGroup = useFrameStore((s) => s.addGitGroup);
   const addSettingsGroup = useFrameStore((s) => s.addSettingsGroup);
   const initDefaultGroups = useFrameStore((s) => s.initDefaultGroups);
   const showHomePage = useFrameStore((s) => s.showHomePage);
@@ -272,9 +274,12 @@ const App: React.FC = () => {
 
   const handleNewTool = useCallback(
     (pageId: string) => {
-      addToolGroup(pageId, pageId);
+      if (pageId === "git") addGitGroup();
+      else if (pageId === "terminal") addTerminalGroup();
+      else if (pageId === "settings") addSettingsGroup();
+      else addToolGroup(pageId, pageId);
     },
-    [addToolGroup]
+    [addToolGroup, addGitGroup, addTerminalGroup, addSettingsGroup]
   );
 
   useWorkbenchRegistry();
@@ -301,7 +306,13 @@ const App: React.FC = () => {
         </div>
       );
     }
-    return renderPlugin(group.pageId, { groupId: group.id, tabId: activeTabId, isActive: true });
+    const path = getWorkspacePath(group);
+    return renderPlugin(group.pageId, {
+      groupId: group.id,
+      tabId: activeTabId,
+      isActive: true,
+      path: path || undefined,
+    });
   };
 
   const renderGroupPage = (group: GenericGroup) => {

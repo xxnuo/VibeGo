@@ -1,3 +1,4 @@
+import { splitPageTasks, legacyPageTaskId } from "./page-tasks";
 import { create } from "zustand";
 import { fileApi } from "@/api/file";
 import { type SessionInfo, sessionApi, type WorkspaceState } from "@/api/session";
@@ -224,7 +225,7 @@ function normalizeWorkspaceRecord<T>(value: unknown): Record<string, T> {
 }
 
 export function normalizeSessionWorkspaceState(state: SessionState): SessionState {
-  return {
+  const normalized: SessionState = {
     workspaceNameOverride: normalizeWorkspaceNameOverride(state?.workspaceNameOverride),
     openGroups: Array.isArray(state?.openGroups) ? state.openGroups : [],
     openTools: Array.isArray(state?.openTools) ? state.openTools : [],
@@ -238,6 +239,41 @@ export function normalizeSessionWorkspaceState(state: SessionState): SessionStat
     activeGroupId: typeof state?.activeGroupId === "string" ? state.activeGroupId : null,
     fileManagerByGroup: normalizeWorkspaceRecord<SessionState["fileManagerByGroup"][string]>(state?.fileManagerByGroup),
   };
+  const original = normalized.openGroups;
+  const groups = splitPageTasks(original.map((group) => ({ ...group, type: "group" })));
+  normalized.openGroups = groups.filter((group) => group.type === "group");
+  normalized.openTools = [...groups.filter((group) => group.type === "tool"), ...normalized.openTools];
+  for (const group of original) {
+    const derived = groups.filter(
+      (task) => task.id === group.id || (task.type === "tool" && task.data?.sourceGroupId === group.id)
+    );
+    if (normalized.activeGroupId === group.id) {
+      const active = group.pages.find((page) => page.id === group.activePageId);
+      if (active && active.type !== "files")
+        normalized.activeGroupId =
+          derived.find((task) => task.type === "tool" && task.pageId === active.type)?.id || group.id;
+    }
+    normalized.taskbarOrder = normalized.taskbarOrder.flatMap((id) =>
+      id === `group:${group.id}` ? derived.map((task) => `group:${task.id}`) : [id]
+    );
+    const terminalPage = group.pages.find((page) => page.type === "terminal");
+    if (!terminalPage || group.pages.length === 1) continue;
+    const owner = legacyPageTaskId(group.id, terminalPage.id);
+    for (const key of [
+      "terminalsByGroup",
+      "activeTerminalByGroup",
+      "listManagerOpenByGroup",
+      "focusedIdByGroup",
+    ] as const) {
+      const record = { ...normalized[key] } as Record<string, any>;
+      if (group.id in record) {
+        record[owner] = record[group.id];
+        delete record[group.id];
+      }
+      Object.assign(normalized, { [key]: record });
+    }
+  }
+  return normalized;
 }
 
 function getFilesPagePath(group: { pages: GroupPage[] }): string {
@@ -245,7 +281,7 @@ function getFilesPagePath(group: { pages: GroupPage[] }): string {
 }
 
 function isFolderWorkspaceGroup(group: GenericGroup): boolean {
-  return group.pages.some((page) => Boolean(page.path));
+  return group.pages.some((page) => page.type === "files" && Boolean(page.path));
 }
 
 function getFolderName(path: string): string {
@@ -875,6 +911,13 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       const folder = await fileApi.list(folderPath);
       const resolvedPath = folder.path || folderPath;
       const folderName = getFolderName(resolvedPath);
+      try {
+        const previous = JSON.parse(localStorage.getItem("vibego:recent-folders") || "[]");
+        const recent = Array.isArray(previous)
+          ? previous.filter((path) => typeof path === "string" && path !== resolvedPath)
+          : [];
+        localStorage.setItem("vibego:recent-folders", JSON.stringify([resolvedPath, ...recent].slice(0, 12)));
+      } catch {}
       const sessionId = await enqueueWorkspaceMutation(async () => {
         if (!isCurrentWorkspaceTransition(requestRevision, undefined, true)) return "";
         const frameStore = useFrameStore.getState();

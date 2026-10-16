@@ -39,10 +39,46 @@ export function workspaceSnapshotState(snapshot: WorkspaceSnapshot): WorkspaceSt
     viewport = JSON.parse(window.sessionStorage.getItem(key(snapshot.workspace.id)) || "{}");
   } catch {}
   const groups = frameFromInventory(snapshot, []);
+  for (const group of groups) {
+    if (group.type !== "tool" || typeof group.data?.sourceGroupId !== "string") continue;
+    const source = group.data.sourceGroupId;
+    const sourcePage = group.data.sourcePageId as string;
+    if (viewport.activeGroupId === source && viewport.activePages?.[source] === sourcePage)
+      viewport.activeGroupId = group.id;
+    if (viewport.activeToolTabs?.[group.id] === undefined && viewport.activeTabs?.[sourcePage] !== undefined) {
+      viewport.activeToolTabs = { ...viewport.activeToolTabs, [group.id]: viewport.activeTabs[sourcePage] };
+    }
+    if (group.pageId === "terminal" && viewport.activeTerminalByGroup?.[group.id] === undefined) {
+      for (const field of ["activeTerminalByGroup", "terminalOrder"]) {
+        if (viewport[field]?.[source] !== undefined)
+          viewport[field] = { ...viewport[field], [group.id]: viewport[field][source] };
+      }
+    }
+  }
+  const order: string[] = viewport.taskbarOrder || [];
+  viewport.taskbarOrder = order.flatMap((id) => {
+    const source = id.startsWith("group:") ? id.slice(6) : undefined;
+    const derived = groups.filter(
+      (group) =>
+        group.type === "tool" &&
+        group.id !== source &&
+        group.data?.sourceGroupId === source &&
+        !order.includes(`group:${group.id}`)
+    );
+    return [id, ...derived.map((group) => `group:${group.id}`)];
+  });
+  const legacyTerminalOwners = new Map(
+    groups.flatMap((group) =>
+      group.type === "tool" && group.pageId === "terminal" && typeof group.data?.sourceGroupId === "string"
+        ? [[group.data.sourceGroupId, group.id] as const]
+        : []
+    )
+  );
   const terminalsByGroup: WorkspaceState["terminalsByGroup"] = {};
   for (const terminal of snapshot.terminals) {
-    if (terminal.group_id)
-      (terminalsByGroup[terminal.group_id] ||= []).push({
+    const groupId = legacyTerminalOwners.get(terminal.group_id) || terminal.group_id;
+    if (groupId)
+      (terminalsByGroup[groupId] ||= []).push({
         id: terminal.id,
         name: terminal.name,
         parentId: terminal.parent_id || undefined,
@@ -65,12 +101,16 @@ export function workspaceSnapshotState(snapshot: WorkspaceSnapshot): WorkspaceSt
         activePageId: viewport.activePages?.[group.id] || group.activePageId,
         pages: group.pages.map((page) => ({
           ...page,
-          activeTabId: viewport.activeTabs?.[page.id] || page.activeTabId,
+          activeTabId: viewport.activeTabs?.[page.id] !== undefined ? viewport.activeTabs[page.id] : page.activeTabId,
         })),
       })),
     openTools: groups
       .filter((group) => group.type === "tool")
-      .map((group) => ({ ...group, activeTabId: viewport.activeToolTabs?.[group.id] || group.activeTabId })),
+      .map((group) => ({
+        ...group,
+        activeTabId:
+          viewport.activeToolTabs?.[group.id] !== undefined ? viewport.activeToolTabs[group.id] : group.activeTabId,
+      })),
     activeGroupId: viewport.activeGroupId || null,
     taskbarOrder: viewport.taskbarOrder || [],
     settingsOpen: viewport.settingsOpen === true,

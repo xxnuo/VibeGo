@@ -1,4 +1,4 @@
-import { ArrowUpDown, Check, GripVertical, SquareStack, X } from "lucide-react";
+import { ArrowUpDown, Check, GitGraph, GripVertical, SquareStack, Terminal, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,8 @@ interface TaskbarItemMenuProps {
   onClose?: () => void | Promise<void>;
   onCloseOthers?: () => void | Promise<void>;
   onCloseAll?: () => void | Promise<void>;
+  onOpenTerminal?: () => void;
+  onOpenGit?: () => void;
   onSort: (restoreFocusTo?: HTMLElement | null) => void;
   canClose?: boolean;
   canCloseOthers?: boolean;
@@ -286,6 +288,8 @@ export const TaskbarItemMenu: React.FC<TaskbarItemMenuProps> = ({
   onCloseOthers,
   onCloseAll,
   onSort,
+  onOpenTerminal,
+  onOpenGit,
   canClose = false,
   canCloseOthers = false,
   canCloseAll = false,
@@ -313,6 +317,10 @@ export const TaskbarItemMenu: React.FC<TaskbarItemMenuProps> = ({
   const menuItems = useMemo(() => {
     const items: Array<{ icon: React.ReactNode; label: string; variant?: "default" | "danger"; onClick: () => void }> =
       [{ icon: <Check size={16} />, label: t("common.activate"), onClick: onActivate }];
+    if (onOpenTerminal)
+      items.push({ icon: <Terminal size={16} />, label: t("fileManager.openTerminalHere"), onClick: onOpenTerminal });
+    if (onOpenGit)
+      items.push({ icon: <GitGraph size={16} />, label: t("fileManager.openGitHere"), onClick: onOpenGit });
     if (canClose) {
       items.push({
         icon: <X size={16} />,
@@ -361,7 +369,19 @@ export const TaskbarItemMenu: React.FC<TaskbarItemMenuProps> = ({
       onClick: () => onSort(restoreFocusRef.current),
     });
     return items;
-  }, [canClose, canCloseAll, canCloseOthers, onActivate, onClose, onCloseAll, onCloseOthers, onSort, t]);
+  }, [
+    canClose,
+    canCloseAll,
+    canCloseOthers,
+    onActivate,
+    onClose,
+    onCloseAll,
+    onCloseOthers,
+    onSort,
+    onOpenTerminal,
+    onOpenGit,
+    t,
+  ]);
 
   if (isMobile) {
     const element = children as React.ReactElement<any>;
@@ -458,10 +478,7 @@ export const TaskbarItemMenu: React.FC<TaskbarItemMenuProps> = ({
             {index === 1 && canClose && <ContextMenuSeparator />}
             <ContextMenuItem
               className={cn(item.variant === "danger" && "text-red-500 focus:text-red-500")}
-              onSelect={(event) => {
-                event.preventDefault();
-                item.onClick();
-              }}
+              onSelect={() => item.onClick()}
             >
               {item.label}
             </ContextMenuItem>

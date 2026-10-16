@@ -126,14 +126,16 @@ test("workbench registry, taskbars, and contributed actions preserve frame behav
     await reset();
     useFrameStore.getState().addFolderGroup("/repo", "Repo", "repo");
     await renderProbe("horizontal");
-    await act(() => taskbar.handlePageClick(useFrameStore.getState().getActiveGroup(), "repo-git", document.body));
+    await act(() => useFrameStore.getState().addToolGroup("test-tool", "Tool", "other"));
+    await act(() => taskbar.handleGroupClick(useFrameStore.getState().groups.find(group => group.id === "repo"), document.body));
     assert.equal(taskbar.workspaceHint, null);
-    await act(() => taskbar.handlePageClick(useFrameStore.getState().getActiveGroup(), "repo-git", document.body));
+    await act(() => taskbar.handleGroupClick(useFrameStore.getState().getActiveGroup(), document.body));
     assert.equal(taskbar.workspaceHint.path, "/repo");
     assert.equal(taskbar.workspaceHint.placement, "top");
     await renderProbe("vertical");
-    await act(() => taskbar.handlePageClick(useFrameStore.getState().getActiveGroup(), "repo-files", document.body));
+    await act(() => taskbar.handleGroupClick(useFrameStore.getState().getActiveGroup(), document.body));
     assert.equal(taskbar.workspaceHint.placement, "right");
+    await act(() => useFrameStore.getState().removeGroup("other"));
     const closeFolderGroup = useSessionStore.getState().closeFolderGroup;
     const closed = [];
     await act(() =>
@@ -212,11 +214,11 @@ test("workbench registry, taskbars, and contributed actions preserve frame behav
       assert.deepEqual(restored.taskbarOrder, ["group:tool", "group:repo"]);
       assert.deepEqual(
         restored.groups[0].pages.map((page) => page.type),
-        ["files", "git", "terminal"]
+        ["files"]
       );
       assert.equal(restored.getCurrentTabs()[0].pinned, true);
       assert.equal(restored.getCurrentActiveTabId(), "file");
-      assert.deepEqual([...getTerminalWorkspaceGroupIds(restored.groups)], ["repo"]);
+      assert.deepEqual([...getTerminalWorkspaceGroupIds(restored.groups)], []);
       assert.equal(restored.groups.find((group) => group.id === "tool").activeTabId, "tool-tab");
     } finally {
       for (const [target, key, value] of patches) target[key] = value;

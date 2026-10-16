@@ -142,10 +142,10 @@ func TestWorkspaceMigrationPreservesEntitiesAndIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(snapshot.Tabs) != 4 || len(snapshot.Tools) != 1 || len(snapshot.Folders) != 1 {
+	if len(snapshot.Tabs) != 4 || len(snapshot.Tools) != 2 || len(snapshot.Folders) != 1 {
 		t.Fatalf("lost inventory: %+v", snapshot)
 	}
-	if !strings.Contains(snapshot.Tools[0].Data, `"filter":"tcp"`) || !strings.Contains(snapshot.Folders[0].Data, `"encoding":"utf8"`) {
+	if !strings.Contains(snapshot.Tools[1].Data, `"filter":"tcp"`) || !strings.Contains(snapshot.Folders[0].Data, `"encoding":"utf8"`) {
 		t.Fatal("lost generic data")
 	}
 	for _, tab := range snapshot.Tabs {
@@ -164,7 +164,7 @@ func TestWorkspaceMigrationPreservesEntitiesAndIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshot, _ = service.Snapshot("ws")
-	if len(snapshot.Folders) != 0 || len(snapshot.Tabs) != 1 {
+	if len(snapshot.Folders) != 0 || len(snapshot.Tabs) != 2 {
 		t.Fatal("migration resurrected removed assets")
 	}
 	var stored model.UserSession

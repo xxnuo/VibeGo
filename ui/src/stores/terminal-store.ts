@@ -285,8 +285,11 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
 
   addTerminal: (groupId, terminal) =>
     set((s) => {
-      const newTerminal = { ...terminal, status: "running" as TerminalStatus };
-      const newTerminals = [...(s.terminalsByGroup[groupId] || []), newTerminal];
+      const terminals = s.terminalsByGroup[groupId] || [];
+      // The workspace broadcast can arrive before the create response.
+      const newTerminals = terminals.some((item) => item.id === terminal.id)
+        ? terminals
+        : [...terminals, { ...terminal, status: "running" as TerminalStatus }];
 
       if (terminal.parentId) {
         return { terminalsByGroup: { ...s.terminalsByGroup, [groupId]: newTerminals } };

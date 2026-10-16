@@ -4,6 +4,12 @@ import { pageRegistry } from "@/pages/registry";
 import { randomUUID } from "@/lib/uuid";
 import { groupPayload, tabPayload } from "./workspace-inventory";
 
+// Only the device that opens a terminal task starts its first PTY.
+const terminalStartRequests = new Set<string>();
+export function consumeTerminalStartRequest(groupId: string): boolean {
+  return terminalStartRequests.delete(groupId);
+}
+
 export type FrameMutationAction = { type: string; payload: Record<string, unknown> };
 export type FrameActionDispatcher = (action: FrameMutationAction) => void;
 let frameActionDispatcher: FrameActionDispatcher | null = null;
@@ -171,7 +177,8 @@ interface FrameState {
     }
   ) => void;
   addToolGroup: (pageId: string, name?: string, id?: string) => void;
-  addTerminalGroup: () => void;
+  addTerminalGroup: (cwd?: string, name?: string, associatedFolderId?: string) => string;
+  addGitGroup: (repoPath?: string, name?: string, associatedFolderId?: string) => string;
   updateGroupData: (groupId: string, data: Record<string, unknown>) => void;
   addSettingsGroup: () => void;
   openSettingsCategory: (category: string) => void;
@@ -210,14 +217,6 @@ interface FrameState {
   setCurrentView: (view: ViewType) => void;
 }
 
-const getWorkspaceViews = () => {
-  const core = ["files", "git", "terminal"];
-  return [
-    ...core.map((id) => pageRegistry.get(id) || { id, name: id[0].toUpperCase() + id.slice(1) }),
-    ...pageRegistry.getAll().filter((page) => page.category === "workspace" && !core.includes(page.id)),
-  ];
-};
-
 const createFolderGroup = (path: string, name?: string): GenericGroup => {
   const groupId = `group-${randomUUID()}`;
   const folderName = name || path.split("/").pop() || "Folder";
@@ -225,14 +224,16 @@ const createFolderGroup = (path: string, name?: string): GenericGroup => {
     type: "group",
     id: groupId,
     name: folderName,
-    pages: getWorkspaceViews().map((view) => ({
-      id: `${groupId}-${view.id}`,
-      type: view.id,
-      label: view.name,
-      path,
-      tabs: [],
-      activeTabId: null,
-    })),
+    pages: [
+      {
+        id: `${groupId}-files`,
+        type: "files",
+        label: "Files",
+        path,
+        tabs: [],
+        activeTabId: null,
+      },
+    ],
     activePageId: `${groupId}-files`,
   };
 };
@@ -320,6 +321,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
   setPageMenuItems: (items) => set({ pageMenuItems: items }),
 
   initDefaultGroups: () => {
+    terminalStartRequests.clear();
     const homeGroup = createHomeGroup();
     set({ groups: [homeGroup], activeGroupId: homeGroup.id, taskbarOrder: [] });
   },
@@ -367,22 +369,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     set((s) => ({
       groups: s.groups.map((g) => {
         if (g.type !== "group" || g.id !== groupId) return g;
-        const path = payload.pages.find((page) => page.type === "files")?.path;
-        const pages = [
-          ...payload.pages,
-          ...(path
-            ? getWorkspaceViews()
-                .filter((view) => !payload.pages.some((page) => page.type === view.id))
-                .map((view) => ({
-                  id: `${g.id}-${view.id}`,
-                  type: view.id,
-                  label: view.name,
-                  path,
-                  tabs: [],
-                  activeTabId: null,
-                }))
-            : []),
-        ];
+        const pages = payload.pages;
         const activePageExists = !!payload.activePageId && pages.some((p) => p.id === payload.activePageId);
         const fallbackActivePageId = pages.find((p) => p.type === "files")?.id || pages[0]?.id || null;
         return {
@@ -412,17 +399,21 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     dispatchGroup("tool/open", group.id);
   },
 
-  addTerminalGroup: () => {
-    const groupId = `terminal-${randomUUID()}`;
-    const group: GenericGroup = {
-      type: "group",
-      id: groupId,
-      name: "Terminal",
-      pages: [{ id: `${groupId}-terminal`, type: "terminal", label: "Terminal", tabs: [], activeTabId: null }],
-      activePageId: `${groupId}-terminal`,
-    };
+  addTerminalGroup: (cwd, name, associatedFolderId) => {
+    const group = createToolGroup("terminal", name || "Terminal");
+    terminalStartRequests.add(group.id);
+    group.data = { cwd, associatedFolderId };
     set((s) => ({ groups: [...s.groups, group], activeGroupId: group.id }));
-    dispatchGroup("folder/add", group.id);
+    dispatchGroup("tool/open", group.id);
+    return group.id;
+  },
+
+  addGitGroup: (repoPath, name, associatedFolderId) => {
+    const group = createToolGroup("git", name || "Git");
+    group.data = { repoPath, associatedFolderId };
+    set((s) => ({ groups: [...s.groups, group], activeGroupId: group.id }));
+    dispatchGroup("tool/open", group.id);
+    return group.id;
   },
 
   updateGroupData: (groupId, data) => {
@@ -466,6 +457,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     })),
 
   removeGroup: (id) => {
+    terminalStartRequests.delete(id);
     const group = get().groups.find((group) => group.id === id);
     set((s) => {
       const remainingGroups = s.groups.filter((g) => g.id !== id);
@@ -541,23 +533,13 @@ export const useFrameStore = create<FrameState>((set, get) => ({
       const page = getActivePage(group);
       return page?.type || null;
     }
-    return null;
+    return group.type === "tool" ? group.pageId : group.type;
   },
 
   addPageToGroup: (groupId, page) => {
-    set((s) => ({
-      groups: s.groups.map((g) => {
-        if (g.type !== "group" || g.id !== groupId) return g;
-        const exists = g.pages.find((p) => p.id === page.id);
-        if (exists) return { ...g, activePageId: page.id };
-        return {
-          ...g,
-          pages: [...g.pages, { ...page, tabs: [], activeTabId: null }],
-          activePageId: page.id,
-        };
-      }),
-    }));
-    dispatchGroup("folder/update-data", groupId);
+    const frame = get();
+    frame.addToolGroup(page.type, page.label, page.id);
+    frame.updateGroupData(page.id, { path: page.path, associatedFolderId: groupId });
   },
 
   removePageFromGroup: (groupId, pageId) => {
@@ -576,15 +558,37 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     dispatchGroup("folder/update-data", groupId);
   },
 
-  setFolderView: (groupId, view) =>
-    set((s) => ({
-      groups: s.groups.map((g) => {
-        if (g.type !== "group" || g.id !== groupId) return g;
-        const page = g.pages.find((p) => p.type === view);
-        if (!page) return g;
-        return { ...g, activePageId: page.id };
-      }),
-    })),
+  setFolderView: (groupId, view) => {
+    const frame = get();
+    const group = frame.groups.find((group) => group.id === groupId);
+    if (!group) return;
+    if (group.type === "tool" && group.pageId === view) {
+      frame.setActiveGroup(groupId);
+      return;
+    }
+    if (group.type !== "group") return;
+    const page = group.pages.find((page) => page.type === view);
+    if (page) {
+      frame.setActiveGroup(groupId);
+      frame.setActivePage(groupId, page.id);
+      return;
+    }
+    const existing = frame.groups.find(
+      (task) => task.type === "tool" && task.pageId === view && task.data?.associatedFolderId === groupId
+    );
+    if (existing) {
+      frame.setActiveGroup(existing.id);
+      return;
+    }
+    const path = group.pages[0]?.path;
+    if (view === "terminal") frame.addTerminalGroup(path, undefined, groupId);
+    else if (view === "git") frame.addGitGroup(path, undefined, groupId);
+    else {
+      const id = `page:${groupId}:${view}`;
+      frame.addToolGroup(view, pageRegistry.get(view)?.name || view, id);
+      frame.updateGroupData(id, { path, associatedFolderId: groupId });
+    }
+  },
 
   getCurrentView: () => {
     const group = get().getActiveGroup();
@@ -593,7 +597,7 @@ export const useFrameStore = create<FrameState>((set, get) => ({
       const page = getActivePage(group);
       return page?.type || null;
     }
-    return null;
+    return group.type === "tool" ? group.pageId : group.type;
   },
 
   setCurrentView: (view) => {
@@ -805,33 +809,3 @@ export const useFrameStore = create<FrameState>((set, get) => ({
     dispatchTab("tab/open", group.id, tab.id);
   },
 }));
-
-// Add newly registered views without replacing persisted tabs or terminal owners.
-pageRegistry.subscribe(() => {
-  const extended: string[] = [];
-  useFrameStore.setState((state) => ({
-    groups: state.groups.map((group) => {
-      if (group.type !== "group") return group;
-      const path = group.pages.find((page) => page.type === "files")?.path;
-      if (!path) return group;
-      const added = getWorkspaceViews().filter((view) => !group.pages.some((page) => page.type === view.id));
-      if (!added.length) return group;
-      extended.push(group.id);
-      return {
-        ...group,
-        pages: [
-          ...group.pages,
-          ...added.map((view) => ({
-            id: `${group.id}-${view.id}`,
-            type: view.id,
-            label: view.name,
-            path,
-            tabs: [],
-            activeTabId: null,
-          })),
-        ],
-      };
-    }),
-  }));
-  for (const id of extended) dispatchGroup("folder/update-data", id);
-});

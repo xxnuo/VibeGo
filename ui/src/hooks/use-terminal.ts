@@ -1,4 +1,7 @@
+import { toast } from "sonner";
+import { useWorkspaceSyncStore } from "@/stores/workspace-sync-store";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { getTerminalWorkspaceGroupIds } from "@/stores/session-workspace-guard";
 import { terminalApi } from "@/api/terminal";
 import { cleanupSpeculativeTerminal } from "@/services/speculative-terminal-cleanup";
 import { useFrameStore, useTerminalStore } from "@/stores";
@@ -25,12 +28,7 @@ function captureTerminalCreateScope(groupId: string): TerminalCreateScope {
 }
 
 function isTerminalScopeCurrent(scope: TerminalCreateScope): boolean {
-  const groupExists = useFrameStore
-    .getState()
-    .groups.some(
-      (group) =>
-        group.type === "group" && group.id === scope.groupId && group.pages.some((page) => page.type === "terminal")
-    );
+  const groupExists = getTerminalWorkspaceGroupIds(useFrameStore.getState().groups).has(scope.groupId);
   return (
     groupExists &&
     useSessionStore.getState().sessionInitialized &&
@@ -56,6 +54,8 @@ export function useTerminalCreate(groupId: string) {
       return enqueueWorkspaceMutation(async () => {
         if (!isTerminalScopeCurrent(scope)) return null;
 
+        await useWorkspaceSyncStore.getState().flush();
+        if (!isTerminalScopeCurrent(scope)) return null;
         const terminals = getTerminals(scope.groupId);
         const existingNumbers = terminals
           .map((terminal) => {
@@ -82,6 +82,7 @@ export function useTerminalCreate(groupId: string) {
         return result;
       });
     },
+    onError: (error) => toast.error(error.message),
     onSuccess: (result) => {
       if (result) void queryClient.invalidateQueries({ queryKey: terminalKeys.list() });
     },

@@ -96,7 +96,7 @@ function project(recovered?: WorkspaceSnapshot) {
   const frame = useFrameStore.getState();
   const groups = frameFromInventory(optimistic, frame.groups);
   for (const group of frame.groups)
-    if (group.type === "group" && !groups.some((next) => next.id === group.id)) {
+    if ((group.type === "group" || group.type === "tool") && !groups.some((next) => next.id === group.id)) {
       removeFileManagerStore(group.id);
       removeGitStore(group.id);
     }

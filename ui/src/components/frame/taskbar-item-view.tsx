@@ -1,9 +1,6 @@
 import { motion } from "motion/react";
 import React from "react";
-import NavIcon from "@/components/frame/nav-icon";
 import { TaskbarItemMenu } from "@/components/frame/taskbar-item-menu";
-import { getWorkspacePath } from "@/components/frame/workspace-hint-bubble";
-import { pageRegistry } from "@/framework/workbench/registry";
 import type { TaskbarItem, useTaskbar } from "@/framework/workbench/use-taskbar";
 import { cn } from "@/lib/utils";
 import type { PageGroup } from "@/stores/frame-store";
@@ -15,42 +12,6 @@ const REORDER_TRANSITION = { type: "spring", stiffness: 520, damping: 42, mass: 
 const GroupButton: React.FC<{ group: PageGroup; taskbar: Taskbar }> = ({ group, taskbar }) => {
   const vertical = taskbar.orientation === "vertical";
   const isActive = taskbar.activeGroupId === group.id;
-  if (group.type === "group") {
-    const workspacePath = getWorkspacePath(group);
-    return (
-      <div
-        className={
-          vertical
-            ? `flex flex-col w-full items-center gap-1 p-1 ${taskbar.hasMultipleGroups ? "bg-ide-panel/70 border border-ide-border/30 rounded-xl shadow-inner" : ""}`
-            : `flex h-11 min-h-11 items-center gap-0.5 px-1 ${taskbar.hasMultipleGroups ? "bg-ide-panel/70 border border-ide-border/30 rounded-md shadow-inner" : ""}`
-        }
-      >
-        {group.pages.map((page) => {
-          const title = workspacePath
-            ? `${taskbar.getPageTitle(page.type)} - ${workspacePath}`
-            : taskbar.getPageTitle(page.type);
-          const active = isActive && group.activePageId === page.id;
-          return (
-            <button
-              key={page.id}
-              type="button"
-              onClick={(event) => taskbar.handlePageClick(group, page.id, event.currentTarget)}
-              className={
-                vertical
-                  ? `w-10 h-10 rounded-lg flex items-center justify-center transition-all ${active ? "text-ide-accent bg-ide-panel" : "text-ide-mute hover:text-ide-text hover:bg-ide-panel/50"}`
-                  : `h-11 min-h-11 min-w-11 px-2 rounded flex items-center justify-center transition-all ${active ? "text-ide-accent" : "text-ide-mute hover:text-ide-text"}`
-              }
-              title={title}
-              aria-label={vertical ? undefined : title}
-            >
-              <NavIcon icon={pageRegistry.get(page.type)?.icon} size={vertical ? 24 : 18} />
-            </button>
-          );
-        })}
-      </div>
-    );
-  }
-
   const title = taskbar.getGroupTitle(group);
   return (
     <button
@@ -62,7 +23,8 @@ const GroupButton: React.FC<{ group: PageGroup; taskbar: Taskbar }> = ({ group, 
           : `h-11 min-h-11 min-w-11 px-3 rounded flex items-center justify-center gap-2 transition-all ${isActive ? "bg-ide-panel text-ide-accent shadow-sm" : "text-ide-mute hover:text-ide-text"}`
       }
       title={title}
-      aria-label={vertical ? undefined : title}
+      aria-label={title}
+      aria-pressed={isActive}
     >
       {taskbar.getGroupIcon(group)}
     </button>
@@ -80,6 +42,10 @@ const TaskbarItemView: React.FC<{ item: TaskbarItem; taskbar: Taskbar }> = ({ it
       onClose={isGroup ? () => taskbar.closeGroup(item.group) : undefined}
       onCloseOthers={isGroup ? () => taskbar.closeAllGroups(item.group.id) : undefined}
       onCloseAll={isGroup ? () => taskbar.closeAllGroups() : undefined}
+      onOpenTerminal={
+        isGroup && item.group.type === "group" ? () => taskbar.openContextPage(item.group, "terminal") : undefined
+      }
+      onOpenGit={isGroup && item.group.type === "group" ? () => taskbar.openContextPage(item.group, "git") : undefined}
       onSort={taskbar.openSort}
       canClose={isGroup && !(item.group.type === "home" && taskbar.groups.length <= 1)}
       canCloseOthers={isGroup && taskbar.groups.some((group) => group.id !== item.group.id)}

@@ -1,4 +1,6 @@
 import { terminalApi } from "@/api/terminal";
+import { removeFileManagerStore } from "@/stores/file-manager-store";
+import { removeGitStore } from "@/stores/git-store";
 import { useFrameStore } from "@/stores/frame-store";
 import { useTerminalStore } from "@/stores/terminal-store";
 
@@ -30,6 +32,8 @@ export function initTerminalCleanup(enqueueWorkspaceMutation: WorkspaceMutationE
 
     for (const groupId of removedGroupIds) {
       cleanupGroupTerminals(groupId);
+      removeFileManagerStore(groupId);
+      removeGitStore(groupId);
     }
 
     previousGroupIds = currentGroupIds;

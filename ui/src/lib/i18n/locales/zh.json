@@ -863,6 +863,8 @@
     "connected": "已连接"
   },
   "fileManager": {
+    "openTerminalHere": "在此处打开终端",
+    "openGitHere": "在此处打开 Git",
     "newFile": "新建文件",
     "newFolder": "新建文件夹",
     "enterName": "输入名称...",
@@ -893,6 +895,14 @@
     "closeGroup": "关闭分组"
   },
   "home": {
+    "recentFolders": "最近文件夹",
+    "quickActions": "常用速启",
+    "activeTasks": "当前任务",
+    "category": {
+      "workspace": "开发",
+      "tool": "实用工具",
+      "system": "系统"
+    },
     "welcome": "选择一个文件夹开始",
     "openDirectory": "打开目录",
     "enterPath": "输入服务器路径...",

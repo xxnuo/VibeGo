@@ -10,7 +10,6 @@ import {
   Search,
   Settings,
   Sun,
-  Terminal,
   Undo2,
   XCircle,
 } from "lucide-react";
@@ -18,24 +17,6 @@ import { useSyncExternalStore } from "react";
 import type { MenuContribution, MenuLocation, PluginManifest, WorkbenchPageDefinition } from "./types";
 
 const shellMenus: MenuContribution[] = [
-  {
-    id: "open-folder",
-    location: "new-page",
-    title: "Open Folder",
-    titleKey: "common.openFolder",
-    icon: FolderOpen,
-    command: "open-folder",
-    order: 0,
-  },
-  {
-    id: "terminal",
-    location: "new-page",
-    title: "Terminal",
-    titleKey: "sidebar.terminal",
-    icon: Terminal,
-    command: "new-terminal",
-    order: 1,
-  },
   ...[
     ["home", "common.home", Home],
     ["new-page", "common.newPage", FilePlus],
@@ -204,14 +185,14 @@ class WorkbenchRegistry {
     if (location === "new-page")
       entries.push(
         ...this.getAll()
-          .filter((page) => page.category === "tool")
+          .filter((page) => page.id !== "home")
           .map((page) => ({
             id: page.id,
             location,
             title: page.name,
             titleKey: page.nameKey,
             icon: page.icon || Files,
-            command: `page:${page.id}`,
+            command: page.id === "files" ? "open-folder" : page.id === "terminal" ? "new-terminal" : `page:${page.id}`,
             order: (page.order ?? 100) + 10,
           }))
       );

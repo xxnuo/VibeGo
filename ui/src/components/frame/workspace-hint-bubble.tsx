@@ -1,5 +1,5 @@
 import { type CSSProperties, type FC, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { GenericGroup } from "@/stores/frame-store";
+import type { PageGroup } from "@/stores/frame-store";
 
 export type WorkspaceHintPlacement = "right" | "top";
 
@@ -49,11 +49,16 @@ function clampArrow(value: number, size: number): number {
   return clamp(value, padding, size - padding);
 }
 
-export function getWorkspacePath(group: GenericGroup): string {
-  return group.pages.find((page) => page.path)?.path || "";
+export function getWorkspacePath(group: PageGroup): string {
+  if (group.type === "group") return group.pages.find((page) => page.path)?.path || "";
+  if (group.type !== "tool") return "";
+  const path =
+    (group.pageId === "terminal" ? group.data?.cwd : group.pageId === "git" ? group.data?.repoPath : undefined) ??
+    group.data?.path;
+  return typeof path === "string" ? path : "";
 }
 
-export function getWorkspaceGroupTitle(group: GenericGroup): string {
+export function getWorkspaceGroupTitle(group: PageGroup): string {
   const path = getWorkspacePath(group);
   return path ? `${group.name} - ${path}` : group.name;
 }
@@ -74,7 +79,7 @@ export function useWorkspaceHint(placement: WorkspaceHintPlacement) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showWorkspaceHint = useCallback(
-    (group: GenericGroup, target: HTMLElement) => {
+    (group: PageGroup, target: HTMLElement) => {
       const path = getWorkspacePath(group);
       if (!path) return;
       const rect = target.getBoundingClientRect();

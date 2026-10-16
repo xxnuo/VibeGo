@@ -1,6 +1,7 @@
 import type { ClientMutation, WorkspaceSnapshot } from "@/api/workspace-sync";
 import { pageRegistry } from "@/pages/registry";
 import type { GroupPage, PageGroup, TabItem } from "./frame-store";
+import { splitPageTasks } from "./page-tasks";
 
 export function parseData(raw?: string): Record<string, unknown> {
   try {
@@ -233,7 +234,7 @@ export function frameFromInventory(snapshot: WorkspaceSnapshot, current: PageGro
         return old && JSON.stringify(old) === JSON.stringify(result) ? old : result;
       });
   const activeTab = (id: string | null | undefined, tabs: TabItem[]) =>
-    tabs.some((tab) => tab.id === id) ? id! : tabs[0]?.id || null;
+    id === null ? null : tabs.some((tab) => tab.id === id) ? id! : tabs[0]?.id || null;
   const assets: PageGroup[] = [...snapshot.folders]
     .sort((a, b) => a.position - b.position)
     .map((folder) => {
@@ -242,7 +243,7 @@ export function frameFromInventory(snapshot: WorkspaceSnapshot, current: PageGro
       const savedPages = Array.isArray(data.pages) ? (data.pages as GroupPage[]) : [];
       const definitions = savedPages.length
         ? savedPages
-        : ["files", "git", "terminal"].map((type) => ({
+        : ["files"].map((type) => ({
             id: `${folder.id}-${type}`,
             type,
             label: pageRegistry.get(type)?.name || type,
@@ -278,6 +279,8 @@ export function frameFromInventory(snapshot: WorkspaceSnapshot, current: PageGro
       activeTabId: activeTab(old?.type === "tool" ? old.activeTabId : null, tabs),
     });
   }
+  const positions = new Map([...snapshot.folders, ...snapshot.tools].map((item) => [item.id, item.position]));
+  assets.sort((a, b) => (positions.get(a.id) ?? 0) - (positions.get(b.id) ?? 0));
   // Preserve local Home/Settings and focus. Shared additions never activate a group.
-  return [...current.filter((group) => group.type === "home" || group.type === "settings"), ...assets];
+  return splitPageTasks([...current.filter((group) => group.type === "home" || group.type === "settings"), ...assets]);
 }
