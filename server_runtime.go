@@ -27,7 +27,6 @@ import (
 	"github.com/xxnuo/vibego/internal/middleware"
 	"github.com/xxnuo/vibego/internal/model"
 	"github.com/xxnuo/vibego/internal/service/asr"
-	"github.com/xxnuo/vibego/internal/service/sshconnection"
 	"github.com/xxnuo/vibego/internal/service/terminal"
 	"github.com/xxnuo/vibego/internal/service/workspace"
 	vibegoTls "github.com/xxnuo/vibego/internal/tls"
@@ -106,8 +105,6 @@ func runServerWithOptions(ctx context.Context, options serverOptions) error {
 		&model.UserSetting{},
 		&model.TerminalSession{},
 		&model.TerminalHistory{},
-		&model.SSHConnectionProfile{},
-		&model.SSHKnownHost{},
 	)
 	if err := config.MigrateWorkspaceSettings(db); err != nil {
 		return fmt.Errorf("migrate workspace settings: %w", err)
@@ -116,11 +113,8 @@ func runServerWithOptions(ctx context.Context, options serverOptions) error {
 		return fmt.Errorf("migrate workspace inventory: %w", err)
 	}
 	workspaceSync := workspace.New(db)
-	sshService := sshconnection.New(db)
-	defer sshService.Close()
 	terminalManager := terminal.NewManager(db, &terminal.ManagerConfig{
 		Shell:            cfg.DefaultShell,
-		RuntimeFactory:   sshService,
 		WorkspaceChanged: workspaceSync.TerminalsChanged,
 	})
 	terminalManager.CleanupOnStart()
@@ -148,13 +142,11 @@ func runServerWithOptions(ctx context.Context, options serverOptions) error {
 	handler.NewAISessionHandler(db).Register(api)
 	handler.NewCodexHandler().Register(api)
 	fileHandler := handler.NewFileHandler(fileViews)
-	fileHandler.SetRemoteFileProvider(sshService)
 	fileHandler.Register(api)
 	handler.NewTerminalHandler(terminalManager).Register(api)
 	taskHandler := handler.NewTaskHandler()
 	defer taskHandler.Close()
 	taskHandler.Register(api)
-	handler.NewSSHHandler(sshService).Register(api)
 	githubHandler.RegisterProtectedRoutes(api)
 	gitHandler := handler.NewGitHandler(db)
 	gitHandler.Register(api)

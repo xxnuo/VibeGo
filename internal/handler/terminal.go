@@ -77,7 +77,6 @@ type TerminalInfo struct {
 	Cols                int                           `json:"cols"`
 	Rows                int                           `json:"rows"`
 	RuntimeType         string                        `json:"runtime_type"`
-	SSHProfileID        string                        `json:"ssh_profile_id,omitempty"`
 	Readonly            bool                          `json:"readonly"`
 	Capabilities        terminal.TerminalCapabilities `json:"capabilities"`
 	Status              string                        `json:"status"`
@@ -123,7 +122,6 @@ func (h *TerminalHandler) List(c *gin.Context) {
 			Cols:                s.Cols,
 			Rows:                s.Rows,
 			RuntimeType:         s.RuntimeType,
-			SSHProfileID:        s.SSHProfileID,
 			Readonly:            s.Readonly,
 			Capabilities:        s.Capabilities,
 			Status:              s.Status,
@@ -145,17 +143,15 @@ func (h *TerminalHandler) List(c *gin.Context) {
 }
 
 type NewTerminalRequest struct {
-	Name               string         `json:"name"`
-	Cwd                string         `json:"cwd"`
-	Cols               int            `json:"cols"`
-	Rows               int            `json:"rows"`
-	UserID             string         `json:"user_id"`
-	WorkspaceSessionID string         `json:"workspace_session_id"`
-	GroupID            string         `json:"group_id"`
-	ParentID           string         `json:"parent_id"`
-	RuntimeType        string         `json:"runtime_type"`
-	SSHProfileID       string         `json:"ssh_profile_id"`
-	SSHAuth            sshAuthRequest `json:"ssh_auth"`
+	Name               string `json:"name"`
+	Cwd                string `json:"cwd"`
+	Cols               int    `json:"cols"`
+	Rows               int    `json:"rows"`
+	UserID             string `json:"user_id"`
+	WorkspaceSessionID string `json:"workspace_session_id"`
+	GroupID            string `json:"group_id"`
+	ParentID           string `json:"parent_id"`
+	RuntimeType        string `json:"runtime_type"`
 }
 
 // New godoc
@@ -169,7 +165,11 @@ type NewTerminalRequest struct {
 // @Router /api/terminal/new [post]
 func (h *TerminalHandler) New(c *gin.Context) {
 	var req NewTerminalRequest
-	if !bindLimitedJSON(c, &req, sshSecretRequestMaxBody) {
+	if !bindLimitedJSON(c, &req, 2*1024*1024) {
+		return
+	}
+	if req.RuntimeType != "" && req.RuntimeType != terminal.RuntimeTypeLocal {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported terminal runtime"})
 		return
 	}
 
@@ -183,14 +183,9 @@ func (h *TerminalHandler) New(c *gin.Context) {
 		GroupID:            req.GroupID,
 		ParentID:           req.ParentID,
 		RuntimeType:        req.RuntimeType,
-		SSHProfileID:       req.SSHProfileID,
-		SSHAuth:            req.SSHAuth.secrets(),
 		Context:            c.Request.Context(),
 	})
 	if err != nil {
-		if writeSSHError(c, err) {
-			return
-		}
 		if errors.Is(err, terminal.ErrWorkspaceNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 			return
@@ -711,8 +706,7 @@ func (h *TerminalHandler) Reset(c *gin.Context) {
 }
 
 // ProcessIdentity returns process identifiers only when the active runtime
-// can observe them. In particular, a remote SSH runtime does not report a
-// guessed local PID.
+// can observe them.
 func (h *TerminalHandler) ProcessIdentity(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {

@@ -130,7 +130,6 @@ function project() {
         cwd: term.cwd,
         currentCwd: term.current_cwd,
         capabilities: term.capabilities || old?.capabilities,
-        sshProfileId: term.ssh_profile_id,
       });
     }
     // Keep each device's local terminal order and focus when peers add assets.

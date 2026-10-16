@@ -15,7 +15,6 @@ type TerminalSession struct {
 	Cols                int    `gorm:"column:cols" json:"cols"`
 	Rows                int    `gorm:"column:rows" json:"rows"`
 	RuntimeType         string `gorm:"column:runtime_type" json:"runtime_type"`
-	SSHProfileID        string `gorm:"column:ssh_profile_id;index" json:"ssh_profile_id,omitempty"`
 	Readonly            bool   `gorm:"column:readonly" json:"readonly"`
 	Status              string `gorm:"column:status;index:idx_user_status" json:"status"`
 	ExitCode            int    `gorm:"column:exit_code" json:"exit_code"`

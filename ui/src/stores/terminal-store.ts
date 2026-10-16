@@ -13,7 +13,6 @@ export interface TerminalSession {
   status?: TerminalStatus;
   parentId?: string;
   runtimeType?: string;
-  sshProfileId?: string;
   readonly?: boolean;
   capabilities?: TerminalCapabilities;
   cwd?: string;

@@ -46,7 +46,6 @@ func init() {
 type FileHandler struct {
 	baseDir   string
 	fileViews *middleware.FileViewAuthorizer
-	remote    RemoteFileProvider
 }
 
 func NewFileHandler(fileViews ...*middleware.FileViewAuthorizer) *FileHandler {
@@ -59,10 +58,6 @@ func NewFileHandler(fileViews ...*middleware.FileViewAuthorizer) *FileHandler {
 
 func (h *FileHandler) SetBaseDir(dir string) {
 	h.baseDir = dir
-}
-
-func (h *FileHandler) SetRemoteFileProvider(provider RemoteFileProvider) {
-	h.remote = provider
 }
 
 func (h *FileHandler) Register(r *gin.RouterGroup) {
@@ -97,11 +92,6 @@ func (h *FileHandler) Register(r *gin.RouterGroup) {
 	g.GET("/abs", h.Abs)
 	g.POST("/copy", h.Copy)
 	g.GET("/info", h.Info)
-	g.GET("/remote/info", h.RemoteInfo)
-	g.GET("/remote/read", h.RemoteRead)
-	g.POST("/remote/check", h.RemoteCheckExist)
-	g.POST("/remote/save", h.RemoteSaveContent)
-	g.GET("/remote/view-url", h.RemoteViewURL)
 }
 
 func (h *FileHandler) LogoutViewSession(c *gin.Context) {
@@ -1400,15 +1390,6 @@ func (h *FileHandler) Download(c *gin.Context) {
 	path := c.Query("path")
 	if path == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "path required"})
-		return
-	}
-	descriptor, remote, err := decodeRemoteFileDescriptor(h.fileViews, path)
-	if remote {
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "invalid_remote_file_descriptor"})
-			return
-		}
-		h.downloadRemote(c, descriptor)
 		return
 	}
 	p, target, err := h.resolvePathTarget(path)

@@ -311,13 +311,11 @@ func (m *Manager) prepareRuntime(opts CreateOptions) (*preparedTerminalRuntime, 
 			ctx = context.Background()
 		}
 		runtime, err = m.runtimeFactory.CreateRuntime(ctx, RuntimeCreateRequest{
-			Type:      runtimeType,
-			ProfileID: opts.SSHProfileID,
-			Cwd:       cwd,
-			Command:   opts.Command,
-			Cols:      cols,
-			Rows:      rows,
-			SSHAuth:   opts.SSHAuth,
+			Type:    runtimeType,
+			Cwd:     cwd,
+			Command: opts.Command,
+			Cols:    cols,
+			Rows:    rows,
 		})
 	}
 	if err != nil {
@@ -361,11 +359,6 @@ func (m *Manager) persistRuntime(opts CreateOptions, prepared *preparedTerminalR
 		}
 		name = fmt.Sprintf("Terminal %d", count+1)
 	}
-	sshProfileID := ""
-	if prepared.runtimeType == RuntimeTypeSSH {
-		sshProfileID = opts.SSHProfileID
-	}
-
 	now := time.Now().Unix()
 	session := &model.TerminalSession{
 		ID:                 uuid.New().String(),
@@ -380,7 +373,6 @@ func (m *Manager) persistRuntime(opts CreateOptions, prepared *preparedTerminalR
 		Cols:               prepared.cols,
 		Rows:               prepared.rows,
 		RuntimeType:        prepared.runtimeType,
-		SSHProfileID:       sshProfileID,
 		Readonly:           false,
 		Status:             model.StatusRunning,
 		ShellIntegration:   prepared.capabilities.ShellIntegration,
@@ -493,9 +485,7 @@ func (m *Manager) Get(id string) (*TerminalInfo, bool) {
 }
 
 // Complete queries the live runtime's own completion environment. The
-// capability is optional; notably, an SSH runtime must use a separate remote
-// exec channel rather than writing completion commands into its interactive
-// PTY.
+// capability is optional.
 func (m *Manager) Complete(ctx context.Context, id string, request CompletionRequest) (CompletionResult, error) {
 	at, ok := m.getActive(id)
 	if !ok {
@@ -534,36 +524,6 @@ func (m *Manager) Complete(ctx context.Context, id string, request CompletionReq
 	at.stateMu.Unlock()
 	if status != model.StatusRunning {
 		return CompletionResult{}, ErrTerminalNotFound
-	}
-	return result, nil
-}
-
-// CompleteProfile delegates a completion query to the configured runtime
-// factory for a trusted, profile-specific connection. It is intentionally
-// separate from Complete: the latter is fenced to an active parent terminal,
-// while a future connection may select another SSH profile.
-func (m *Manager) CompleteProfile(ctx context.Context, profileID string, request CompletionRequest) (CompletionResult, error) {
-	if m == nil || m.runtimeFactory == nil {
-		return CompletionResult{}, ErrCompletionUnsupported
-	}
-	provider, ok := m.runtimeFactory.(ProfileCompletionProvider)
-	if !ok {
-		return CompletionResult{}, ErrCompletionUnsupported
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	profileID = strings.TrimSpace(profileID)
-	if profileID == "" {
-		return CompletionResult{}, ErrCompletionUnsupported
-	}
-	result, err := provider.CompleteProfile(ctx, profileID, request)
-	if err != nil {
-		return CompletionResult{}, err
-	}
-	if request.Limit > 0 && len(result.Candidates) > request.Limit {
-		result.Candidates = result.Candidates[:request.Limit]
-		result.HasMore = true
 	}
 	return result, nil
 }

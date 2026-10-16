@@ -18,7 +18,7 @@ type completionManagerRuntime struct {
 	closeOnce sync.Once
 }
 
-func (r *completionManagerRuntime) Type() string { return RuntimeTypeSSH }
+func (r *completionManagerRuntime) Type() string { return "test" }
 
 func (r *completionManagerRuntime) Capabilities() TerminalCapabilities {
 	return TerminalCapabilities{Completion: true}
@@ -55,7 +55,7 @@ type completionUnsupportedRuntime struct {
 	once   sync.Once
 }
 
-func (r *completionUnsupportedRuntime) Type() string { return RuntimeTypeSSH }
+func (r *completionUnsupportedRuntime) Type() string { return "test" }
 func (r *completionUnsupportedRuntime) Capabilities() TerminalCapabilities {
 	return TerminalCapabilities{}
 }
@@ -181,8 +181,8 @@ func TestManagerListUsesLiveCompletionCapabilityOnlyForActiveRuntime(t *testing.
 	activeID := "completion-list-active"
 	historyID := "completion-list-history"
 	for _, session := range []model.TerminalSession{
-		{ID: activeID, RuntimeType: RuntimeTypeSSH, Status: model.StatusRunning},
-		{ID: historyID, RuntimeType: RuntimeTypeSSH, Status: model.StatusExited},
+		{ID: activeID, RuntimeType: "test", Status: model.StatusRunning},
+		{ID: historyID, RuntimeType: "test", Status: model.StatusExited},
 	} {
 		if err := db.Create(&session).Error; err != nil {
 			t.Fatalf("create terminal %s: %v", session.ID, err)
@@ -204,10 +204,10 @@ func TestManagerListUsesLiveCompletionCapabilityOnlyForActiveRuntime(t *testing.
 		capabilities[info.ID] = info.Capabilities.Completion
 	}
 	if !capabilities[activeID] {
-		t.Fatal("active SSH terminal omitted live completion capability")
+		t.Fatal("active terminal omitted live completion capability")
 	}
 	if capabilities[historyID] {
-		t.Fatal("history-only SSH terminal advertised live completion capability")
+		t.Fatal("history-only terminal advertised live completion capability")
 	}
 }
 
@@ -240,7 +240,7 @@ func TestManagerCloseInterruptsConcurrentCompletion(t *testing.T) {
 	terminalID := "completion-close-race-" + strconv.FormatInt(time.Now().UnixNano(), 10)
 	if err := db.Create(&model.TerminalSession{
 		ID:          terminalID,
-		RuntimeType: RuntimeTypeSSH,
+		RuntimeType: "test",
 		Status:      model.StatusRunning,
 	}).Error; err != nil {
 		t.Fatalf("create terminal: %v", err)
@@ -267,7 +267,7 @@ func TestManagerCloseInterruptsConcurrentCompletion(t *testing.T) {
 	at := &activeTerminal{
 		ID:            terminalID,
 		Runtime:       runtime,
-		Session:       &model.TerminalSession{ID: terminalID, RuntimeType: RuntimeTypeSSH, Status: model.StatusRunning},
+		Session:       &model.TerminalSession{ID: terminalID, RuntimeType: "test", Status: model.StatusRunning},
 		Done:          make(chan struct{}),
 		readDone:      readDone,
 		historyBuffer: newHistoryBuffer(128),

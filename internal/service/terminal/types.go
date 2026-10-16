@@ -19,7 +19,6 @@ type TerminalInfo struct {
 	Cols                int                  `json:"cols"`
 	Rows                int                  `json:"rows"`
 	RuntimeType         string               `json:"runtime_type"`
-	SSHProfileID        string               `json:"ssh_profile_id,omitempty"`
 	Readonly            bool                 `json:"readonly"`
 	Capabilities        TerminalCapabilities `json:"capabilities"`
 	Status              string               `json:"status"`
@@ -50,8 +49,6 @@ type CreateOptions struct {
 	GroupID            string
 	ParentID           string
 	RuntimeType        string
-	SSHProfileID       string
-	SSHAuth            SSHAuthSecrets
 	Context            context.Context
 }
 
@@ -145,7 +142,6 @@ func sessionToInfo(s *model.TerminalSession) *TerminalInfo {
 		Cols:                s.Cols,
 		Rows:                s.Rows,
 		RuntimeType:         s.RuntimeType,
-		SSHProfileID:        s.SSHProfileID,
 		Readonly:            s.Readonly,
 		Capabilities:        capabilities,
 		Status:              s.Status,

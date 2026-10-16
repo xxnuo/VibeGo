@@ -7,10 +7,7 @@ import (
 	"strings"
 )
 
-const (
-	RuntimeTypeLocal = "local"
-	RuntimeTypeSSH   = "ssh"
-)
+const RuntimeTypeLocal = "local"
 
 type TerminalCapabilities struct {
 	Resume           bool `json:"resume"`
@@ -48,15 +45,6 @@ type CompletionResult struct {
 // runtime never falls back to scanning the VibeGo host by accident.
 type CompletionProvider interface {
 	Complete(ctx context.Context, request CompletionRequest) (CompletionResult, error)
-}
-
-// ProfileCompletionProvider serves completion for a durable connection profile
-// without requiring that profile to be the runtime currently attached to the
-// parent terminal. Implementations must resolve the profile from trusted
-// server-side state; callers must never use this interface to authorize an
-// arbitrary browser-supplied profile.
-type ProfileCompletionProvider interface {
-	CompleteProfile(ctx context.Context, profileID string, request CompletionRequest) (CompletionResult, error)
 }
 
 type ShellState struct {
@@ -128,22 +116,14 @@ func writeTerminalRuntimeFull(runtime TerminalRuntime, data []byte) error {
 	return nil
 }
 
-type SSHAuthSecrets struct {
-	Password   string `json:"-"`
-	PrivateKey string `json:"-"`
-	Passphrase string `json:"-"`
-}
-
 type RuntimeCreateRequest struct {
-	Type      string
-	ProfileID string
-	Cwd       string
+	Type string
+	Cwd  string
 	// Command selects one-shot command mode for runtimes that support it.
 	// Empty keeps the long-lived interactive PTY session.
 	Command string
 	Cols    int
 	Rows    int
-	SSHAuth SSHAuthSecrets
 }
 
 type RuntimeFactory interface {

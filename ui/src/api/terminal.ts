@@ -1,5 +1,4 @@
 import { request } from "@/api/request";
-import type { SSHAuthSecrets } from "@/api/ssh";
 
 export type TerminalStatus = "running" | "exited" | "closed";
 
@@ -22,7 +21,6 @@ export interface TerminalInfo {
   cols: number;
   rows: number;
   runtime_type: string;
-  ssh_profile_id?: string;
   readonly: boolean;
   capabilities: TerminalCapabilities;
   status: TerminalStatus;
@@ -74,9 +72,6 @@ export const terminalApi = {
     workspace_session_id?: string;
     group_id?: string;
     parent_id?: string;
-    runtime_type?: "local" | "ssh";
-    ssh_profile_id?: string;
-    ssh_auth?: SSHAuthSecrets;
   }) =>
     request<{ ok: boolean; id: string; name: string }>("/terminal", {
       method: "POST",

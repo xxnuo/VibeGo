@@ -19,19 +19,18 @@ import (
 )
 
 const (
-	SignedFileDownloadPath    = "/api/file/download"
-	FileViewSessionCookie     = "vibego_file_view"
-	FileViewSessionPath       = "/api/file"
-	SignedFileViewTTL         = 10 * time.Minute
-	FileViewSessionHardTTL    = 24 * time.Hour
-	fileViewSecretSize        = 32
-	fileViewNonceSize         = 32
-	fileViewMaxSessions       = 256
-	fileViewMaxPerPrincipal   = 32
-	fileViewURLMACPurpose     = "vibego-file-view-url-v1"
-	fileViewCookiePurpose     = "vibego-file-view-cookie-v1"
-	fileViewPrincipalPurpose  = "vibego-file-view-principal-v1"
-	fileViewDescriptorPurpose = "vibego-file-view-descriptor-v1"
+	SignedFileDownloadPath   = "/api/file/download"
+	FileViewSessionCookie    = "vibego_file_view"
+	FileViewSessionPath      = "/api/file"
+	SignedFileViewTTL        = 10 * time.Minute
+	FileViewSessionHardTTL   = 24 * time.Hour
+	fileViewSecretSize       = 32
+	fileViewNonceSize        = 32
+	fileViewMaxSessions      = 256
+	fileViewMaxPerPrincipal  = 32
+	fileViewURLMACPurpose    = "vibego-file-view-url-v1"
+	fileViewCookiePurpose    = "vibego-file-view-cookie-v1"
+	fileViewPrincipalPurpose = "vibego-file-view-principal-v1"
 )
 
 type FileViewGrant struct {
@@ -210,38 +209,6 @@ func (a *FileViewAuthorizer) ClearSessionCookie(c *gin.Context) {
 		Secure:   fileViewCookieSecure(c.Request),
 		SameSite: http.SameSiteStrictMode,
 	})
-}
-
-func (a *FileViewAuthorizer) SealPathDescriptor(kind string, payload []byte) (string, error) {
-	if kind == "" || len(kind) > 64 || len(payload) == 0 || len(payload) > 16*1024 {
-		return "", fmt.Errorf("invalid file view descriptor")
-	}
-	encoded := base64.RawURLEncoding.EncodeToString(payload)
-	mac := hmac.New(sha256.New, a.urlKey)
-	writeMACFields(mac, fileViewDescriptorPurpose, kind, encoded)
-	signature := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
-	return strings.Join([]string{"v1", encoded, signature}, "."), nil
-}
-
-func (a *FileViewAuthorizer) OpenPathDescriptor(kind, value string) ([]byte, error) {
-	if kind == "" || len(kind) > 64 || len(value) > 32*1024 {
-		return nil, fmt.Errorf("invalid file view descriptor")
-	}
-	parts := strings.Split(value, ".")
-	if len(parts) != 3 || parts[0] != "v1" || parts[1] == "" || parts[2] == "" {
-		return nil, fmt.Errorf("invalid file view descriptor")
-	}
-	mac := hmac.New(sha256.New, a.urlKey)
-	writeMACFields(mac, fileViewDescriptorPurpose, kind, parts[1])
-	want := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
-	if !hmac.Equal([]byte(parts[2]), []byte(want)) {
-		return nil, fmt.Errorf("invalid file view descriptor")
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil || len(payload) == 0 || len(payload) > 16*1024 {
-		return nil, fmt.Errorf("invalid file view descriptor")
-	}
-	return payload, nil
 }
 
 func (a *FileViewAuthorizer) newNonceLocked() (string, error) {

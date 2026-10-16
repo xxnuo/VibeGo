@@ -62,6 +62,33 @@ func createTestWorkspaceSession(t *testing.T, handler *TerminalHandler, id strin
 	}
 }
 
+func TestTerminalHandlerRejectsUnsupportedRuntime(t *testing.T) {
+	handler, cleanup := setupTestHandler(t)
+	defer cleanup()
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler.Register(router.Group("/api"))
+
+	for _, runtimeType := range []string{"ssh", "unknown"} {
+		t.Run(runtimeType, func(t *testing.T) {
+			body, _ := json.Marshal(NewTerminalRequest{RuntimeType: runtimeType})
+			req := httptest.NewRequest(http.MethodPost, "/api/terminal", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("expected status 400, got %d: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+
+	sessions, err := handler.manager.List("", "")
+	if err != nil || len(sessions) != 0 {
+		t.Fatalf("rejected requests created terminals: %v, error: %v", sessions, err)
+	}
+}
+
 func TestTerminalHandlerNew(t *testing.T) {
 	handler, cleanup := setupTestHandler(t)
 	defer cleanup()

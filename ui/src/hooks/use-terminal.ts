@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { SSHAuthSecrets } from "@/api/ssh";
 import { terminalApi } from "@/api/terminal";
 import { cleanupSpeculativeTerminal } from "@/services/speculative-terminal-cleanup";
 import { useFrameStore, useTerminalStore } from "@/stores";
@@ -52,15 +51,7 @@ export function useTerminalCreate(groupId: string) {
   const getTerminals = useTerminalStore((s) => s.getTerminals);
 
   return useMutation({
-    mutationFn: (opts?: {
-      name?: string;
-      cwd?: string;
-      cols?: number;
-      rows?: number;
-      runtime_type?: "local" | "ssh";
-      ssh_profile_id?: string;
-      ssh_auth?: SSHAuthSecrets;
-    }) => {
+    mutationFn: (opts?: { name?: string; cwd?: string; cols?: number; rows?: number }) => {
       const scope = captureTerminalCreateScope(groupId);
       return enqueueWorkspaceMutation(async () => {
         if (!isTerminalScopeCurrent(scope)) return null;
@@ -87,8 +78,6 @@ export function useTerminalCreate(groupId: string) {
           id: result.id,
           name: result.name,
           cwd: opts?.cwd,
-          runtimeType: opts?.runtime_type,
-          sshProfileId: opts?.ssh_profile_id,
         });
         return result;
       });

@@ -81,7 +81,7 @@ func TestManagerResetRejectsRemoteRuntime(t *testing.T) {
 		}),
 	})
 
-	info, err := manager.Create(CreateOptions{RuntimeType: RuntimeTypeSSH, SSHProfileID: "profile-1"})
+	info, err := manager.Create(CreateOptions{RuntimeType: "test"})
 	if err != nil {
 		t.Fatalf("create remote terminal: %v", err)
 	}
@@ -108,7 +108,7 @@ func newResetRemoteRuntime() *resetRemoteRuntime {
 	return &resetRemoteRuntime{done: make(chan struct{})}
 }
 
-func (*resetRemoteRuntime) Type() string { return RuntimeTypeSSH }
+func (*resetRemoteRuntime) Type() string { return "test" }
 func (*resetRemoteRuntime) Capabilities() TerminalCapabilities {
 	return TerminalCapabilities{}
 }

@@ -1,11 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Columns, Edit2, Plus, Rows, Server, Terminal, X, XCircle } from "lucide-react";
+import { Columns, Edit2, Plus, Rows, Terminal, X, XCircle } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { terminalApi } from "@/api/terminal";
 import { useDialog } from "@/components/common";
 import type { KeyEvent } from "@/components/keyboard";
 import { translateKeyEvent } from "@/components/keyboard";
-import SSHConnectionDialog, { type SSHConnectionAttempt } from "@/components/terminal/ssh-connection-dialog";
 import TerminalHistoryPage from "@/components/terminal/terminal-history-page";
 import type { TerminalInstanceHandle, TerminalInstanceStateUpdate } from "@/components/terminal/terminal-instance";
 import TerminalInstance from "@/components/terminal/terminal-instance";
@@ -84,7 +83,6 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
   const listManagerOpen = useTerminalStore((s) => s.listManagerOpenByGroup[groupId] ?? true);
   const focusedId = useTerminalStore((s) => s.focusedIdByGroup[groupId] ?? null);
   const [showHistory, setShowHistory] = useState(false);
-  const [sshDialogOpen, setSSHDialogOpen] = useState(false);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const terminalRefsMap = useRef<Map<string, TerminalInstanceHandle>>(new Map());
 
@@ -193,19 +191,6 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
   const handleCreateTerminal = useCallback(() => {
     createTerminalMutation.mutate({ cwd });
   }, [createTerminalMutation, cwd]);
-
-  const handleCreateSSHTerminal = useCallback(
-    async ({ profile, auth, cwd: remoteCwd }: SSHConnectionAttempt) => {
-      await createTerminalMutation.mutateAsync({
-        name: `SSH ${profile.name}`,
-        cwd: remoteCwd,
-        runtime_type: "ssh",
-        ssh_profile_id: profile.id,
-        ssh_auth: auth,
-      });
-    },
-    [createTerminalMutation]
-  );
 
   const handleToggleListManager = useCallback(() => {
     if (listManagerOpen) {
@@ -530,7 +515,7 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
                         : "bg-transparent border-transparent text-ide-mute hover:bg-ide-panel hover:text-ide-text"
                   }`}
                 >
-                  {terminal.runtimeType === "ssh" ? <Server size={12} /> : <Terminal size={12} />}
+                  <Terminal size={12} />
                   <span className={`max-w-[80px] truncate font-medium ${!terminal.pinned ? "italic" : ""}`}>
                     {terminal.name}
                   </span>
@@ -563,10 +548,7 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
             })}
           </div>
         ) : null,
-      rightButtons: [
-        { icon: <Plus size={18} />, title: t("terminal.new"), onClick: handleCreateTerminal },
-        { icon: <Server size={18} />, title: t("terminal.ssh.openDialog"), onClick: () => setSSHDialogOpen(true) },
-      ],
+      rightButtons: [{ icon: <Plus size={18} />, title: t("terminal.new"), onClick: handleCreateTerminal }],
     };
   }, [
     handleToggleListManager,
@@ -726,11 +708,6 @@ const TerminalPage: React.FC<TerminalPageProps> = ({ groupId, cwd }) => {
           ))
         )}
       </div>
-      <SSHConnectionDialog
-        open={sshDialogOpen}
-        onOpenChange={setSSHDialogOpen}
-        onCreateTerminal={handleCreateSSHTerminal}
-      />
     </div>
   );
 };
